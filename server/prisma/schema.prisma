@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ActivityType {
+  RIDE
+  RUN
+  WALK
+  HIKE
+  SWIM
+}
+
+model User {
+  id             String      @id @default(cuid())
+  stravaId       String?     @unique
+  firstName      String
+  lastName       String
+  email          String?     @unique
+  profilePicture String?
+  city           String?
+  country        String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  role           UserRole    @default(USER)
+  activities     Activity[]
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  stravaId      String       @unique
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  type          ActivityType
+  name          String
+  distance      Float
+  movingTime    Int
+  elevationGain Float
+  averageSpeed  Float?
+  calories      Int?
+  startDate     DateTime
+  createdAt     DateTime     @default(now())
+}
