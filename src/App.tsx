@@ -87,6 +87,18 @@ type GroupMembersResponse = {
 function App() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+  const handleResize = () => {
+    setIsMobile(window.innerWidth <= 768);
+  };
+
+  window.addEventListener("resize", handleResize);
+
+  return () => {
+    window.removeEventListener("resize", handleResize);
+  };
+}, []);
   const isSuperAdmin =
   user?.role === "SUPER_ADMIN";
 
@@ -943,7 +955,13 @@ async function removeGroupMember(
 
         {/* HEADER */}
 
-        <header style={styles.header}>
+        <header
+  style={{
+    ...styles.header,
+    flexDirection: isMobile ? "column" : "row",
+    alignItems: isMobile ? "stretch" : "center",
+  }}
+>
           <div>
           <div style={styles.logo}>
   <img
@@ -957,10 +975,7 @@ async function removeGroupMember(
     }}
   />
 </div>
-
-            <div style={styles.headerSubtitle}>
-              Clasificación Deportiva
-            </div>
+            
           </div>
            <div
   style={{
@@ -981,9 +996,14 @@ async function removeGroupMember(
     style={{
       fontSize: "13px",
       marginTop: "4px",
+      lineHeight: isMobile ? "1.8" : "normal",
     }}
   >
-    Hoy ☀️ 18° / 9° · Mañana 🌤️ 17° / 8° · Mié 🌧️ 15° / 10° · Jue ☀️ 19° / 9° · Vie 🌤️ 20° / 11°
+    <span style={{ whiteSpace: "nowrap" }}>Hoy ☀️ 18° / 9°</span>{" · "}
+<span style={{ whiteSpace: "nowrap" }}>Mañana 🌤️ 17° / 8°</span>{" · "}
+<span style={{ whiteSpace: "nowrap" }}>Mié 🌧️ 15° / 10°</span>{" · "}
+<span style={{ whiteSpace: "nowrap" }}>Jue ☀️ 19° / 9°</span>{" · "}
+<span style={{ whiteSpace: "nowrap" }}>Vie 🌤️ 20° / 11°</span>
   </div>
 </div>
           <div style={styles.userHeader}>
@@ -1002,7 +1022,13 @@ async function removeGroupMember(
 
         {/* PERFIL */}
 
-        <section style={styles.profileCard}>
+        <section
+  style={{
+    ...styles.profileCard,
+    flexDirection: isMobile ? "column" : "row",
+    alignItems: isMobile ? "stretch" : "center",
+  }}
+>
           <div style={styles.profileInfo}>
 
             {user?.profilePicture ? (
@@ -1225,13 +1251,14 @@ display: showCreateGroup
 </div>
           {/* BUSCAR GRUPO */}
 
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              marginBottom: "16px",
-            }}
-          >
+         <div
+  style={{
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    gap: "10px",
+    marginBottom: "16px",
+  }}
+>
             <input
               type="text"
               value={groupSearch}
@@ -1258,6 +1285,8 @@ display: showCreateGroup
                 borderRadius: "10px",
                 cursor: "pointer",
                 fontWeight: 700,
+               width: isMobile ? "100%" : "auto",
+               background: isMobile ? "#f1f5f9" : "transparent",
               }}
             >
               Buscar
@@ -1269,6 +1298,7 @@ display: showCreateGroup
           <div
             style={{
               display: "flex",
+              flexDirection: isMobile ? "column" : "row",
               gap: "10px",
               marginBottom: "24px",
             }}
@@ -1356,10 +1386,11 @@ display: showCreateGroup
                         "14px",
                       padding: "18px",
                       display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
                       justifyContent:
                         "space-between",
                       alignItems:
-                        "center",
+  isMobile ? "stretch" : "center",
                       gap: "20px",
                     }}
                   >
@@ -1440,62 +1471,72 @@ display: showCreateGroup
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        loadGroupRanking(group.id);
-                      }}
-                      style={{
-                        padding:
-                          "12px 18px",
-                        border: "none",
-                        borderRadius:
-                          "10px",
-                        cursor:
-                          "pointer",
-                        fontWeight:
-                          700,
-                      }}
-                    >
-                      Ver ranking
-                    </button>
-{canManageGroup(group) && (
-<>
-<button
-  onClick={() => {
-    loadGroupMembers(group);
-  }}
+                    <div
   style={{
-    padding: "12px 18px",
-    border: "none",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: 700,
-    marginLeft: "8px",
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    gap: "8px",
+    width: isMobile ? "100%" : "auto",
   }}
 >
-  Administrar grupo
-</button>
+  <button
+    onClick={() => {
+      loadGroupRanking(group.id);
+    }}
+    style={{
+      padding: "12px 18px",
+      border: "none",
+      borderRadius: "10px",
+      cursor: "pointer",
+      fontWeight: 700,
+      width: isMobile ? "100%" : "auto",
+      background: isMobile ? "#f1f5f9" : "transparent",
+    }}
+  >
+    Ver ranking
+  </button>
 
-<button
-  onClick={() =>
-    deleteGroup(
-      group.id,
-      group.name
-    )
-  }
-  style={{
-    padding: "12px 18px",
-    border: "none",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: 700,
-    marginLeft: "8px",
-  }}
->
-  Eliminar grupo
-</button>
-</>
-)}
+  {canManageGroup(group) && (
+    <>
+      <button
+        onClick={() => {
+          loadGroupMembers(group);
+        }}
+        style={{
+          padding: "12px 18px",
+          border: "none",
+          borderRadius: "10px",
+          cursor: "pointer",
+          fontWeight: 700,
+          width: isMobile ? "100%" : "auto",
+          background: isMobile ? "#f1f5f9" : "transparent",
+        }}
+      >
+        Administrar grupo
+      </button>
+
+      <button
+        onClick={() =>
+          deleteGroup(
+            group.id,
+            group.name
+          )
+        }
+        style={{
+          padding: "12px 18px",
+          border: "none",
+          borderRadius: "10px",
+          cursor: "pointer",
+          fontWeight: 700,
+          width: isMobile ? "100%" : "auto",
+          background: isMobile ? "#f1f5f9" : "transparent",
+        }}
+      >
+        Eliminar grupo
+      </button>
+    </>
+  )}
+</div>
                   </div>
                 )
               )}
@@ -1667,7 +1708,12 @@ display: showCreateGroup
 )}
         {/* FILTROS */}
 
-        <section style={styles.filtersCard}>
+        <section
+  style={{
+    ...styles.filtersCard,
+    flexDirection: isMobile ? "column" : "row",
+  }}
+>
           <div>
             <p style={styles.filterLabel}>
               DEPORTE
@@ -2022,7 +2068,7 @@ display: showCreateGroup
                     key={athlete.userId}
                     style={{
                       ...styles.athleteCard,
-
+                      flexWrap: isMobile ? "wrap" : "nowrap",
                       ...(athlete.position <=
                       3
                         ? styles.topAthlete
@@ -2094,7 +2140,15 @@ display: showCreateGroup
 
                     {/* ESTADÍSTICAS */}
 
-                    <div style={styles.stats}>
+                    <div
+  style={{
+    ...styles.stats,
+    gap: isMobile ? "12px" : "25px",
+    flexWrap: isMobile ? "wrap" : "nowrap",
+    justifyContent: isMobile ? "space-between" : "initial",
+    width: isMobile ? "100%" : "auto",
+  }}
+>
 
                       <div style={styles.stat}>
                         <strong>
@@ -2242,13 +2296,23 @@ const styles: {
     alignItems: "center",
     justifyContent: "space-between",
     gap: "20px",
+    flexWrap: "wrap",
     marginBottom: "25px",
   },
 
   headerSubtitle: {
-    color: "#667085",
-    marginTop: "4px",
-  },
+  color: "#667085",
+  marginTop: "-2px",
+  marginLeft: "62px",
+  width: "148px",
+  textAlign: "center",
+  fontFamily: "Verdana, Arial, sans-serif",
+  fontSize: "13px",
+  letterSpacing: "-0.5px",
+  transform: "scaleY(0.78)",
+  transformOrigin: "center top",
+  whiteSpace: "nowrap",
+},
 
   userHeader: {
     display: "flex",
