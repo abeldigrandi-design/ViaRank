@@ -4,9 +4,17 @@ function LoginButton() {
   return (
     <button
       onClick={loginWithStrava}
-      className="rounded-xl bg-orange-500 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-orange-600"
+      style={{
+        background: "red",
+        color: "white",
+        fontSize: "24px",
+        padding: "20px",
+        border: "none",
+        borderRadius: "10px",
+        cursor: "pointer",
+      }}
     >
-      🚴 Conectar con Strava
+      🚴 CONECTAR CON STRAVA
     </button>
   );
 }

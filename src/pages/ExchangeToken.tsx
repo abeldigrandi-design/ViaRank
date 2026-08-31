@@ -14,7 +14,11 @@ export default function ExchangeToken() {
 
     if (!code) {
       console.error("❌ No llegó el código de Strava");
+
+      alert("No llegó el código de Strava");
+
       navigate("/", { replace: true });
+
       return;
     }
 
@@ -22,31 +26,36 @@ export default function ExchangeToken() {
       try {
         console.log("🚀 Código recibido:", code);
 
-        const response = await fetch("http://localhost:3001/exchange_token", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ code }),
-        });
+        const response = await fetch(
+          "http://localhost:3001/exchange_token",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ code }),
+          }
+        );
 
-        console.log("Status:", response.status);
+        const data = await response.json();
 
-        const text = await response.text();
-        console.log("Respuesta:", text);
+        console.log("RESPUESTA DEL SERVIDOR:", data);
 
         if (!response.ok) {
-          throw new Error(text);
+          throw new Error(JSON.stringify(data));
         }
-
-        const data = JSON.parse(text);
-
-        localStorage.setItem("strava_token", data.access_token);
-
+        localStorage.setItem(
+  "viarank_auth_token",
+  data.authToken
+);
+    
         navigate("/", { replace: true });
+
       } catch (err) {
         console.error(err);
+
         alert("Error al conectar con Strava");
+
         navigate("/", { replace: true });
       }
     }
@@ -57,11 +66,12 @@ export default function ExchangeToken() {
   return (
     <div
       style={{
-        padding: 40,
+        padding: "40px",
         textAlign: "center",
       }}
     >
       <h2>Conectando con Strava...</h2>
+
       <p>Esperá unos segundos...</p>
     </div>
   );

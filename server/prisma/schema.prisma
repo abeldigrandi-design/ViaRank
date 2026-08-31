@@ -19,21 +19,34 @@ enum ActivityType {
   WALK
   HIKE
   SWIM
+  KAYAK
+  ROW
+  SAIL
+  WINDSURF
+  WHEELCHAIR
 }
 
 model User {
-  id             String      @id @default(cuid())
-  stravaId       String?     @unique
-  firstName      String
-  lastName       String
-  email          String?     @unique
-  profilePicture String?
-  city           String?
-  country        String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  role           UserRole    @default(USER)
-  activities     Activity[]
+  id                  String        @id @default(cuid())
+  stravaId            String?       @unique
+  firstName           String
+  lastName            String
+  email               String?       @unique
+  profilePicture      String?
+  city                String?
+  country             String?
+
+  accessToken         String?
+  refreshToken        String?
+  expiresAt           Int?
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  role                UserRole      @default(USER)
+
+  activities          Activity[]
+  groupMemberships    GroupMember[]
+  administeredGroups  SportGroup[]  @relation("GroupAdministrator")
 }
 
 model Activity {
@@ -50,4 +63,37 @@ model Activity {
   calories      Int?
   startDate     DateTime
   createdAt     DateTime     @default(now())
+}
+
+model SportGroup {
+  id              String        @id @default(cuid())
+  name            String
+  sport           ActivityType
+  joinCode        String        @unique
+
+  administratorId String
+  administrator   User          @relation("GroupAdministrator", fields: [administratorId], references: [id])
+
+  members         GroupMember[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([sport])
+  @@index([administratorId])
+}
+
+model GroupMember {
+  id        String     @id @default(cuid())
+  userId    String
+  groupId   String
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  joinedAt  DateTime   @default(now())
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+  @@index([userId])
 }

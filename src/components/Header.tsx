@@ -3,16 +3,16 @@ export default function Header() {
     <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 shadow-xl">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-8">
 
-        <div>
-          <h1 className="text-4xl font-black text-orange-500">
-            🏆 ViaRank
-          </h1>
-
-          <p className="text-sm text-slate-300">
-            Rankings deportivos inteligentes
-          </p>
+        {/* LOGO VIARANK */}
+        <div className="flex items-center">
+          <img
+            src="/viarank-logo.png"
+            alt="ViaRank"
+            className="h-16 w-auto object-contain"
+          />
         </div>
 
+        {/* PARTE DERECHA */}
         <div className="flex items-center gap-6">
 
           <button className="rounded-full bg-slate-700 p-3 text-xl transition hover:scale-110 hover:bg-slate-600">
@@ -28,7 +28,7 @@ export default function Header() {
             <img
               src="https://i.pravatar.cc/80?img=15"
               alt="avatar"
-              className="h-12 w-12 rounded-full border-2 border-orange-500"
+              className="h-12 w-12 rounded-full border-2 border-lime-400"
             />
 
             <div>
