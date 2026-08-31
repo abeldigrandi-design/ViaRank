@@ -1674,7 +1674,7 @@ app.get(
 
       const memberIds =
         group.members.map(
-          (member) =>
+          (member: { userId: string }) =>
             member.userId
         );
 
@@ -2082,7 +2082,17 @@ const { groupId } = req.params;
 
       const members =
         group.members.map(
-          (membership) => ({
+          (membership: {
+           id: string;
+joinedAt: Date;
+user: {
+  id: string;
+  firstName: string;
+  lastName: string;
+  profilePicture: string | null;
+  role: "USER" | "ADMIN" | "SUPER_ADMIN";
+};
+}) => ({
             membershipId:
               membership.id,
 
