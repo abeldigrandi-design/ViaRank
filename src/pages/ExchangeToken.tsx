@@ -27,7 +27,7 @@ export default function ExchangeToken() {
         console.log("🚀 Código recibido:", code);
 
         const response = await fetch(
-          "http://localhost:3001/exchange_token",
+          `${import.meta.env.VITE_API_URL}/exchange_token`,
           {
             method: "POST",
             headers: {
