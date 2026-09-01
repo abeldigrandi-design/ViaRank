@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import LoginButton from "./components/LoginButton";
 import viarankLogo from "./assets/viarank-logo.png";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 type RankingAthlete = {
   position: number;
   userId: string;
@@ -200,7 +201,7 @@ const [groupMembersLoading, setGroupMembersLoading] =
   );
 
 const response = await fetch(
-  "http://localhost:3001/api/strava-status",
+  `${API_URL}/api/strava-status`,
   {
     headers: authToken
       ? {
@@ -256,7 +257,7 @@ const response = await fetch(
       }
 
       const url =
-        "http://localhost:3001/api/ranking" +
+        `${API_URL}/api/ranking` +
         (params.toString()
           ? `?${params.toString()}`
           : "");
@@ -313,7 +314,7 @@ async function loadGroups() {
     }
 
     const url =
-      "http://localhost:3001/api/groups" +
+      `${API_URL}/api/groups` +
       (params.toString()
         ? `?${params.toString()}`
         : "");
@@ -365,7 +366,7 @@ async function joinGroup() {
 
     const response =
       await fetch(
-        "http://localhost:3001/api/groups/join",
+        `${API_URL}/api/groups/join`,
         {
           method: "POST",
 
@@ -441,7 +442,7 @@ async function loadGroupRanking(
     }
 
     const url =
-      `http://localhost:3001/api/groups/${groupId}/ranking` +
+      `${API_URL}/api/groups/${groupId}/ranking` +
       (params.toString()
         ? `?${params.toString()}`
         : "");
@@ -508,7 +509,7 @@ async function createGroup() {
     setCreatingGroup(true);
 
     const response = await fetch(
-      "http://localhost:3001/api/groups",
+      `${API_URL}/api/groups`,
       {
         method: "POST",
 
@@ -588,7 +589,7 @@ async function deleteGroup(
 
   try {
     const response = await fetch(
-      `http://localhost:3001/api/groups/${groupId}`,
+      `${API_URL}/api/groups/${groupId}`,
       {
         method: "DELETE",
 
@@ -647,7 +648,7 @@ async function loadGroupMembers(
     setAdminGroup(group);
 
    const response = await fetch(
-  `http://localhost:3001/api/groups/${group.id}/members`,
+  `${API_URL}/api/groups/${group.id}/members`,
   {
     headers: {
       Authorization:
@@ -707,7 +708,7 @@ async function removeGroupMember(
 
   try {
     const response = await fetch(
-      `http://localhost:3001/api/groups/${adminGroup.id}/members/${memberUserId}`,
+      `${API_URL}/api/groups/${adminGroup.id}/members/${memberUserId}`,
       {
         method: "DELETE",
 
@@ -767,7 +768,7 @@ async function removeGroupMember(
       );
 
       const response = await fetch(
-        "http://localhost:3001/api/strava-activities/import",
+        `${API_URL}/api/strava-activities/import`,
        {
   method: "POST",
 
