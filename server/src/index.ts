@@ -1014,37 +1014,40 @@ app.get(
       const now =
         new Date();
 
-      if (
-        period === "week"
-      ) {
-        startDate =
-          new Date(now);
+      if (period === "week") {
+  startDate = new Date(now);
 
-        startDate.setDate(
-          now.getDate() - 7
-        );
-      }
+  const day = startDate.getDay();
 
-      if (
-        period === "month"
-      ) {
-        startDate =
-          new Date(now);
+  const diffToMonday =
+    day === 0 ? 6 : day - 1;
 
-        startDate.setMonth(
-          now.getMonth() - 1
-        );
-      }
+  startDate.setDate(
+    startDate.getDate() - diffToMonday
+  );
 
-      if (
-        period === "year"
-      ) {
-        startDate = new Date(
-          now.getFullYear(),
-          0,
-          1
-        );
-      }
+  startDate.setHours(0, 0, 0, 0);
+}
+
+if (period === "month") {
+  startDate = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1
+  );
+
+  startDate.setHours(0, 0, 0, 0);
+}
+
+if (period === "year") {
+  startDate = new Date(
+    now.getFullYear(),
+    0,
+    1
+  );
+
+  startDate.setHours(0, 0, 0, 0);
+}
 
       const where: any = {};
 

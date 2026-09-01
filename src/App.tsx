@@ -123,7 +123,7 @@ function canManageGroup(
   >([]);
 
   const [sport, setSport] = useState("");
-  const [period, setPeriod] = useState("year");
+  const [period, setPeriod] = useState("month");
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
