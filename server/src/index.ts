@@ -1941,11 +1941,7 @@ if (!administratorId) {
 
       const canDelete =
   user.role === "SUPER_ADMIN" ||
-  (
-    user.role === "ADMIN" &&
-    group.administratorId ===
-      administratorId
-  );
+  group.administratorId === administratorId;
 
       if (!canDelete) {
         return res.status(403).json({

@@ -110,12 +110,9 @@ function canManageGroup(
     return false;
   }
 
- return (
-  isSuperAdmin ||
-  (
-    user?.role === "ADMIN" &&
+  return (
+    isSuperAdmin ||
     group.administrator.id === user.id
-  )
 );
 }
   const [ranking, setRanking] = useState<
