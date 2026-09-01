@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import LoginButton from "./components/LoginButton";
 import viarankLogo from "./assets/viarank-logo.png";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -170,7 +170,7 @@ const [groupMembers, setGroupMembers] =
 const [groupMembersLoading, setGroupMembersLoading] =
   useState(false);
   /* =====================================================
-     COMPROBAR CONEXIÓN CON STRAVA
+     COMPROBAR CONEXIÃ“N CON STRAVA
   ===================================================== */
 
   useEffect(() => {
@@ -345,7 +345,7 @@ async function loadGroups() {
 }
 
 /* =====================================================
-   UNIRSE A GRUPO POR CÓDIGO
+   UNIRSE A GRUPO POR CÃ“DIGO
 ===================================================== */
 
 async function joinGroup() {
@@ -359,7 +359,7 @@ async function joinGroup() {
 
     if (!joinCode.trim()) {
       alert(
-        "Ingresá un código de grupo."
+        "IngresÃ¡ un cÃ³digo de grupo."
       );
       return;
     }
@@ -411,7 +411,7 @@ async function joinGroup() {
     await loadGroups();
   } catch (err) {
     console.error(
-      "Error uniéndose al grupo:",
+      "Error uniÃ©ndose al grupo:",
       err
     );
 
@@ -501,7 +501,7 @@ async function createGroup() {
 
     if (!newGroupName.trim()) {
       alert(
-        "Ingresá un nombre para el grupo."
+        "IngresÃ¡ un nombre para el grupo."
       );
       return;
     }
@@ -552,7 +552,7 @@ async function createGroup() {
     await loadGroups();
 
     alert(
-      `Grupo creado correctamente.\nCódigo de ingreso: ${data.group.joinCode}`
+      `Grupo creado correctamente.\nCÃ³digo de ingreso: ${data.group.joinCode}`
     );
   } catch (err) {
     console.error(
@@ -580,7 +580,7 @@ async function deleteGroup(
 
   const confirmed =
     window.confirm(
-      `¿Seguro que querés eliminar el grupo "${groupName}"?`
+      `Â¿Seguro que querÃ©s eliminar el grupo "${groupName}"?`
     );
 
   if (!confirmed) {
@@ -699,7 +699,7 @@ async function removeGroupMember(
 
   const confirmed =
     window.confirm(
-      `¿Seguro que querés quitar a "${memberName}" del grupo "${adminGroup.name}"?`
+      `Â¿Seguro que querÃ©s quitar a "${memberName}" del grupo "${adminGroup.name}"?`
     );
 
   if (!confirmed) {
@@ -784,7 +784,7 @@ async function removeGroupMember(
       const data = await response.json();
 
       console.log(
-        "IMPORTACIÓN STRAVA:",
+        "IMPORTACIÃ“N STRAVA:",
         data
       );
 
@@ -796,7 +796,7 @@ async function removeGroupMember(
       }
 
       alert(
-        `Strava respondió correctamente.\n\nActividades encontradas: ${data.stravaActivities}\nActividades importadas: ${data.imported}`
+        `Strava respondiÃ³ correctamente.\n\nActividades encontradas: ${data.stravaActivities}\nActividades importadas: ${data.imported}`
       );
 
       await loadRanking();
@@ -815,7 +815,7 @@ async function removeGroupMember(
   }
 
   /* =====================================================
-     CERRAR SESIÓN
+     CERRAR SESIÃ“N
   ===================================================== */
 
   function logout() {
@@ -860,9 +860,9 @@ async function removeGroupMember(
   function getMedal(
     position: number
   ) {
-    if (position === 1) return "🥇";
-    if (position === 2) return "🥈";
-    if (position === 3) return "🥉";
+    if (position === 1) return "ðŸ¥‡";
+    if (position === 2) return "ðŸ¥ˆ";
+    if (position === 3) return "ðŸ¥‰";
 
     return `#${position}`;
   }
@@ -876,19 +876,19 @@ async function removeGroupMember(
   ) {
     switch (value) {
       case "RIDE":
-        return "🚴 Ciclismo";
+        return "ðŸš´ Ciclismo";
 
       case "RUN":
-        return "🏃 Running";
+        return "ðŸƒ Running";
 
       case "SWIM":
-        return "🏊 Natación";
+        return "ðŸŠ NataciÃ³n";
 
       case "HIKE":
-        return "🥾 Senderismo";
+        return "ðŸ¥¾ Senderismo";
 
       case "WALK":
-        return "🚶 Caminata";
+        return "ðŸš¶ Caminata";
 
       default:
         return "Todos los deportes";
@@ -903,11 +903,11 @@ async function removeGroupMember(
     return (
       <div style={styles.loadingPage}>
         <div style={styles.logo}>
-          🏆 ViaRank
+          ðŸ† ViaRank
         </div>
 
         <p>
-          Comprobando conexión con
+          Comprobando conexiÃ³n con
           Strava...
         </p>
       </div>
@@ -915,7 +915,7 @@ async function removeGroupMember(
   }
 
   /* =====================================================
-     PANTALLA SIN CONEXIÓN
+     PANTALLA SIN CONEXIÃ“N
   ===================================================== */
 
   if (!connected) {
@@ -923,7 +923,7 @@ async function removeGroupMember(
       <div style={styles.page}>
         <div style={styles.loginCard}>
           <div style={styles.bigLogo}>
-            🏆
+            ðŸ†
           </div>
 
           <h1 style={styles.title}>
@@ -931,11 +931,11 @@ async function removeGroupMember(
           </h1>
 
           <p style={styles.subtitle}>
-            Clasificación Deportiva
+            ClasificaciÃ³n Deportiva
           </p>
 
           <p style={styles.description}>
-            Conectá tu cuenta de Strava
+            ConectÃ¡ tu cuenta de Strava
             para participar en los
             rankings deportivos.
           </p>
@@ -990,7 +990,7 @@ async function removeGroupMember(
       fontWeight: 700,
     }}
   >
-    PRONÓSTICO SMN
+    PRONÃ“STICO SMN
   </div>
 
   <div
@@ -1000,23 +1000,23 @@ async function removeGroupMember(
       lineHeight: isMobile ? "1.8" : "normal",
     }}
   >
-    <span style={{ whiteSpace: "nowrap" }}>Hoy ☀️ 18° / 9°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Mañana 🌤️ 17° / 8°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Mié 🌧️ 15° / 10°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Jue ☀️ 19° / 9°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Vie 🌤️ 20° / 11°</span>
+    <span style={{ whiteSpace: "nowrap" }}>Hoy â˜€ï¸ 18Â° / 9Â°</span>{" Â· "}
+<span style={{ whiteSpace: "nowrap" }}>MaÃ±ana ðŸŒ¤ï¸ 17Â° / 8Â°</span>{" Â· "}
+<span style={{ whiteSpace: "nowrap" }}>MiÃ© ðŸŒ§ï¸ 15Â° / 10Â°</span>{" Â· "}
+<span style={{ whiteSpace: "nowrap" }}>Jue â˜€ï¸ 19Â° / 9Â°</span>{" Â· "}
+<span style={{ whiteSpace: "nowrap" }}>Vie ðŸŒ¤ï¸ 20Â° / 11Â°</span>
   </div>
 </div>
           <div style={styles.userHeader}>
             <span style={styles.connected}>
-              🟢 Strava conectado
+              ðŸŸ¢ Strava conectado
             </span>
 
             <button
               style={styles.logoutButton}
               onClick={logout}
             >
-              Cerrar sesión
+              Cerrar sesiÃ³n
             </button>
           </div>
         </header>
@@ -1040,7 +1040,7 @@ async function removeGroupMember(
               />
             ) : (
               <div style={styles.profilePlaceholder}>
-                👤
+                ðŸ‘¤
               </div>
             )}
 
@@ -1063,8 +1063,8 @@ async function removeGroupMember(
             disabled={refreshing}
           >
             {refreshing
-              ? "⏳ Actualizando..."
-              : "🔄 Actualizar Strava"}
+              ? "â³ Actualizando..."
+              : "ðŸ”„ Actualizar Strava"}
           </button>
         </section>
         {/* GRUPOS */}
@@ -1206,7 +1206,7 @@ display: showCreateGroup
 </option>
 
 <option value="SWIM">
-  Natación
+  NataciÃ³n
 </option>
 
 <option value="ROW">
@@ -1294,7 +1294,7 @@ display: showCreateGroup
             </button>
           </div>
 
-          {/* ENTRAR CON CÓDIGO */}
+          {/* ENTRAR CON CÃ“DIGO */}
 
           <div
             style={{
@@ -1312,7 +1312,7 @@ display: showCreateGroup
                   e.target.value
                 )
               }
-              placeholder="Código del grupo"
+              placeholder="CÃ³digo del grupo"
               style={{
                 flex: 1,
                 padding: "12px",
@@ -1440,7 +1440,7 @@ display: showCreateGroup
                             "4px",
                         }}
                       >
-                        Código:{" "}
+                        CÃ³digo:{" "}
                         <strong>
                           {
                             group.joinCode
@@ -1582,7 +1582,7 @@ display: showCreateGroup
             color: "#64748b",
           }}
         >
-          Código: {adminGroup.joinCode}
+          CÃ³digo: {adminGroup.joinCode}
         </p>
       </div>
 
@@ -1748,7 +1748,7 @@ display: showCreateGroup
 </option>
 
 <option value="SWIM">
-  Natación
+  NataciÃ³n
 </option>
 
 <option value="ROW">
@@ -1775,7 +1775,7 @@ display: showCreateGroup
 
           <div>
             <p style={styles.filterLabel}>
-              PERÍODO
+              PERÃODO
             </p>
 
             <select
@@ -1790,15 +1790,15 @@ display: showCreateGroup
               </option>
 
               <option value="week">
-                Últimos 7 días
+                Semana en curso
               </option>
 
               <option value="month">
-                Último mes
+                Mes en curso
               </option>
 
               <option value="year">
-                Este año
+                Año en curso
               </option>
             </select>
           </div>
@@ -1842,7 +1842,7 @@ display: showCreateGroup
           }}
         >
           {sportName(selectedGroup.sport)}
-          {" � "}
+          {" ï¿½ "}
           {selectedGroup.members} atletas
         </p>
       </div>
@@ -1868,7 +1868,7 @@ display: showCreateGroup
       <p>Cargando ranking del grupo...</p>
     ) : groupRanking.length === 0 ? (
       <p>
-        Todav�a no hay actividades para este grupo.
+        Todavï¿½a no hay actividades para este grupo.
       </p>
     ) : (
       <div
@@ -1998,7 +1998,7 @@ display: showCreateGroup
                 {athlete.hours.toLocaleString(
                   "es-AR"
                 )}{" "}
-                h �{" "}
+                h ï¿½{" "}
                 {athlete.elevationGain.toLocaleString(
                   "es-AR"
                 )}{" "}
@@ -2017,20 +2017,20 @@ display: showCreateGroup
           <div style={styles.rankingTitleRow}>
             <div>
               <h2 style={styles.rankingTitle}>
-                🏆 Ranking
+                ðŸ† Ranking
               </h2>
 
               <p style={styles.rankingSubtitle}>
                 {sport
                   ? sportName(sport)
                   : "Todos los deportes"}
-                {" · "}
+                {" Â· "}
                 {period === "week"
-                  ? "Últimos 7 días"
+                  ? "Semana en curso"
                   : period === "month"
-                  ? "Último mes"
+                  ? "Mes en curso"
                   : period === "year"
-                  ? "Último año"
+                  ? "Ãšltimo aÃ±o"
                   : "Todo"}
               </p>
             </div>
@@ -2049,11 +2049,11 @@ display: showCreateGroup
           {ranking.length === 0 ? (
             <div style={styles.emptyCard}>
               <div style={styles.emptyIcon}>
-                🏃
+                ðŸƒ
               </div>
 
               <h3>
-                Todavía no hay atletas
+                TodavÃ­a no hay atletas
               </h3>
 
               <p>
@@ -2077,7 +2077,7 @@ display: showCreateGroup
                     }}
                   >
 
-                    {/* POSICIÓN */}
+                    {/* POSICIÃ“N */}
 
                     <div style={styles.position}>
                       <span
@@ -2113,7 +2113,7 @@ display: showCreateGroup
                           styles.athletePlaceholder
                         }
                       >
-                        👤
+                        ðŸ‘¤
                       </div>
                     )}
 
@@ -2139,7 +2139,7 @@ display: showCreateGroup
                       </p>
                     </div>
 
-                    {/* ESTADÍSTICAS */}
+                    {/* ESTADÃSTICAS */}
 
                     <div
   style={{
@@ -2205,11 +2205,11 @@ display: showCreateGroup
 
         <footer style={styles.footer}>
           <strong>
-            🏆 ViaRank
+            ðŸ† ViaRank
           </strong>
 
           <span>
-            Competí. Entrená. Subí en
+            CompetÃ­. EntrenÃ¡. SubÃ­ en
             el ranking.
           </span>
         </footer>
@@ -2566,5 +2566,7 @@ const styles: {
 };
 
 export default App;
+
+
 
 
