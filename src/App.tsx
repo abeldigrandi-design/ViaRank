@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import LoginButton from "./components/LoginButton";
 import viarankLogo from "./assets/viarank-logo.png";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -84,27 +84,10 @@ type GroupMembersResponse = {
   count: number;
   members: GroupMemberItem[];
 };
-function getWeatherIcon(code: number) {
-  if (code === 0) return "☀️";
-  if (code === 1 || code === 2) return "🌤️";
-  if (code === 3) return "☁️";
-  if (code === 45 || code === 48) return "🌫️";
-  if (code >= 51 && code <= 67) return "🌧️";
-  if (code >= 71 && code <= 77) return "❄️";
-  if (code >= 80 && code <= 82) return "🌦️";
-  if (code >= 95) return "⛈️";
-
-  return "🌤️";
-}
 function App() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [location, setLocation] = useState<{
-  latitude: number;
-  longitude: number;
-} | null>(null);
-const [weather, setWeather] = useState<any>(null);
   useEffect(() => {
   const handleResize = () => {
     setIsMobile(window.innerWidth <= 768);
@@ -116,44 +99,6 @@ const [weather, setWeather] = useState<any>(null);
     window.removeEventListener("resize", handleResize);
   };
 }, []);
-useEffect(() => {
-  if (!navigator.geolocation) {
-    return;
-  }
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      setLocation({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-    },
-    (error) => {
-      console.error("No se pudo obtener la ubicación:", error);
-    }
-  );
-}, []);
-useEffect(() => {
-  if (!location) {
-    return;
-  }
-
-  const loadWeather = async () => {
-    try {
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`
-      );
-
-      const data = await response.json();
-
-      setWeather(data);
-    } catch (error) {
-      console.error("No se pudo obtener el pronóstico:", error);
-    }
-  };
-
-  loadWeather();
-}, [location]);
   const isSuperAdmin =
   user?.role === "SUPER_ADMIN";
 
@@ -917,9 +862,9 @@ async function removeGroupMember(
   function getMedal(
     position: number
   ) {
-    if (position === 1) return "🥇";
-    if (position === 2) return "🥈";
-    if (position === 3) return "🥉";
+    if (position === 1) return "??";
+    if (position === 2) return "??";
+    if (position === 3) return "??";
 
     return `#${position}`;
   }
@@ -933,19 +878,19 @@ async function removeGroupMember(
   ) {
     switch (value) {
       case "RIDE":
-        return "🚴 Ciclismo";
+        return "?? Ciclismo";
 
       case "RUN":
-        return "🏃 Running";
+        return "?? Running";
 
       case "SWIM":
-        return "🏊 Natación";
+        return "?? Natación";
 
       case "HIKE":
-        return "🥾 Senderismo";
+        return "?? Senderismo";
 
       case "WALK":
-        return "🚶 Caminata";
+        return "?? Caminata";
 
       default:
         return "Todos los deportes";
@@ -960,7 +905,7 @@ async function removeGroupMember(
     return (
       <div style={styles.loadingPage}>
         <div style={styles.logo}>
-          🏆 ViaRank
+          ?? ViaRank
         </div>
 
         <p>
@@ -980,7 +925,7 @@ async function removeGroupMember(
       <div style={styles.page}>
         <div style={styles.loginCard}>
           <div style={styles.bigLogo}>
-            🏆
+            ??
           </div>
 
           <h1 style={styles.title}>
@@ -1035,61 +980,6 @@ async function removeGroupMember(
 </div>
             
           </div>
-           <div
-  style={{
-    display: "none",
-    textAlign: "center",
-    padding: "8px 16px",
-  }}
->
-  <div
-    style={{
-      fontSize: "12px",
-      fontWeight: 700,
-    }}
-  >
-    PRONÓSTICO DEL TIEMPO
-  </div>
-
-  <div
-    style={{
-      fontSize: "13px",
-      marginTop: "4px",
-      lineHeight: isMobile ? "1.8" : "normal",
-    }}
-  >
-    {weather?.daily?.time?.map((date: string, index: number) => (
-  <span
-    key={date}
-    style={{ whiteSpace: "nowrap" }}
-  >
-    {index === 0
-      ? "Hoy"
-      : index === 1
-      ? "Mañana"
-      : new Date(`${date}T12:00:00`).toLocaleDateString("es-AR", {
-          weekday: "short",
-        })}
-    {" "}
-   {getWeatherIcon(weather.daily.weather_code[index])}{" "}
-    {Math.round(weather.daily.temperature_2m_max[index])}° /{" "}
-    {Math.round(weather.daily.temperature_2m_min[index])}°
-    {index < weather.daily.time.length - 1 ? " · " : ""}
-  </span>
-))}
-  </div>
-
-     <div
-  style={{
-    fontSize: "10px",
-    marginTop: "4px",
-    opacity: 0.7,
-  }}
->
- Datos meteorológicos: Open-Meteo
-</div>
-
-</div>
 <div
   style={{
     display: "flex",
@@ -1112,7 +1002,7 @@ fontSize: "13px",
     whiteSpace: "nowrap",
   }}
 >
-  {refreshing ? "⏳ Actualizando..." : "🔄 Actualizar Strava"}
+  {refreshing ? "? Actualizando..." : "?? Actualizar Strava"}
 </button>
 <div
   style={{
@@ -1135,7 +1025,7 @@ height: "48px",
     />
   ) : (
     <div style={styles.profilePlaceholder}>
-      👤
+      ??
     </div>
   )}
 
@@ -1173,8 +1063,8 @@ height: "48px",
     cursor: "pointer",
   }}
 >
-  ⌄
-⌄
+  ?
+?
 </span>
 </div>
 </div>
@@ -1200,7 +1090,7 @@ height: "48px",
               />
             ) : (
               <div style={styles.profilePlaceholder}>
-                👤
+                ??
               </div>
             )}
 
@@ -1223,8 +1113,8 @@ height: "48px",
             disabled={refreshing}
           >
             {refreshing
-              ? "⏳ Actualizando..."
-              : "🔄 Actualizar Strava"}
+              ? "? Actualizando..."
+              : "?? Actualizar Strava"}
           </button>
         </section>
         {/* GRUPOS */}
@@ -2220,7 +2110,7 @@ display: showCreateGroup
           <div style={styles.rankingTitleRow}>
             <div>
               <h2 style={styles.rankingTitle}>
-                🏆 Ranking
+                ?? Ranking
               </h2>
 
               <p style={styles.rankingSubtitle}>
@@ -2252,7 +2142,7 @@ display: showCreateGroup
           {ranking.length === 0 ? (
             <div style={styles.emptyCard}>
               <div style={styles.emptyIcon}>
-                🏃
+                ??
               </div>
 
               <h3>
@@ -2316,7 +2206,7 @@ display: showCreateGroup
                           styles.athletePlaceholder
                         }
                       >
-                        👤
+                        ??
                       </div>
                     )}
 
@@ -2408,7 +2298,7 @@ display: showCreateGroup
 
         <footer style={styles.footer}>
           <strong>
-            🏆 ViaRank
+            ?? ViaRank
           </strong>
 
           <span>
