@@ -1071,52 +1071,6 @@ height: "48px",
 
 </header>
 
-        {/* PERFIL */}
-
-        <section
-  style={{
-    ...styles.profileCard,
-    flexDirection: isMobile ? "column" : "row",
-    alignItems: isMobile ? "stretch" : "center",
-  }}
->
-          <div style={styles.profileInfo}>
-
-            {user?.profilePicture ? (
-              <img
-                src={user.profilePicture}
-                alt="Perfil"
-                style={styles.profileImage}
-              />
-            ) : (
-              <div style={styles.profilePlaceholder}>
-                ??
-              </div>
-            )}
-
-            <div>
-              <h2 style={styles.profileName}>
-                {user?.firstName}{" "}
-                {user?.lastName}
-              </h2>
-
-              <p style={styles.profileText}>
-                Atleta conectado con
-                Strava
-              </p>
-            </div>
-          </div>
-
-          <button
-            style={styles.refreshButton}
-            onClick={refreshActivities}
-            disabled={refreshing}
-          >
-            {refreshing
-              ? "? Actualizando..."
-              : "?? Actualizar Strava"}
-          </button>
-        </section>
         {/* GRUPOS */}
 
         <section
