@@ -862,9 +862,9 @@ async function removeGroupMember(
   function getMedal(
     position: number
   ) {
-    if (position === 1) return "??";
-    if (position === 2) return "??";
-    if (position === 3) return "??";
+    if (position === 1) return "🥇";
+    if (position === 2) return "🥈";
+    if (position === 3) return "🥉";
 
     return `#${position}`;
   }
@@ -1002,7 +1002,7 @@ fontSize: "13px",
     whiteSpace: "nowrap",
   }}
 >
-  {refreshing ? "? Actualizando..." : "?? Actualizar Strava"}
+  {refreshing ? "🔄 Actualizando..." : "🔄 Actualizar Strava"}
 </button>
 <div
   style={{
@@ -2064,7 +2064,7 @@ display: showCreateGroup
           <div style={styles.rankingTitleRow}>
             <div>
               <h2 style={styles.rankingTitle}>
-                ?? Ranking
+                🏆 Ranking
               </h2>
 
               <p style={styles.rankingSubtitle}>
