@@ -238,6 +238,12 @@ const [groupMembersLoading, setGroupMembersLoading] =
     loadGroups();
   }
 }, [connected, sport, period]);
+
+useEffect(() => {
+  if (selectedGroup) {
+    loadGroupRanking(selectedGroup.id);
+  }
+}, [period]);
   /* =====================================================
      ESTADO STRAVA
   ===================================================== */
