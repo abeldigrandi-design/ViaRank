@@ -1652,11 +1652,19 @@ app.get(
           },
 
           include: {
-            members: {
-              select: {
-                userId: true,
-              },
-            },
+           members: {
+  select: {
+    userId: true,
+    user: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        profilePicture: true,
+      },
+    },
+  },
+},
 
             administrator: {
               select: {
@@ -1689,31 +1697,39 @@ app.get(
         new Date();
 
       if (period === "week") {
-        startDate =
-          new Date(now);
+  startDate = new Date(now);
 
-        startDate.setDate(
-          now.getDate() - 7
-        );
-      }
+  const day = startDate.getDay();
 
-      if (period === "month") {
-        startDate =
-          new Date(now);
+  const diffToMonday =
+    day === 0 ? 6 : day - 1;
 
-        startDate.setMonth(
-          now.getMonth() - 1
-        );
-      }
+  startDate.setDate(
+    startDate.getDate() - diffToMonday
+  );
 
-      if (period === "year") {
-        startDate =
-          new Date(
-            now.getFullYear(),
-            0,
-            1
-          );
-      }
+  startDate.setHours(0, 0, 0, 0);
+}
+
+if (period === "month") {
+  startDate = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1
+  );
+
+  startDate.setHours(0, 0, 0, 0);
+}
+
+if (period === "year") {
+  startDate = new Date(
+    now.getFullYear(),
+    0,
+    1
+  );
+
+  startDate.setHours(0, 0, 0, 0);
+}
 
       const where: any = {
         userId: {
@@ -1761,7 +1777,22 @@ app.get(
             elevationGain: number;
           }
         >();
-
+          for (const member of group.members) {
+  rankingMap.set(
+    member.userId,
+    {
+      userId: member.userId,
+      firstName: member.user.firstName,
+      lastName: member.user.lastName,
+      profilePicture:
+        member.user.profilePicture,
+      activities: 0,
+      distance: 0,
+      movingTime: 0,
+      elevationGain: 0,
+    }
+  );
+}
       for (const activity of activities) {
         const existing =
           rankingMap.get(

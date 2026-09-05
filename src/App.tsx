@@ -84,11 +84,27 @@ type GroupMembersResponse = {
   count: number;
   members: GroupMemberItem[];
 };
+function getWeatherIcon(code: number) {
+  if (code === 0) return "☀️";
+  if (code === 1 || code === 2) return "🌤️";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫️";
+  if (code >= 51 && code <= 67) return "🌧️";
+  if (code >= 71 && code <= 77) return "❄️";
+  if (code >= 80 && code <= 82) return "🌦️";
+  if (code >= 95) return "⛈️";
 
+  return "🌤️";
+}
 function App() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [location, setLocation] = useState<{
+  latitude: number;
+  longitude: number;
+} | null>(null);
+const [weather, setWeather] = useState<any>(null);
   useEffect(() => {
   const handleResize = () => {
     setIsMobile(window.innerWidth <= 768);
@@ -100,6 +116,44 @@ function App() {
     window.removeEventListener("resize", handleResize);
   };
 }, []);
+useEffect(() => {
+  if (!navigator.geolocation) {
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      setLocation({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    },
+    (error) => {
+      console.error("No se pudo obtener la ubicación:", error);
+    }
+  );
+}, []);
+useEffect(() => {
+  if (!location) {
+    return;
+  }
+
+  const loadWeather = async () => {
+    try {
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`
+      );
+
+      const data = await response.json();
+
+      setWeather(data);
+    } catch (error) {
+      console.error("No se pudo obtener el pronóstico:", error);
+    }
+  };
+
+  loadWeather();
+}, [location]);
   const isSuperAdmin =
   user?.role === "SUPER_ADMIN";
 
@@ -966,7 +1020,7 @@ async function removeGroupMember(
     src={viarankLogo}
     alt="ViaRank"
     style={{
-      width: "210px",
+      width: "155px",
       height: "auto",
       objectFit: "contain",
       display: "block",
@@ -977,6 +1031,7 @@ async function removeGroupMember(
           </div>
            <div
   style={{
+    display: "none",
     textAlign: "center",
     padding: "8px 16px",
   }}
@@ -987,7 +1042,7 @@ async function removeGroupMember(
       fontWeight: 700,
     }}
   >
-    PRONÓSTICO SMN
+    PRONÓSTICO DEL TIEMPO
   </div>
 
   <div
@@ -997,26 +1052,128 @@ async function removeGroupMember(
       lineHeight: isMobile ? "1.8" : "normal",
     }}
   >
-    <span style={{ whiteSpace: "nowrap" }}>Hoy ☀️ 18° / 9°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Mañana 🌤️ 17° / 8°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Mié 🌧️ 15° / 10°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Jue ☀️ 19° / 9°</span>{" · "}
-<span style={{ whiteSpace: "nowrap" }}>Vie 🌤️ 20° / 11°</span>
+    {weather?.daily?.time?.map((date: string, index: number) => (
+  <span
+    key={date}
+    style={{ whiteSpace: "nowrap" }}
+  >
+    {index === 0
+      ? "Hoy"
+      : index === 1
+      ? "Mañana"
+      : new Date(`${date}T12:00:00`).toLocaleDateString("es-AR", {
+          weekday: "short",
+        })}
+    {" "}
+   {getWeatherIcon(weather.daily.weather_code[index])}{" "}
+    {Math.round(weather.daily.temperature_2m_max[index])}° /{" "}
+    {Math.round(weather.daily.temperature_2m_min[index])}°
+    {index < weather.daily.time.length - 1 ? " · " : ""}
+  </span>
+))}
   </div>
-</div>
-          <div style={styles.userHeader}>
-            <span style={styles.connected}>
-              🟢 Strava conectado
-            </span>
 
-            <button
-              style={styles.logoutButton}
-              onClick={logout}
-            >
-              Cerrar sesión
-            </button>
-          </div>
-        </header>
+     <div
+  style={{
+    fontSize: "10px",
+    marginTop: "4px",
+    opacity: 0.7,
+  }}
+>
+ Datos meteorológicos: Open-Meteo
+</div>
+
+</div>
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+    marginLeft: isMobile ? "0" : "auto",
+  }}
+>
+<button
+  onClick={refreshActivities}
+  disabled={refreshing}
+  style={{
+    padding: "6px 10px",
+fontSize: "13px",
+    borderRadius: "10px",
+    border: "1px solid #d9dee8",
+    background: "white",
+    fontWeight: 600,
+    cursor: refreshing ? "default" : "pointer",
+    whiteSpace: "nowrap",
+  }}
+>
+  {refreshing ? "⏳ Actualizando..." : "🔄 Actualizar Strava"}
+</button>
+<div
+  style={{
+    ...styles.userHeader,
+    marginLeft: isMobile ? "0" : "auto",
+    justifyContent: isMobile ? "center" : "flex-end",
+    gap: "10px",
+  }}
+>
+  {user?.profilePicture ? (
+    <img
+      src={user.profilePicture}
+      alt="Perfil"
+      style={{
+        width: "48px",
+height: "48px",
+        borderRadius: "50%",
+        objectFit: "cover",
+      }}
+    />
+  ) : (
+    <div style={styles.profilePlaceholder}>
+      👤
+    </div>
+  )}
+
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      lineHeight: 1.15,
+    }}
+  >
+    <strong
+  style={{
+    fontSize: "20px",
+    fontWeight: 700,
+  }}
+>
+  {user?.firstName} {user?.lastName}
+</strong>
+
+    <span
+      style={{
+        fontSize: "12px",
+        opacity: 0.7,
+      }}
+    >
+      Atleta conectado
+    </span>
+  </div>
+
+  <span
+  onClick={logout}
+  style={{
+    fontSize: "22px",
+    marginLeft: "4px",
+    cursor: "pointer",
+  }}
+>
+  ⌄
+⌄
+</span>
+</div>
+</div>
+
+</header>
 
         {/* PERFIL */}
 
@@ -1875,139 +2032,178 @@ display: showCreateGroup
           gap: "12px",
         }}
       >
-        {groupRanking.map((athlete) => (
-          <div
-            key={athlete.userId}
-            style={{
-              background:
-                athlete.position <= 3
-                  ? "#fff7ed"
-                  : "#f8fafc",
-              border:
-                athlete.position <= 3
-                  ? "2px solid #f97316"
-                  : "1px solid #e2e8f0",
-              borderRadius: "16px",
-              padding: isMobile ? "14px" : "18px",
-              display: "flex",
-              alignItems: "center",
-              gap: isMobile ? "10px" : "16px",
-              flexWrap: isMobile ? "wrap" : "nowrap",
-            }}
-          >
-            <div
-              style={{
-                minWidth: "48px",
-                fontSize:
-                  athlete.position <= 3
-                    ? "30px"
-                    : "20px",
-                fontWeight: 800,
-                textAlign: "center",
-              }}
-            >
-             {athlete.position === 1
-  ? "\u{1F947}"
-  : athlete.position === 2
-  ? "\u{1F948}"
-  : athlete.position === 3
-  ? "\u{1F949}"
-  : `${athlete.position}\u00BA`}
-            </div>
+      {groupRanking.map((athlete) => {
+  const isTopThree =
+    athlete.position <= 3;
 
-            {athlete.profilePicture ? (
-              <img
-                src={athlete.profilePicture}
-                alt={`${athlete.firstName} ${athlete.lastName}`}
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  background: "#e2e8f0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "24px",
-                }}
-              >
-                {"\u{1F464}"}
-              </div>
-            )}
+  return (
+    <div
+      key={athlete.userId}
+      style={{
+        background: isTopThree
+          ? "#fff7ed"
+          : "#ffffff",
+        border: isTopThree
+          ? "2px solid #f97316"
+          : "1px solid #e2e8f0",
+        borderRadius: isTopThree
+          ? "14px"
+          : "12px",
+        padding: isMobile
+          ? "10px 12px"
+          : "12px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: isMobile
+          ? "8px"
+          : "12px",
+        minHeight: isTopThree
+          ? "78px"
+          : "64px",
+      }}
+    >
+      <div
+        style={{
+          minWidth: isMobile
+            ? "34px"
+            : "42px",
+          fontSize: isTopThree
+            ? isMobile
+              ? "24px"
+              : "28px"
+            : isMobile
+            ? "17px"
+            : "19px",
+          fontWeight: 800,
+          textAlign: "center",
+        }}
+      >
+        {athlete.position === 1
+          ? "\u{1F947}"
+          : athlete.position === 2
+          ? "\u{1F948}"
+          : athlete.position === 3
+          ? "\u{1F949}"
+          : `${athlete.position}\u00BA`}
+      </div>
 
-            <div
-              style={{
-                flex: 1,
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: "17px",
-                }}
-              >
-                {athlete.firstName}{" "}
-                {athlete.lastName}
-              </div>
+      {athlete.profilePicture ? (
+        <img
+          src={athlete.profilePicture}
+          alt={`${athlete.firstName} ${athlete.lastName}`}
+          style={{
+            width: isTopThree
+              ? "48px"
+              : "42px",
+            height: isTopThree
+              ? "48px"
+              : "42px",
+            borderRadius: "50%",
+            objectFit: "cover",
+            flexShrink: 0,
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: isTopThree
+              ? "48px"
+              : "42px",
+            height: isTopThree
+              ? "48px"
+              : "42px",
+            borderRadius: "50%",
+            background: "#e2e8f0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            flexShrink: 0,
+          }}
+        >
+          {"\u{1F464}"}
+        </div>
+      )}
 
-              <div
-                style={{
-                  color: "#64748b",
-                  fontSize: "14px",
-                  marginTop: "4px",
-                }}
-              >
-                {athlete.activities} actividades
-              </div>
-            </div>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 800,
+            fontSize: isMobile
+              ? "15px"
+              : "17px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {athlete.firstName}{" "}
+          {athlete.lastName}
+        </div>
 
-            <div
-              style={{
-                textAlign: "right",
-                width: isMobile ? "100%" : "auto",
-                marginLeft: isMobile ? "0" : "auto",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: isMobile ? "18px" : "20px",
-                  fontWeight: 800,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {athlete.distanceKm.toLocaleString(
-                  "es-AR"
-                )}{" "}
-                km
-              </div>
+        <div
+          style={{
+            color: "#64748b",
+            fontSize: isMobile
+              ? "12px"
+              : "13px",
+            marginTop: "2px",
+          }}
+        >
+          {athlete.activities} actividades
+        </div>
+      </div>
 
-              <div
-                style={{
-                  color: "#64748b",
-                  fontSize: "13px",
-                  marginTop: "4px",
-                }}
-              >
-                {athlete.hours.toLocaleString(
-                  "es-AR"
-                )}{" "}
-                h ·{" "}
-                {athlete.elevationGain.toLocaleString(
-                  "es-AR"
-                )}{" "}
-                m
-              </div>
-            </div>
-          </div>
-        ))}
+      <div
+        style={{
+          textAlign: "right",
+          marginLeft: "auto",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            fontSize: isMobile
+              ? "16px"
+              : "19px",
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {athlete.distanceKm.toLocaleString(
+            "es-AR"
+          )}{" "}
+          km
+        </div>
+
+        <div
+          style={{
+            color: "#64748b",
+            fontSize: isMobile
+              ? "11px"
+              : "12px",
+            marginTop: "2px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {athlete.hours.toLocaleString(
+            "es-AR"
+          )}{" "}
+          h ·{" "}
+          {athlete.elevationGain.toLocaleString(
+            "es-AR"
+          )}{" "}
+          m
+        </div>
+      </div>
+    </div>
+  );
+})}
       </div>
     )}
   </section>
