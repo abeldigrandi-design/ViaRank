@@ -2215,7 +2215,7 @@ display: showCreateGroup
   </section>
 )}
         {/* RANKING */}
-
+{!selectedGroup && (
         <section>
           <div style={styles.rankingTitleRow}>
             <div>
@@ -2403,7 +2403,7 @@ display: showCreateGroup
             </div>
           )}
         </section>
-
+)}
         {/* FOOTER */}
 
         <footer style={styles.footer}>
