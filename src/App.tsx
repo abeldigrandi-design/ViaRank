@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
 import LoginButton from "./components/LoginButton";
-import viarankLogo from "./assets/viarank-logo.png";
+import viarankHeaderLogo from "./assets/viarank-header-logo-clean.png";
+import stravaLogo from "./assets/strava.svg";
+import heroImage from "./assets/hero-sport.png";
+import sportCiclismo from "./assets/sports/sport-ciclismo.png";
+import sportCarrera from "./assets/sports/sport-carrera.png";
+import sportNatacion from "./assets/sports/sport-natacion.png";
+import sportSenderismo from "./assets/sports/sport-senderismo.png";
+import sportCaminata from "./assets/sports/sport-caminata.png";
+import sportSillaRuedas from "./assets/sports/sport-silla-ruedas.png";
+import sportKayak from "./assets/sports/sport-kayak.png";
+import sportRemo from "./assets/sports/sport-remo.png";
+import sportVela from "./assets/sports/sport-vela.png";
+import sportWindsurf from "./assets/sports/sport-windsurf.png";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 type RankingAthlete = {
   position: number;
@@ -881,7 +893,7 @@ async function removeGroupMember(
         return "🚴 Ciclismo";
 
       case "RUN":
-        return "🏃 Running";
+        return "🏃 Carrera";
 
       case "SWIM":
         return "🏊 Natación";
@@ -892,11 +904,25 @@ async function removeGroupMember(
       case "WALK":
         return "🚶 Caminata";
 
+      case "KAYAK":
+        return "🛶 Kayak";
+
+      case "ROW":
+        return "🚣 Remo";
+
+      case "WHEELCHAIR":
+        return "♿ Silla de ruedas";
+
+      case "SAIL":
+        return "⛵ Vela";
+
+      case "WINDSURF":
+        return "🏄 Windsurf";
+
       default:
         return "Todos los deportes";
     }
   }
-
   /* =====================================================
      LOADING
   ===================================================== */
@@ -955,122 +981,412 @@ async function removeGroupMember(
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-
         {/* HEADER */}
 
         <header
-  style={{
-    ...styles.header,
-    flexDirection: isMobile ? "column" : "row",
-    alignItems: isMobile ? "stretch" : "center",
-  }}
->
-          <div>
-          <div style={styles.logo}>
-  <img
-    src={viarankLogo}
-    alt="ViaRank"
-    style={{
-      width: "155px",
-      height: "auto",
-      objectFit: "contain",
-      display: "block",
-    }}
-  />
-</div>
-            
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "18px",
+            padding: isMobile ? "12px 14px" : "14px 22px",
+            marginBottom: "22px",
+            background: "#111827",
+            borderRadius: "18px",
+            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.16)",
+            flexWrap: isMobile ? "wrap" : "nowrap",
+          }}
+        >
+          {/* LOGO */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flexShrink: 0,
+            }}
+          >
+            <img
+              src={viarankHeaderLogo}
+              alt="ViaRank"
+              style={{
+                width: isMobile ? "190px" : "285px",
+                height: isMobile ? "48px" : "58px",
+                objectFit: "contain",
+                objectPosition: "left center",
+                display: "block",
+              }}
+            />
           </div>
-<div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    gap: "16px",
-    marginLeft: isMobile ? "0" : "auto",
-  }}
->
-<button
-  onClick={refreshActivities}
-  disabled={refreshing}
-  style={{
-    padding: "6px 10px",
-fontSize: "13px",
-    borderRadius: "10px",
-    border: "1px solid #d9dee8",
-    background: "white",
-    fontWeight: 600,
-    cursor: refreshing ? "default" : "pointer",
-    whiteSpace: "nowrap",
-  }}
->
-  {refreshing ? "🔄 Actualizando..." : "🔄 Actualizar Strava"}
-</button>
-<div
-  style={{
-    ...styles.userHeader,
-    marginLeft: isMobile ? "0" : "auto",
-    justifyContent: isMobile ? "center" : "flex-end",
-    gap: "10px",
-  }}
->
-  {user?.profilePicture ? (
-    <img
-      src={user.profilePicture}
-      alt="Perfil"
-      style={{
-        width: "48px",
-height: "48px",
-        borderRadius: "50%",
-        objectFit: "cover",
-      }}
-    />
-  ) : (
-    <div style={styles.profilePlaceholder}>
-      👤
-    </div>
-  )}
+          {/* ZONA DERECHA */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: isMobile ? "8px" : "12px",
+              marginLeft: "auto",
+              flex: isMobile ? "1 1 100%" : "0 1 auto",
+              minWidth: 0,
+            }}
+          >
+            {/* ATLETA */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                minWidth: isMobile ? "0" : "235px",
+                padding: "7px 14px 7px 8px",
+                borderRadius: "14px",
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "white",
+                flex: isMobile ? "1 1 auto" : "0 0 auto",
+              }}
+            >
+              {user?.profilePicture ? (
+                <img
+                  src={user.profilePicture}
+                  alt="Perfil"
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "50%",
+                    background: "#374151",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  👤
+                </div>
+              )}
 
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      lineHeight: 1.15,
-    }}
-  >
-    <strong
-  style={{
-    fontSize: "20px",
-    fontWeight: 700,
-  }}
->
-  {user?.firstName} {user?.lastName}
-</strong>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  minWidth: 0,
+                  lineHeight: 1.2,
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: isMobile ? "14px" : "16px",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {user?.firstName} {user?.lastName}
+                </strong>
 
-    <span
-      style={{
-        fontSize: "12px",
-        opacity: 0.7,
-      }}
-    >
-      Atleta conectado
-    </span>
-  </div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "#cbd5e1",
+                    marginTop: "3px",
+                  }}
+                >
+                  Atleta conectado
+                </span>
+              </div>
+            </div>
 
-  <span
-  onClick={logout}
-  style={{
-    fontSize: "22px",
-    marginLeft: "4px",
-    cursor: "pointer",
-  }}
->
-  Salir
+            {/* STRAVA */}
+            <button
+              onClick={refreshActivities}
+              disabled={refreshing}
+              title="Actualizar datos de Strava"
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "14px",
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: refreshing ? "default" : "pointer",
+                padding: "10px",
+                flexShrink: 0,
+                opacity: refreshing ? 0.6 : 1,
+              }}
+            >
+              <img
+                src={stravaLogo}
+                alt="Actualizar Strava"
+                style={{
+                  width: "25px",
+                  height: "25px",
+                  objectFit: "contain",
+                }}
+              />
+            </button>
 
-</span>
-</div>
-</div>
+            {/* MENU */}
+            <details
+              style={{
+                position: "relative",
+                flexShrink: 0,
+              }}
+            >
+              <summary
+                style={{
+                  listStyle: "none",
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.08)",
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: "24px",
+                  userSelect: "none",
+                }}
+              >
+                ☰
+              </summary>
 
-</header>
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "58px",
+                  width: "190px",
+                  background: "white",
+                  borderRadius: "14px",
+                  padding: "8px",
+                  boxShadow: "0 12px 30px rgba(15,23,42,0.22)",
+                  border: "1px solid #e5e7eb",
+                  zIndex: 100,
+                }}
+              >
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    fontSize: "13px",
+                    color: "#64748b",
+                    borderBottom: "1px solid #eef2f7",
+                  }}
+                >
+                  {user?.firstName} {user?.lastName}
+                </div>
 
+                <button
+                  onClick={logout}
+                  style={{
+                    width: "100%",
+                    marginTop: "6px",
+                    padding: "10px 12px",
+                    border: "none",
+                    background: "transparent",
+                    borderRadius: "9px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    color: "#111827",
+                  }}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            </details>
+          </div>
+        </header>
+
+        {/* PORTADA VIARANK */}
+
+        <section
+          style={{
+            position: "relative",
+            minHeight: isMobile ? "520px" : "500px",
+            marginBottom: "26px",
+            borderRadius: "22px",
+            overflow: "hidden",
+            backgroundImage: `linear-gradient(
+              90deg,
+              rgba(8, 18, 32, 0.84) 0%,
+              rgba(8, 18, 32, 0.55) 42%,
+              rgba(8, 18, 32, 0.12) 72%
+            ), url(${heroImage})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
+          }}
+        >
+          {/* TEXTO PORTADA */}
+
+          <div
+            style={{
+              position: "relative",
+              zIndex: 2,
+              padding: isMobile
+                ? "42px 24px 190px"
+                : "72px 40px 165px",
+              maxWidth: isMobile ? "100%" : "610px",
+              color: "#ffffff",
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                fontSize: isMobile ? "38px" : "54px",
+                lineHeight: 0.98,
+                fontWeight: 900,
+                letterSpacing: "-2px",
+              }}
+            >
+              Más que kilómetros,
+              <br />
+              <span style={{ color: "#ff4f00" }}>
+                una comunidad
+              </span>
+            </h1>
+
+            <p
+              style={{
+                margin: "18px 0 0",
+                maxWidth: "470px",
+                fontSize: isMobile ? "15px" : "17px",
+                lineHeight: 1.45,
+                color: "#e2e8f0",
+                fontWeight: 500,
+              }}
+            >
+              Rankings deportivos conectados con Strava.
+              <br />
+              Competí, entrená y superate.
+            </p>
+
+            <div
+              style={{
+                marginTop: "22px",
+                fontSize: isMobile ? "18px" : "22px",
+                fontStyle: "italic",
+                color: "#ffffff",
+                transform: "rotate(-4deg)",
+                transformOrigin: "left center",
+                display: "inline-block",
+                opacity: 0.92,
+              }}
+            >
+              El deporte
+              <br />
+              nos conecta
+            </div>
+          </div>
+
+          {/* TARJETAS DEPORTES */}
+
+          <div
+            style={{
+              position: "absolute",
+              left: isMobile ? "14px" : "18px",
+              right: isMobile ? "14px" : "18px",
+              bottom: isMobile ? "14px" : "18px",
+              display: "flex",
+              gap: isMobile ? "7px" : "8px",
+              overflowX: "auto",
+              paddingBottom: "4px",
+              zIndex: 3,
+            }}
+          >
+            {[
+              ["RIDE", "Ciclismo", "🚴", sportCiclismo],
+              ["RUN", "Carrera", "🏃", sportCarrera],
+              ["SWIM", "Natación", "🏊", sportNatacion],
+              ["HIKE", "Senderismo", "🥾", sportSenderismo],
+              ["WALK", "Caminata", "🚶", sportCaminata],
+              ["WHEELCHAIR", "Silla de ruedas", "♿", sportSillaRuedas],
+              ["KAYAK", "Kayak", "🛶", sportKayak],
+              ["ROW", "Remo", "🚣", sportRemo],
+              ["SAIL", "Vela", "⛵", sportVela],
+              ["WINDSURF", "Windsurf", "🏄", sportWindsurf],
+            ].map(([value, name, , image]) => (
+              <button
+                key={value}
+                onClick={() => {
+                  setSport(value);
+                  window.setTimeout(() => {
+                    document
+                      .getElementById("ranking-viarank")
+                      ?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                  }, 100);
+                }}
+                style={{
+                  width: isMobile ? "82px" : "94px",
+                  minWidth: isMobile ? "82px" : "94px",
+                  height: isMobile ? "115px" : "135px",
+                  position: "relative",
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  border:
+                    sport === value
+                      ? "3px solid #ff4f00"
+                      : "2px solid rgba(255,255,255,0.75)",
+                  backgroundImage: `linear-gradient(
+                    180deg,
+                    rgba(0,0,0,0.02) 0%,
+                    rgba(0,0,0,0.12) 48%,
+                    rgba(0,0,0,0.76) 100%
+                  ), url(${image})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  padding: 0,
+                  boxShadow: "0 5px 14px rgba(0,0,0,0.28)",
+                }}
+              >
+
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    minHeight: "30px",
+                    padding: "7px 4px",
+                    background: "rgba(5,15,25,0.88)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize:
+                      name === "Silla de ruedas"
+                        ? "10px"
+                        : "11px",
+                    lineHeight: 1.05,
+                    fontWeight: 700,
+                    textAlign: "center",
+                  }}
+                >
+                  {name}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
         {/* GRUPOS */}
 
         <section
@@ -1629,7 +1945,7 @@ display: showCreateGroup
               padding: "14px",
               border:
                 "1px solid #e2e8f0",
-              borderRadius: "12px",
+              borderRadius: "14px",
             }}
           >
             {member.user.profilePicture ? (
@@ -2060,7 +2376,7 @@ display: showCreateGroup
 )}
         {/* RANKING */}
 {!selectedGroup && (
-        <section>
+        <section id="ranking-viarank">
           <div style={styles.rankingTitleRow}>
             <div>
               <h2 style={styles.rankingTitle}>
