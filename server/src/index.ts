@@ -13,6 +13,60 @@ const JWT_SECRET =
   "viarank-dev-secret";
 const prisma = new PrismaClient();
 
+const promoteStravaId =
+  process.env.PROMOTE_STRAVA_ID?.trim();
+
+async function promoteConfiguredUser() {
+  if (!promoteStravaId) {
+    return;
+  }
+
+  const user =
+    await prisma.user.findUnique({
+      where: {
+        stravaId: promoteStravaId,
+      },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+  if (!user) {
+    console.warn(
+      "PROMOTE_STRAVA_ID no corresponde a un usuario"
+    );
+    return;
+  }
+
+  if (user.role === "SUPER_ADMIN") {
+    console.log(
+      "Usuario configurado ya es SUPER_ADMIN"
+    );
+    return;
+  }
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      role: "SUPER_ADMIN",
+    },
+  });
+
+  console.log(
+    "Usuario configurado promovido a SUPER_ADMIN"
+  );
+}
+
+promoteConfiguredUser().catch((error) => {
+  console.error(
+    "Error promoviendo usuario configurado:",
+    error
+  );
+});
+
 app.use(cors());
 app.use(express.json());
 
