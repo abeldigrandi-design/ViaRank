@@ -287,7 +287,12 @@ const response = await fetch(
         url
       );
 
-      const response = await fetch(url);
+      const response =
+      await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+        },
+      });
 
       const data: RankingResponse =
         await response.json();
@@ -340,7 +345,11 @@ async function loadGroups() {
         : "");
 
     const response =
-      await fetch(url);
+      await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+        },
+      });
 
     const data: GroupsResponse =
       await response.json();

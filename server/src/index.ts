@@ -1499,14 +1499,59 @@ app.get(
           req.query.sport || ""
         ).toUpperCase();
 
-      const where: any = {};
+      const requesterId =
+  getAuthenticatedUserId(req);
 
-      if (search) {
-        where.name = {
-          contains: search,
-          mode: "insensitive",
-        };
-      }
+if (!requesterId) {
+  return res.status(401).json({
+    error: "Usuario no autenticado",
+  });
+}
+
+const requester =
+  await prisma.user.findUnique({
+    where: {
+      id: requesterId,
+    },
+    select: {
+      role: true,
+    },
+  });
+
+if (!requester) {
+  return res.status(404).json({
+    error: "Usuario no encontrado",
+  });
+}
+
+const isSuperAdmin =
+  requester.role === "SUPER_ADMIN";
+
+const where: any = {};
+
+if (search) {
+  where.name = {
+    contains: search,
+    mode: "insensitive",
+  };
+
+  if (!isSuperAdmin) {
+    where.visibility = "PUBLIC";
+  }
+} else if (!isSuperAdmin) {
+  where.OR = [
+    {
+      administratorId: requesterId,
+    },
+    {
+      members: {
+        some: {
+          userId: requesterId,
+        },
+      },
+    },
+  ];
+}
 
       if (
         sport &&
