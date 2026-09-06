@@ -38,6 +38,7 @@ type SportGroup = {
   name: string;
   sport: string;
   joinCode: string;
+  visibility: "PUBLIC" | "PRIVATE";
 
   administrator: {
     id: string;
@@ -64,6 +65,7 @@ type GroupRankingResponse = {
     name: string;
     sport: string;
     joinCode: string;
+  visibility: "PUBLIC" | "PRIVATE";
 
     administrator: {
       id: string;
@@ -1991,6 +1993,39 @@ display: showCreateGroup
         >
           Código: {adminGroup.joinCode}
         </p>
+
+        <select
+          value={adminGroup.visibility}
+          onChange={async (e) => {
+            const visibility = e.target.value as "PUBLIC" | "PRIVATE";
+            const response = await fetch(`${API_URL}/api/groups/${adminGroup.id}`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+              },
+              body: JSON.stringify({ visibility }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              alert(data.error || "No se pudo actualizar la privacidad");
+              return;
+            }
+            setAdminGroup(data.group);
+            await loadGroups();
+          }}
+          style={{
+            marginTop: "12px",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            border: "1px solid #cbd5e1",
+            background: "#ffffff",
+            fontWeight: 600,
+          }}
+        >
+          <option value="PUBLIC">Público</option>
+          <option value="PRIVATE">Privado</option>
+        </select>
       </div>
 
       <button

@@ -1920,6 +1920,103 @@ if (period === "year") {
   }
 );
 /* =========================================================
+   ACTUALIZAR GRUPO
+========================================================= */
+
+app.patch(
+  "/api/groups/:groupId",
+  async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { visibility } = req.body;
+
+      const userId =
+        getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const group =
+        await prisma.sportGroup.findUnique({
+          where: {
+            id: groupId,
+          },
+          select: {
+            id: true,
+            administratorId: true,
+          },
+        });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (!user) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      const canManage =
+        user.role === "SUPER_ADMIN" ||
+        group.administratorId === userId;
+
+      if (!canManage) {
+        return res.status(403).json({
+          error:
+            "No tenés permiso para administrar este grupo",
+        });
+      }
+
+      const normalizedVisibility =
+        visibility === "PRIVATE"
+          ? "PRIVATE"
+          : "PUBLIC";
+
+      const updatedGroup =
+        await prisma.sportGroup.update({
+          where: {
+            id: groupId,
+          },
+          data: {
+            visibility: normalizedVisibility,
+          },
+        });
+
+      return res.json({
+        success: true,
+        group: updatedGroup,
+      });
+    } catch (error) {
+      console.error(
+        "Error actualizando grupo:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo actualizar el grupo",
+      });
+    }
+  }
+);
+/* =========================================================
    ELIMINAR GRUPO
 ========================================================= */
 
