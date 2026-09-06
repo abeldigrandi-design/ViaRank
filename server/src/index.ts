@@ -1287,6 +1287,7 @@ app.post(
      const {
   name,
   sport,
+  visibility,
 } = req.body;
 
 const administratorId =
@@ -1307,6 +1308,11 @@ if (!administratorId) {
 
       const normalizedSport =
         String(sport).toUpperCase();
+
+      const normalizedVisibility =
+        visibility === "PRIVATE"
+          ? "PRIVATE"
+          : "PUBLIC";
 
       if (
         ![
@@ -1365,6 +1371,8 @@ if (!administratorId) {
 | "WHEELCHAIR",
 
             joinCode,
+
+            visibility: normalizedVisibility,
 
             administratorId,
 

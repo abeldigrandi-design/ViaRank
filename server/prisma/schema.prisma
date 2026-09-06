@@ -13,6 +13,11 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum GroupVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum ActivityType {
   RIDE
   RUN
@@ -70,6 +75,7 @@ model SportGroup {
   name            String
   sport           ActivityType
   joinCode        String        @unique
+  visibility      GroupVisibility @default(PUBLIC)
 
   administratorId String
   administrator   User          @relation("GroupAdministrator", fields: [administratorId], references: [id])

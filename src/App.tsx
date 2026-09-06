@@ -132,6 +132,7 @@ function canManageGroup(
 
   const [sport, setSport] = useState("");
   const [period, setPeriod] = useState("month");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -164,6 +165,9 @@ const [newGroupName, setNewGroupName] =
 
 const [newGroupSport, setNewGroupSport] =
   useState("RIDE");
+
+const [newGroupVisibility, setNewGroupVisibility] =
+  useState("PUBLIC");
 
 const [creatingGroup, setCreatingGroup] =
   useState(false);
@@ -544,6 +548,9 @@ async function createGroup() {
           sport:
             newGroupSport,
 
+          visibility:
+            newGroupVisibility,
+
           administratorId:
             user.id,
         }),
@@ -562,6 +569,7 @@ async function createGroup() {
 
     setNewGroupName("");
     setNewGroupSport("RIDE");
+    setNewGroupVisibility("PUBLIC");
 
     await loadGroups();
 
@@ -1137,15 +1145,19 @@ async function removeGroupMember(
             </button>
 
             {/* MENU */}
-            <details
+            <div
               style={{
                 position: "relative",
                 flexShrink: 0,
               }}
             >
-              <summary
+              <button
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label="Abrir menú"
                 style={{
-                  listStyle: "none",
+                  position: "relative",
+                  zIndex: 102,
                   width: "48px",
                   height: "48px",
                   borderRadius: "14px",
@@ -1157,57 +1169,112 @@ async function removeGroupMember(
                   justifyContent: "center",
                   cursor: "pointer",
                   fontSize: "24px",
-                  userSelect: "none",
+                  lineHeight: 1,
                 }}
               >
                 ☰
-              </summary>
+              </button>
 
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "58px",
-                  width: "190px",
-                  background: "white",
-                  borderRadius: "14px",
-                  padding: "8px",
-                  boxShadow: "0 12px 30px rgba(15,23,42,0.22)",
-                  border: "1px solid #e5e7eb",
-                  zIndex: 100,
-                }}
-              >
-                <div
-                  style={{
-                    padding: "10px 12px",
-                    fontSize: "13px",
-                    color: "#64748b",
-                    borderBottom: "1px solid #eef2f7",
-                  }}
-                >
-                  {user?.firstName} {user?.lastName}
-                </div>
+              {menuOpen && (
+                <>
+                  <div
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      position: "fixed",
+                      inset: 0,
+                      zIndex: 100,
+                    }}
+                  />
 
-                <button
-                  onClick={logout}
-                  style={{
-                    width: "100%",
-                    marginTop: "6px",
-                    padding: "10px 12px",
-                    border: "none",
-                    background: "transparent",
-                    borderRadius: "9px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    color: "#111827",
-                  }}
-                >
-                  Cerrar sesión
-                </button>
-              </div>
-            </details>
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "58px",
+                      width: "190px",
+                      background: "white",
+                      borderRadius: "14px",
+                      padding: "8px",
+                      boxShadow: "0 12px 30px rgba(15,23,42,0.22)",
+                      border: "1px solid #e5e7eb",
+                      zIndex: 103,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        fontSize: "13px",
+                        color: "#64748b",
+                        borderBottom: "1px solid #eef2f7",
+                      }}
+                    >
+                      {user?.firstName} {user?.lastName}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setShowCreateGroup(true);
+
+                        window.setTimeout(() => {
+                          document
+                            .getElementById("mis-grupos-viarank")
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "center",
+                            });
+                        }, 100);
+                      }}
+                      style={{
+                        width: "100%",
+                        marginTop: "6px",
+                        padding: "10px 12px",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: "9px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        color: "#111827",
+                      }}
+                    >
+                      Crear grupo
+                    </button>
+
+                    <div
+                      style={{
+                        height: "1px",
+                        background: "#eef2f7",
+                        margin: "4px 8px",
+                      }}
+                    />
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        logout();
+                      }}
+                      style={{
+                        width: "100%",
+                        marginTop: "6px",
+                        padding: "10px 12px",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: "9px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "#111827",
+                      }}
+                    >
+                      Cerrar sesión
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1390,6 +1457,7 @@ async function removeGroupMember(
         {/* GRUPOS */}
 
         <section
+          id="mis-grupos-viarank"
           style={{
             background: "white",
             borderRadius: "18px",
@@ -1548,6 +1616,25 @@ display: showCreateGroup
 <option value="WINDSURF">
   Windsurf
 </option>
+    </select>
+
+    <select
+      value={newGroupVisibility}
+      onChange={(e) =>
+        setNewGroupVisibility(
+          e.target.value
+        )
+      }
+      style={{
+        minWidth: "170px",
+        padding: "12px",
+        borderRadius: "10px",
+        border: "1px solid #cbd5e1",
+        background: "#ffffff",
+      }}
+    >
+      <option value="PUBLIC">Público</option>
+      <option value="PRIVATE">Privado</option>
     </select>
 
     <button
@@ -2929,6 +3016,8 @@ const styles: {
 };
 
 export default App;
+
+
 
 
 
