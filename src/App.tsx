@@ -1899,10 +1899,19 @@ display: showCreateGroup
   }}
 >
   <button
-    onClick={() => {
-      loadGroupRanking(group.id);
-    }}
-    style={{
+  onClick={() => {
+    loadGroupRanking(group.id);
+  }}
+  onMouseDown={(e) => {
+    e.currentTarget.style.transform = "scale(0.94)";
+  }}
+  onMouseUp={(e) => {
+    e.currentTarget.style.transform = "scale(1)";
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = "scale(1)";
+  }}
+  style={{
       padding: "12px 18px",
       border: "none",
       borderRadius: "10px",
@@ -1910,6 +1919,9 @@ display: showCreateGroup
       fontWeight: 700,
       width: isMobile ? "100%" : "auto",
       background: isMobile ? "#f1f5f9" : "transparent",
+transition: "transform 0.12s ease, background 0.12s ease",
+transform: "scale(1)",
+boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
     }}
   >
     Ver ranking
@@ -1921,6 +1933,15 @@ display: showCreateGroup
         onClick={() => {
           loadGroupMembers(group);
         }}
+onMouseDown={(e) => {
+  e.currentTarget.style.transform = "scale(0.94)";
+}}
+onMouseUp={(e) => {
+  e.currentTarget.style.transform = "scale(1)";
+}}
+onMouseLeave={(e) => {
+  e.currentTarget.style.transform = "scale(1)";
+}}
         style={{
           padding: "12px 18px",
           border: "none",
@@ -1929,30 +1950,45 @@ display: showCreateGroup
           fontWeight: 700,
           width: isMobile ? "100%" : "auto",
           background: isMobile ? "#f1f5f9" : "transparent",
+transition: "transform 0.12s ease, background 0.12s ease",
+transform: "scale(1)",
+boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
         }}
       >
         Administrar grupo
       </button>
 
-      <button
-        onClick={() =>
-          deleteGroup(
-            group.id,
-            group.name
-          )
-        }
-        style={{
-          padding: "12px 18px",
-          border: "none",
-          borderRadius: "10px",
-          cursor: "pointer",
-          fontWeight: 700,
-          width: isMobile ? "100%" : "auto",
-          background: isMobile ? "#f1f5f9" : "transparent",
-        }}
-      >
-        Eliminar grupo
-      </button>
+     <button
+  onClick={() =>
+    deleteGroup(
+      group.id,
+      group.name
+    )
+  }
+  onMouseDown={(e) => {
+    e.currentTarget.style.transform = "scale(0.94)";
+  }}
+  onMouseUp={(e) => {
+    e.currentTarget.style.transform = "scale(1)";
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = "scale(1)";
+  }}
+  style={{
+    padding: "12px 18px",
+    border: "none",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontWeight: 700,
+    width: isMobile ? "100%" : "auto",
+    background: isMobile ? "#f1f5f9" : "transparent",
+    transition: "transform 0.12s ease, background 0.12s ease",
+    transform: "scale(1)",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+  }}
+>
+  Eliminar grupo
+</button>
     </>
   )}
 </div>
