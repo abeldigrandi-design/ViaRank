@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import LoginButton from "./components/LoginButton";
 import viarankHeaderLogo from "./assets/viarank-header-logo-clean.png";
-import stravaLogo from "./assets/strava.svg";
 import heroImage from "./assets/hero-sport.png";
 import sportCiclismo from "./assets/sports/sport-ciclismo.png";
 import sportCarrera from "./assets/sports/sport-carrera.png";
@@ -1197,36 +1196,31 @@ async function removeGroupMember(
                 </span>
               </div>
             </div>
-
-            {/* STRAVA */}
+            {/* ACTUALIZAR ACTIVIDADES */}
             <button
               onClick={refreshActivities}
               disabled={refreshing}
-              title="Actualizar datos de Strava"
+              title="Actualizar actividades"
               style={{
-                width: "48px",
                 height: "48px",
                 borderRadius: "14px",
                 border: "1px solid rgba(255,255,255,0.12)",
                 background: "white",
+                color: "#0f172a",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                gap: "8px",
                 cursor: refreshing ? "default" : "pointer",
-                padding: "10px",
+                padding: "0 14px",
                 flexShrink: 0,
                 opacity: refreshing ? 0.6 : 1,
+                fontSize: "14px",
+                fontWeight: 700,
               }}
             >
-              <img
-                src={stravaLogo}
-                alt="Actualizar Strava"
-                style={{
-                  width: "25px",
-                  height: "25px",
-                  objectFit: "contain",
-                }}
-              />
+              <span style={{ fontSize: "20px", lineHeight: 1 }}>↻</span>
+              <span>{refreshing ? "Actualizando..." : "Actualizar actividades"}</span>
             </button>
 
             {/* MENU */}
