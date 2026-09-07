@@ -1,20 +1,30 @@
 import { loginWithStrava } from "../services/strava";
+import stravaConnectButton from "../assets/strava-connect-orange.png";
 
 function LoginButton() {
   return (
     <button
       onClick={loginWithStrava}
       style={{
-        background: "red",
-        color: "white",
-        fontSize: "24px",
-        padding: "20px",
+        background: "transparent",
         border: "none",
-        borderRadius: "10px",
+        padding: 0,
         cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
+      aria-label="Connect with Strava"
     >
-      🚴 CONECTAR CON STRAVA
+      <img
+        src={stravaConnectButton}
+        alt="Connect with Strava"
+        style={{
+          display: "block",
+          height: "48px",
+          width: "auto",
+        }}
+      />
     </button>
   );
 }
