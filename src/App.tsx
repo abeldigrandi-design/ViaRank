@@ -1196,12 +1196,13 @@ async function removeGroupMember(
                 </span>
               </div>
             </div>
-            {/* ACTUALIZAR ACTIVIDADES */}
+                       {/* ACTUALIZAR ACTIVIDADES */}
             <button
               onClick={refreshActivities}
               disabled={refreshing}
               title="Actualizar actividades"
               style={{
+                width: isMobile ? "48px" : "auto",
                 height: "48px",
                 borderRadius: "14px",
                 border: "1px solid rgba(255,255,255,0.12)",
@@ -1210,9 +1211,9 @@ async function removeGroupMember(
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "8px",
+                gap: isMobile ? "0" : "8px",
                 cursor: refreshing ? "default" : "pointer",
-                padding: "0 14px",
+                padding: isMobile ? "0" : "0 14px",
                 flexShrink: 0,
                 opacity: refreshing ? 0.6 : 1,
                 fontSize: "14px",
@@ -1220,7 +1221,11 @@ async function removeGroupMember(
               }}
             >
               <span style={{ fontSize: "20px", lineHeight: 1 }}>↻</span>
-              <span>{refreshing ? "Actualizando..." : "Actualizar actividades"}</span>
+              {!isMobile && (
+                <span>
+                  {refreshing ? "Actualizando..." : "Actualizar actividades"}
+                </span>
+              )}
             </button>
 
             {/* MENU */}
