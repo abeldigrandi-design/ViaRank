@@ -1762,18 +1762,20 @@ display: showCreateGroup
           {/* LISTA DE GRUPOS */}
 
           {groupsLoading ? (
-            <p>
-              Cargando grupos...
-            </p>
-          ) : groups.length === 0 ? (
-            <p
-              style={{
-                color: "#64748b",
-              }}
-            >
-              No se encontraron grupos.
-            </p>
-          ) : (
+  <p>
+    Cargando grupos...
+  </p>
+) : groups.length === 0 ? (
+  groupSportFilter ? (
+    <p
+      style={{
+        color: "#64748b",
+      }}
+    >
+      No hay grupos públicos en este deporte.
+    </p>
+  ) : null
+) : (
             <div
               style={{
                 display: "grid",
