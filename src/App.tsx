@@ -975,32 +975,98 @@ async function removeGroupMember(
 
   if (!connected) {
     return (
-      <div style={styles.page}>
-        <div style={styles.loginCard}>
-          <div style={styles.bigLogo}>
-            🏆
-          </div>
+      <div
+        style={{
+          ...styles.page,
+          minHeight: "100vh",
+          backgroundImage: `linear-gradient(
+            rgba(7, 18, 35, 0.52),
+            rgba(7, 18, 35, 0.72)
+          ), url(${heroImage})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            ...styles.loginCard,
+            width: "100%",
+            maxWidth: "620px",
+            padding: "42px 32px",
+            borderRadius: "28px",
+            background: "rgba(10, 22, 40, 0.88)",
+            border: "1px solid rgba(255, 255, 255, 0.16)",
+            boxShadow: "0 24px 70px rgba(0, 0, 0, 0.35)",
+            backdropFilter: "blur(10px)",
+            textAlign: "center",
+            boxSizing: "border-box",
+          }}
+        >
+          <img
+            src={viarankHeaderLogo}
+            alt="ViaRank"
+            style={{
+              width: "min(330px, 82vw)",
+              maxWidth: "100%",
+              height: "auto",
+              display: "block",
+              margin: "0 auto 28px",
+            }}
+          />
 
-          <h1 style={styles.title}>
-            ViaRank
+          <h1
+            style={{
+              margin: "0 0 18px",
+              color: "#ffffff",
+              fontSize: "clamp(30px, 5vw, 44px)",
+              lineHeight: 1.08,
+              fontWeight: 800,
+            }}
+          >
+            Tu actividad. Tu comunidad.
           </h1>
 
-          <p style={styles.subtitle}>
-            Clasificación Deportiva
+          <p
+            style={{
+              margin: "0 auto 30px",
+              maxWidth: "470px",
+              color: "#d5dbea",
+              fontSize: "18px",
+              lineHeight: 1.6,
+            }}
+          >
+            Conectá tu cuenta de Strava para seguir tu actividad
+            y compartirla con tu comunidad deportiva.
           </p>
 
-          <p style={styles.description}>
-            Conectá tu cuenta de Strava
-            para participar en los
-            rankings deportivos.
-          </p>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <LoginButton />
+          </div>
 
-          <LoginButton />
+          <p
+            style={{
+              margin: "18px 0 0",
+              color: "#aeb8c8",
+              fontSize: "14px",
+            }}
+          >
+            Es rápido, seguro y oficial.
+          </p>
         </div>
       </div>
     );
   }
-
   /* =====================================================
      PANTALLA PRINCIPAL
   ===================================================== */
