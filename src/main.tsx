@@ -8,11 +8,13 @@ import {
 import "./index.css";
 import App from "./App";
 import ExchangeToken from "./pages/ExchangeToken";
+import SupportPrivacy from "./pages/SupportPrivacy";
 
 createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
     <Routes>
       <Route path="/" element={<App />} />
+      <Route path="/support" element={<SupportPrivacy />} />
       <Route
         path="/exchange_token"
         element={<ExchangeToken />}

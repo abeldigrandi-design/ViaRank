@@ -556,6 +556,102 @@ app.post(
     }
   }
 );
+/* =========================================================
+   DESCONECTAR STRAVA
+========================================================= */
+
+app.post(
+  "/api/strava/disconnect",
+  async (req, res) => {
+    try {
+      const userId =
+        getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autorizado",
+        });
+      }
+
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            accessToken: true,
+          },
+        });
+
+      if (!user) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      if (user.accessToken) {
+        const response = await fetch(
+          "https://www.strava.com/oauth/revoke",
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${user.accessToken}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const data =
+            await response.text();
+
+          console.error(
+            "Error revocando acceso en Strava:",
+            data
+          );
+
+          return res.status(502).json({
+            error:
+              "No se pudo revocar la autorización en Strava",
+          });
+        }
+      }
+
+      await prisma.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          accessToken: null,
+          refreshToken: null,
+          expiresAt: null,
+        },
+      });
+
+      console.log(
+        "Cuenta de Strava desconectada:",
+        userId
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "Cuenta de Strava desconectada correctamente",
+      });
+    } catch (error) {
+      console.error(
+        "Error desconectando Strava:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "Error al desconectar la cuenta de Strava",
+      });
+    }
+  }
+);
 
 /* =========================================================
    RENOVAR TOKEN DE STRAVA

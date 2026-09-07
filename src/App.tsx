@@ -1326,6 +1326,35 @@ async function removeGroupMember(
                       Crear grupo
                     </button>
 
+                                        <div
+                      style={{
+                        height: "1px",
+                        background: "#eef2f7",
+                        margin: "4px 8px",
+                      }}
+                    />
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        window.location.href = "/support";
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: "9px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "#111827",
+                      }}
+                    >
+                      Soporte y privacidad
+                    </button>
+
                     <div
                       style={{
                         height: "1px",
