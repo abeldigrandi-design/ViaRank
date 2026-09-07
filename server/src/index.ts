@@ -1489,17 +1489,12 @@ app.get(
   "/api/groups",
   async (req, res) => {
     try {
-      const search =
-        String(
-          req.query.search || ""
-        ).trim();
-
       const sport =
-        String(
-          req.query.sport || ""
-        ).toUpperCase();
+  String(
+    req.query.sport || ""
+  ).toUpperCase();
 
-      const requesterId =
+const requesterId =
   getAuthenticatedUserId(req);
 
 if (!requesterId) {
@@ -1527,18 +1522,48 @@ if (!requester) {
 const isSuperAdmin =
   requester.role === "SUPER_ADMIN";
 
+const validSports = [
+  "RIDE",
+  "RUN",
+  "WALK",
+  "HIKE",
+  "SWIM",
+  "KAYAK",
+  "ROW",
+  "SAIL",
+  "WINDSURF",
+  "WHEELCHAIR",
+];
+
+const hasValidSport =
+  sport &&
+  validSports.includes(sport);
+
 const where: any = {};
 
-if (search) {
-  where.name = {
-    contains: search,
-    mode: "insensitive",
-  };
-
-  if (!isSuperAdmin) {
-    where.visibility = "PUBLIC";
+if (isSuperAdmin) {
+  if (hasValidSport) {
+    where.sport = sport;
   }
-} else if (!isSuperAdmin) {
+} else if (hasValidSport) {
+  where.OR = [
+    {
+      visibility: "PUBLIC",
+      sport,
+    },
+    {
+      administratorId: requesterId,
+    },
+    {
+      visibility: "PRIVATE",
+      members: {
+        some: {
+          userId: requesterId,
+        },
+      },
+    },
+  ];
+} else {
   where.OR = [
     {
       administratorId: requesterId,
@@ -1552,24 +1577,6 @@ if (search) {
     },
   ];
 }
-
-      if (
-        sport &&
-       [
-  "RIDE",
-  "RUN",
-  "WALK",
-  "HIKE",
-  "SWIM",
-  "KAYAK",
-  "ROW",
-  "SAIL",
-  "WINDSURF",
-  "WHEELCHAIR",
-].includes(sport)
-      ) {
-        where.sport = sport;
-      }
 
       const groups =
         await prisma.sportGroup.findMany({

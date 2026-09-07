@@ -146,7 +146,7 @@ const [groups, setGroups] = useState<
 const [groupsLoading, setGroupsLoading] =
   useState(false);
 
-const [groupSearch, setGroupSearch] =
+const [groupSportFilter, setGroupSportFilter] =
   useState("");
 
 const [joinCode, setJoinCode] =
@@ -324,19 +324,27 @@ const response = await fetch(
    CARGAR GRUPOS
 ===================================================== */
 
-async function loadGroups() {
+async function loadGroups(selectedSport?: string) {
   try {
     setGroupsLoading(true);
 
     const params =
       new URLSearchParams();
 
-    if (groupSearch.trim()) {
-      params.set(
-        "search",
-        groupSearch.trim()
-      );
-    }
+   const sportToLoad =
+  selectedSport !== undefined
+    ? selectedSport
+    : groupSportFilter;
+
+if (!sportToLoad) {
+  setGroups([]);
+  return;
+}
+
+params.set(
+  "sport",
+  sportToLoad
+);
 
     const url =
       `${API_URL}/api/groups` +
@@ -1668,49 +1676,44 @@ display: showCreateGroup
     </button>
   </div>
 </div>
-          {/* BUSCAR GRUPO */}
+        {/* ELEGIR DEPORTE */}
 
-         <div
+<div
   style={{
-    display: "flex",
-    flexDirection: isMobile ? "column" : "row",
-    gap: "10px",
     marginBottom: "16px",
   }}
 >
-            <input
-              type="text"
-              value={groupSearch}
-              onChange={(e) =>
-                setGroupSearch(
-                  e.target.value
-                )
-              }
-              placeholder="Buscar grupo por nombre"
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: "10px",
-                border:
-                  "1px solid #cbd5e1",
-              }}
-            />
-
-            <button
-              onClick={() => loadGroups()}
-              style={{
-                padding: "12px 20px",
-                border: "none",
-                borderRadius: "10px",
-                cursor: "pointer",
-                fontWeight: 700,
-               width: isMobile ? "100%" : "auto",
-               background: isMobile ? "#f1f5f9" : "transparent",
-              }}
-            >
-              Buscar
-            </button>
-          </div>
+  <select
+    value={groupSportFilter}
+    onChange={(e) => {
+  const sport = e.target.value;
+  setGroupSportFilter(sport);
+  loadGroups(sport);
+}}
+    style={{
+      width: "100%",
+      padding: "12px",
+      borderRadius: "10px",
+      border: "1px solid #cbd5e1",
+      background: "#ffffff",
+      cursor: "pointer",
+    }}
+  >
+    <option value="">
+      Elegir deporte
+    </option>
+    <option value="RIDE">Ciclismo</option>
+    <option value="RUN">Carrera</option>
+    <option value="SWIM">Natación</option>
+    <option value="HIKE">Senderismo</option>
+    <option value="WALK">Caminata</option>
+    <option value="WHEELCHAIR">Silla de ruedas</option>
+    <option value="KAYAK">Kayak</option>
+    <option value="ROW">Remo</option>
+    <option value="SAIL">Vela</option>
+    <option value="WINDSURF">Windsurf</option>
+  </select>
+</div>
 
           {/* ENTRAR CON CÓDIGO */}
 
@@ -1755,24 +1758,7 @@ display: showCreateGroup
               Unirme
             </button>
           </div>
-          <button
-  onClick={() =>
-    setShowCreateGroup(
-      !showCreateGroup
-    )
-  }
-  style={{
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    fontWeight: 700,
-    marginBottom: "12px",
-  }}
->
-  {showCreateGroup
-    ? "Cerrar"
-    : "CREAR UN GRUPO"}
-</button>
+          
           {/* LISTA DE GRUPOS */}
 
           {groupsLoading ? (
@@ -1902,13 +1888,13 @@ display: showCreateGroup
   onClick={() => {
     loadGroupRanking(group.id);
   }}
-  onMouseDown={(e) => {
+  onPointerDown={(e) => {
     e.currentTarget.style.transform = "scale(0.94)";
   }}
-  onMouseUp={(e) => {
+  onPointerUp={(e) => {
     e.currentTarget.style.transform = "scale(1)";
   }}
-  onMouseLeave={(e) => {
+  onPointerLeave={(e) => {
     e.currentTarget.style.transform = "scale(1)";
   }}
   style={{
@@ -1928,69 +1914,86 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
   </button>
 
   {canManageGroup(group) && (
-    <>
-      <button
-        onClick={() => {
-          loadGroupMembers(group);
-        }}
-onMouseDown={(e) => {
-  e.currentTarget.style.transform = "scale(0.94)";
-}}
-onMouseUp={(e) => {
-  e.currentTarget.style.transform = "scale(1)";
-}}
-onMouseLeave={(e) => {
-  e.currentTarget.style.transform = "scale(1)";
-}}
-        style={{
-          padding: "12px 18px",
-          border: "none",
-          borderRadius: "10px",
-          cursor: "pointer",
-          fontWeight: 700,
-          width: isMobile ? "100%" : "auto",
-          background: isMobile ? "#f1f5f9" : "transparent",
-transition: "transform 0.12s ease, background 0.12s ease",
-transform: "scale(1)",
-boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-        }}
-      >
-        Administrar grupo
-      </button>
+  <div
+    style={{
+      display: "flex",
+      gap: "6px",
+      justifyContent: isMobile ? "flex-end" : "flex-start",
+      flexWrap: "wrap",
+    }}
+  >
+    <button
+      onClick={() => {
+        loadGroupMembers(group);
+      }}
+      onPointerDown={(e) => {
+        e.currentTarget.style.transform = "scale(0.94)";
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      onPointerCancel={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      onPointerLeave={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      style={{
+        padding: isMobile ? "6px 9px" : "7px 11px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        cursor: "pointer",
+        fontWeight: 600,
+        fontSize: isMobile ? "11px" : "12px",
+        width: "auto",
+        background: "#ffffff",
+        color: "#475569",
+        transition: "transform 0.12s ease, background 0.12s ease",
+        transform: "scale(1)",
+        touchAction: "manipulation",
+      }}
+    >
+      Administrar grupo
+    </button>
 
-     <button
-  onClick={() =>
-    deleteGroup(
-      group.id,
-      group.name
-    )
-  }
-  onMouseDown={(e) => {
-    e.currentTarget.style.transform = "scale(0.94)";
-  }}
-  onMouseUp={(e) => {
-    e.currentTarget.style.transform = "scale(1)";
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.transform = "scale(1)";
-  }}
-  style={{
-    padding: "12px 18px",
-    border: "none",
-    borderRadius: "10px",
-    cursor: "pointer",
-    fontWeight: 700,
-    width: isMobile ? "100%" : "auto",
-    background: isMobile ? "#f1f5f9" : "transparent",
-    transition: "transform 0.12s ease, background 0.12s ease",
-    transform: "scale(1)",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-  }}
->
-  Eliminar grupo
-</button>
-    </>
-  )}
+    <button
+      onClick={() =>
+        deleteGroup(
+          group.id,
+          group.name
+        )
+      }
+      onPointerDown={(e) => {
+        e.currentTarget.style.transform = "scale(0.94)";
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      onPointerCancel={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      onPointerLeave={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+      style={{
+        padding: isMobile ? "6px 9px" : "7px 11px",
+        border: "1px solid #fecaca",
+        borderRadius: "8px",
+        cursor: "pointer",
+        fontWeight: 600,
+        fontSize: isMobile ? "11px" : "12px",
+        width: "auto",
+        background: "#ffffff",
+        color: "#b91c1c",
+        transition: "transform 0.12s ease, background 0.12s ease",
+        transform: "scale(1)",
+        touchAction: "manipulation",
+      }}
+    >
+      Eliminar grupo
+    </button>
+  </div>
+)}
 </div>
                   </div>
                 )
@@ -2202,63 +2205,7 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
     flexDirection: isMobile ? "column" : "row",
   }}
 >
-          <div>
-            <p style={styles.filterLabel}>
-              DEPORTE
-            </p>
-
-            <select
-              value={sport}
-              onChange={(e) =>
-                setSport(e.target.value)
-              }
-              style={styles.select}
-            >
-              <option value="">
-                Elegir deporte
-              </option>
-
-            <option value="WALK">
-  Caminata
-</option>
-
-<option value="RIDE">
-  Ciclismo
-</option>
-
-<option value="RUN">
-  Carrera
-</option>
-
-<option value="KAYAK">
-  Kayak
-</option>
-
-<option value="SWIM">
-  Natación
-</option>
-
-<option value="ROW">
-  Remo
-</option>
-
-<option value="HIKE">
-  Senderismo
-</option>
-
-<option value="WHEELCHAIR">
-  Silla de ruedas
-</option>
-
-<option value="SAIL">
-  Vela
-</option>
-
-<option value="WINDSURF">
-  Windsurf
-</option>
-            </select>
-          </div>
+          
 
           <div>
             <p style={styles.filterLabel}>
