@@ -182,6 +182,10 @@ const [groupMembers, setGroupMembers] =
 
 const [groupMembersLoading, setGroupMembersLoading] =
   useState(false);
+const [adminUsers, setAdminUsers] = useState<any[]>([]);
+
+const [adminUsersLoading, setAdminUsersLoading] =
+  useState(false);
   /* =====================================================
      COMPROBAR CONEXIÓN CON STRAVA
   ===================================================== */
@@ -194,12 +198,16 @@ const [groupMembersLoading, setGroupMembersLoading] =
      CARGAR RANKING
   ===================================================== */
 
- useEffect(() => {
+useEffect(() => {
   if (connected) {
     loadRanking();
     loadGroups();
+
+    if (isSuperAdmin) {
+      loadAdminUsers();
+    }
   }
-}, [connected, sport, period]);
+}, [connected, sport, period, isSuperAdmin]);
 
 useEffect(() => {
   if (selectedGroup) {
@@ -379,7 +387,50 @@ params.set(
     setGroupsLoading(false);
   }
 }
+/* =====================================================
+   CARGAR USUARIOS - SUPER_ADMIN
+===================================================== */
 
+async function loadAdminUsers() {
+  if (!isSuperAdmin) {
+    return;
+  }
+
+  try {
+    setAdminUsersLoading(true);
+
+    const response = await fetch(
+      `${API_URL}/api/users`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem(
+            "viarank_auth_token"
+          )}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+          "No se pudieron cargar los usuarios"
+      );
+    }
+
+    setAdminUsers(
+      Array.isArray(data) ? data : []
+    );
+  } catch (err) {
+    console.error(
+      "Error cargando usuarios:",
+      err
+    );
+  } finally {
+    setAdminUsersLoading(false);
+  }
+}
 /* =====================================================
    UNIRSE A GRUPO POR CÓDIGO
 ===================================================== */
@@ -1568,7 +1619,140 @@ async function removeGroupMember(
           </div>
         </section>
         {/* GRUPOS */}
+{isSuperAdmin && (
+  <section
+    style={{
+      background: "#ffffff",
+      borderRadius: "18px",
+      padding: "24px",
+      marginBottom: "24px",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "16px",
+        marginBottom: "20px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "24px",
+          }}
+        >
+          Usuarios
+        </h2>
 
+        <p
+          style={{
+            margin: "6px 0 0",
+            color: "#64748b",
+          }}
+        >
+          Panel de SUPER_ADMIN
+        </p>
+      </div>
+
+      <div
+        style={{
+          fontWeight: 700,
+          color: "#475569",
+        }}
+      >
+        {adminUsers.length} usuarios
+      </div>
+    </div>
+
+    {adminUsersLoading ? (
+      <p>Cargando usuarios...</p>
+    ) : adminUsers.length === 0 ? (
+      <p>No hay usuarios para mostrar.</p>
+    ) : (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        {adminUsers.map((adminUser) => (
+          <div
+            key={adminUser.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              padding: "14px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "14px",
+            }}
+          >
+            {adminUser.profilePicture ? (
+              <img
+                src={adminUser.profilePicture}
+                alt={`${adminUser.firstName} ${adminUser.lastName}`}
+                style={{
+                  width: "46px",
+                  height: "46px",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "46px",
+                  height: "46px",
+                  borderRadius: "50%",
+                  background: "#e2e8f0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {"\u{1F464}"}
+              </div>
+            )}
+
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800 }}>
+                {adminUser.firstName}{" "}
+                {adminUser.lastName}
+              </div>
+
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "#64748b",
+                  marginTop: "3px",
+                }}
+              >
+                {adminUser.email || "Sin email"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: 800,
+                padding: "6px 10px",
+                borderRadius: "8px",
+                background: "#f1f5f9",
+              }}
+            >
+              {adminUser.role}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </section>
+)}
         <section
           id="mis-grupos-viarank"
           style={{
