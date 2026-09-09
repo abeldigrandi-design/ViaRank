@@ -195,35 +195,89 @@ export default function SupportPrivacy() {
     Eliminación de datos
   </h2>
 
-  <p
-    style={{
-      lineHeight: 1.7,
-      color: "#475569",
-    }}
-  >
-    Podés solicitar la eliminación de
-    los datos asociados a tu cuenta de
-    ViaRank enviando una solicitud por
-    correo electrónico. Una vez recibida,
-    se eliminarán los datos que
-    correspondan a tu cuenta.
-  </p>
+  <p style={{ lineHeight: 1.7, color: "#475569" }}>Podés solicitar la eliminación de tu cuenta y de los datos asociados en ViaRank.</p><p style={{ lineHeight: 1.7, color: "#475569", fontWeight: 600 }}>Importante: si sos administrador de uno o más grupos, al eliminar tu cuenta también se eliminarán permanentemente esos grupos y sus membresías. Esta acción no se puede deshacer.</p>
 
-  <a
-    href="mailto:abeldigrandi@gmail.com?subject=Solicitud%20de%20eliminacion%20de%20datos%20-%20ViaRank"
+    <button
+    onClick={async () => {
+      const confirmacion = window.confirm(
+        "¿Seguro que querés eliminar tu cuenta? Esta acción eliminará permanentemente tu cuenta, tus actividades, tus membresías y los grupos que administrás."
+      );
+
+      if (!confirmacion) {
+        return;
+      }
+
+      const confirmacionFinal = window.confirm(
+        "Esta acción no se puede deshacer. ¿Querés continuar con la eliminación definitiva?"
+      );
+
+      if (!confirmacionFinal) {
+        return;
+      }
+
+      try {
+        const token =
+          localStorage.getItem(
+            "viarank_auth_token"
+          );
+
+        const API_URL =
+          import.meta.env.VITE_API_URL ||
+          "http://localhost:3001";
+
+        const response = await fetch(
+          `${API_URL}/api/account`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              "No se pudo eliminar la cuenta"
+          );
+        }
+
+        localStorage.removeItem(
+          "viarank_auth_token"
+        );
+
+        alert(
+          "Tu cuenta y tus datos fueron eliminados permanentemente."
+        );
+
+        window.location.href = "/";
+      } catch (error) {
+        console.error(
+          "Error eliminando cuenta:",
+          error
+        );
+
+        alert(
+          "Ocurrió un error al eliminar la cuenta. Intentá nuevamente."
+        );
+      }
+    }}
     style={{
-      display: "inline-block",
       padding: "10px 16px",
-      background: "#ea580c",
+      background: "#dc2626",
       color: "#ffffff",
+      border: "none",
       borderRadius: "10px",
       fontWeight: 700,
-      textDecoration: "none",
+      cursor: "pointer",
     }}
   >
-    Solicitar eliminación de datos
-  </a>
-</section>s
+    Eliminar mi cuenta
+  </button>
+</section>
 
           <div
             style={{

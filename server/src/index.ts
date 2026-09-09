@@ -652,7 +652,130 @@ app.post(
     }
   }
 );
+/* =========================================================
+   ELIMINAR CUENTA Y DATOS
+========================================================= */
 
+app.delete(
+  "/api/account",
+  async (req, res) => {
+    try {
+      const userId =
+        getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autorizado",
+        });
+      }
+
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            accessToken: true,
+          },
+        });
+
+      if (!user) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      // Intentar revocar el acceso de ViaRank en Strava.
+      // Si Strava falla, la eliminación local continúa.
+      if (user.accessToken) {
+        try {
+          const response = await fetch(
+            "https://www.strava.com/oauth/revoke",
+            {
+              method: "POST",
+              headers: {
+                Authorization:
+                  `Bearer ${user.accessToken}`,
+              },
+            }
+          );
+
+          if (!response.ok) {
+            const data =
+              await response.text();
+
+            console.error(
+              "No se pudo revocar Strava durante la eliminación:",
+              data
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Error comunicándose con Strava durante la eliminación:",
+            error
+          );
+        }
+      }
+
+      // Eliminar todos los datos de ViaRank
+      // dentro de una única transacción.
+      await prisma.$transaction(
+        async (tx) => {
+          // Grupos administrados por el usuario.
+          // Sus membresías se eliminan por Cascade.
+          await tx.sportGroup.deleteMany({
+            where: {
+              administratorId: userId,
+            },
+          });
+
+          // Membresías del usuario en otros grupos.
+          await tx.groupMember.deleteMany({
+            where: {
+              userId,
+            },
+          });
+
+          // Actividades importadas desde Strava.
+          await tx.activity.deleteMany({
+            where: {
+              userId,
+            },
+          });
+
+          // Usuario y datos personales.
+          await tx.user.delete({
+            where: {
+              id: userId,
+            },
+          });
+        }
+      );
+
+      console.log(
+        "Cuenta y datos eliminados:",
+        userId
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "Cuenta y datos eliminados permanentemente",
+      });
+    } catch (error) {
+      console.error(
+        "Error eliminando cuenta:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo eliminar la cuenta",
+      });
+    }
+  }
+);
 /* =========================================================
    RENOVAR TOKEN DE STRAVA
 ========================================================= */
