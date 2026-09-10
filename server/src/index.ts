@@ -176,6 +176,11 @@ app.get("/api/users", async (req, res) => {
         role: true,
         city: true,
         country: true,
+_count: {
+  select: {
+    administeredGroups: true,
+  },
+},
         createdAt: true,
       },
 
@@ -772,6 +777,167 @@ app.delete(
       return res.status(500).json({
         error:
           "No se pudo eliminar la cuenta",
+      });
+    }
+  }
+);
+/* =========================================================
+   ELIMINAR USUARIO - SUPER_ADMIN
+========================================================= */
+
+app.delete(
+  "/api/users/:userId",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      const { userId } = req.params;
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const requester =
+        await prisma.user.findUnique({
+          where: {
+            id: requesterId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (
+        !requester ||
+        requester.role !== "SUPER_ADMIN"
+      ) {
+        return res.status(403).json({
+          error:
+            "Acceso exclusivo para SUPER_ADMIN",
+        });
+      }
+
+      if (requesterId === userId) {
+        return res.status(400).json({
+          error:
+            "No podés eliminar tu propia cuenta desde el panel de administración",
+        });
+      }
+
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            accessToken: true,
+          },
+        });
+
+      if (!user) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      if (user.role === "SUPER_ADMIN") {
+        return res.status(403).json({
+          error:
+            "No se puede eliminar otro SUPER_ADMIN desde este panel",
+        });
+      }
+
+      // Intentar revocar el acceso del usuario en Strava.
+      // Si Strava falla, la eliminación local continúa.
+      if (user.accessToken) {
+        try {
+          const response = await fetch(
+            "https://www.strava.com/oauth/revoke",
+            {
+              method: "POST",
+              headers: {
+                Authorization:
+                  `Bearer ${user.accessToken}`,
+              },
+            }
+          );
+
+          if (!response.ok) {
+            const data =
+              await response.text();
+
+            console.error(
+              "No se pudo revocar Strava al eliminar usuario:",
+              data
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Error revocando Strava al eliminar usuario:",
+            error
+          );
+        }
+      }
+
+      await prisma.$transaction(
+        async (tx) => {
+          // Si administra grupos, también se eliminan.
+          await tx.sportGroup.deleteMany({
+            where: {
+              administratorId: userId,
+            },
+          });
+
+          // Eliminar membresías.
+          await tx.groupMember.deleteMany({
+            where: {
+              userId,
+            },
+          });
+
+          // Eliminar actividades.
+          await tx.activity.deleteMany({
+            where: {
+              userId,
+            },
+          });
+
+          // Finalmente eliminar el usuario.
+          await tx.user.delete({
+            where: {
+              id: userId,
+            },
+          });
+        }
+      );
+
+      console.log(
+        "Usuario eliminado por SUPER_ADMIN:",
+        userId
+      );
+
+      return res.json({
+        success: true,
+        message:
+          `${user.firstName} ${user.lastName} fue eliminado correctamente`,
+      });
+    } catch (error) {
+      console.error(
+        "Error eliminando usuario desde SUPER_ADMIN:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo eliminar el usuario",
       });
     }
   }

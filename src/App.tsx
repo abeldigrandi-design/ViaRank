@@ -431,6 +431,60 @@ async function loadAdminUsers() {
     setAdminUsersLoading(false);
   }
 }
+async function deleteAdminUser(
+  userId: string,
+  userName: string
+) {
+  if (
+    !confirm(
+      `¿Seguro que querés eliminar a ${userName}? Esta acción eliminará también sus actividades, membresías y grupos administrados.`
+    )
+  ) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/users/${userId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem(
+            "viarank_auth_token"
+          )}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+          "No se pudo eliminar el usuario"
+      );
+    }
+
+    alert(
+      data.message ||
+        "Usuario eliminado correctamente"
+    );
+
+    await loadAdminUsers();
+  } catch (err) {
+    console.error(
+      "Error eliminando usuario:",
+      err
+    );
+
+    alert(
+      err instanceof Error
+        ? err.message
+        : "No se pudo eliminar el usuario"
+    );
+  }
+}
+
 /* =====================================================
    UNIRSE A GRUPO POR CÓDIGO
 ===================================================== */
@@ -1735,7 +1789,22 @@ async function removeGroupMember(
                 {adminUser.email || "Sin email"}
               </div>
             </div>
-
+{adminUser._count?.administeredGroups > 0 && (
+  <div
+    style={{
+      fontSize: "12px",
+      color: "#f97316",
+      fontWeight: 700,
+      marginTop: "4px",
+    }}
+  >
+    Administra{" "}
+    {adminUser._count.administeredGroups}{" "}
+    {adminUser._count.administeredGroups === 1
+      ? "grupo"
+      : "grupos"}
+  </div>
+)}
             <div
               style={{
                 fontSize: "12px",
@@ -1747,6 +1816,28 @@ async function removeGroupMember(
             >
               {adminUser.role}
             </div>
+{adminUser.role !== "SUPER_ADMIN" && (
+  <button
+    onClick={() =>
+      deleteAdminUser(
+        adminUser.id,
+        `${adminUser.firstName} ${adminUser.lastName}`
+      )
+    }
+    style={{
+      border: "none",
+      background: "#fee2e2",
+      color: "#b91c1c",
+      fontWeight: 800,
+      fontSize: "12px",
+      padding: "7px 10px",
+      borderRadius: "8px",
+      cursor: "pointer",
+    }}
+  >
+    Eliminar usuario
+  </button>
+)}
           </div>
         ))}
       </div>
