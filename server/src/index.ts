@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
+import { randomInt } from "node:crypto";
 dotenv.config();
 
 const app = express();
@@ -127,7 +128,281 @@ app.get("/api/health", (_req, res) => {
     message: "Servidor ViaRank funcionando correctamente",
   });
 });
+/* =========================================================
+   REGISTRO / ACCESO POR TELÉFONO
+========================================================= */
 
+app.post(
+  "/api/auth/request-code",
+  async (req, res) => {
+    try {
+      const firstName =
+        String(req.body.firstName || "").trim();
+
+      const lastName =
+        String(req.body.lastName || "").trim();
+
+      const phone =
+        String(req.body.phone || "")
+          .trim()
+          .replace(/\s+/g, "");
+
+      if (!phone) {
+        return res.status(400).json({
+          error: "El teléfono es obligatorio",
+        });
+      }
+
+      const phoneRegex =
+        /^\+?[0-9]{8,15}$/;
+
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({
+          error: "El teléfono no es válido",
+        });
+      }
+
+      const existingUser =
+        await prisma.user.findUnique({
+          where: { phone },
+        });
+
+      const existingPending =
+        await prisma.pendingPhoneVerification.findUnique({
+          where: { phone },
+        });
+
+      if (
+        existingPending &&
+        Date.now() -
+          existingPending.updatedAt.getTime() <
+          60 * 1000
+      ) {
+        return res.status(429).json({
+          error:
+            "Esperá 60 segundos antes de solicitar otro código",
+        });
+      }
+
+      if (
+        !existingUser &&
+        (!firstName || !lastName)
+      ) {
+        return res.status(400).json({
+          error:
+            "Nombre y apellido son obligatorios para registrarse",
+        });
+      }
+
+      const code =
+        String(
+          Math.floor(
+            100000 +
+              Math.random() * 900000
+          )
+        );
+
+      const expiresAt =
+        new Date(
+          Date.now() +
+            10 * 60 * 1000
+        );
+
+      await prisma.pendingPhoneVerification.upsert({
+        where: { phone },
+
+        update: {
+          firstName:
+            existingUser?.firstName ||
+            firstName,
+
+          lastName:
+            existingUser?.lastName ||
+            lastName,
+
+          code,
+          expiresAt,
+          attempts: 0,
+        },
+
+        create: {
+          phone,
+
+          firstName:
+            existingUser?.firstName ||
+            firstName,
+
+          lastName:
+            existingUser?.lastName ||
+            lastName,
+
+          code,
+          expiresAt,
+          attempts: 0,
+        },
+      });
+
+      console.log(
+        `Código ViaRank para ${phone}: ${code}`
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "Código de verificación generado",
+      });
+    } catch (error) {
+      console.error(
+        "Error generando código de teléfono:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo generar el código de verificación",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/auth/verify-code",
+  async (req, res) => {
+    try {
+      const phone =
+        String(req.body.phone || "")
+          .trim()
+          .replace(/\s+/g, "");
+
+      const code =
+        String(req.body.code || "").trim();
+
+      if (!phone || !code) {
+        return res.status(400).json({
+          error:
+            "Teléfono y código son obligatorios",
+        });
+      }
+
+      const pending =
+        await prisma.pendingPhoneVerification.findUnique({
+          where: { phone },
+        });
+
+      if (!pending) {
+        return res.status(404).json({
+          error:
+            "No hay una verificación pendiente para este teléfono",
+        });
+      }
+
+      if (pending.attempts >= 5) {
+        return res.status(429).json({
+          error:
+            "Demasiados intentos. Solicitá un nuevo código",
+        });
+      }
+
+      if (pending.code !== code) {
+        await prisma.pendingPhoneVerification.update({
+          where: { phone },
+
+          data: {
+            attempts: {
+              increment: 1,
+            },
+          },
+        });
+
+        return res.status(400).json({
+          error: "Código incorrecto",
+        });
+      }
+
+      if (
+        pending.expiresAt <
+        new Date()
+      ) {
+        return res.status(400).json({
+          error: "El código venció",
+        });
+      }
+
+      const existingUser =
+        await prisma.user.findUnique({
+          where: { phone },
+        });
+
+      const verifiedUser =
+        existingUser
+          ? await prisma.user.update({
+              where: {
+                id: existingUser.id,
+              },
+
+              data: {
+                phoneVerified: true,
+              },
+            })
+          : await prisma.user.create({
+              data: {
+                firstName:
+                  pending.firstName,
+
+                lastName:
+                  pending.lastName,
+
+                phone:
+                  pending.phone,
+
+                phoneVerified: true,
+              },
+            });
+
+      await prisma.pendingPhoneVerification.delete({
+        where: { phone },
+      });
+
+      const authToken =
+        jwt.sign(
+          {
+            userId: verifiedUser.id,
+          },
+          JWT_SECRET,
+          {
+            expiresIn: "7d",
+          }
+        );
+
+      return res.json({
+        success: true,
+        authToken,
+
+        user: {
+          id: verifiedUser.id,
+          firstName:
+            verifiedUser.firstName,
+          lastName:
+            verifiedUser.lastName,
+          phone:
+            verifiedUser.phone,
+          role:
+            verifiedUser.role,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Error verificando código de teléfono:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo verificar el código",
+      });
+    }
+  }
+);
 /* =========================================================
    USUARIOS
 ========================================================= */
@@ -283,7 +558,7 @@ app.get(
 
       return res.status(500).json({
         error:
-          "No se pudo comprobar la conexión con Strava",
+          "No se pudo comprobar la conexiÃ³n con Strava",
       });
     }
   }
@@ -340,7 +615,7 @@ app.get(
 );
 
 /* =========================================================
-   INTERCAMBIO DEL CÓDIGO DE STRAVA
+   INTERCAMBIO DEL CÃ“DIGO DE STRAVA
 ========================================================= */
 
 app.post(
@@ -352,7 +627,7 @@ app.post(
       if (!code) {
         return res.status(400).json({
           error:
-            "No se recibió el código de Strava",
+            "No se recibiÃ³ el cÃ³digo de Strava",
         });
       }
 
@@ -376,7 +651,7 @@ app.post(
       }
 
       console.log(
-        "Intercambiando código con Strava..."
+        "Intercambiando cÃ³digo con Strava..."
       );
 
       const response = await fetch(
@@ -423,7 +698,7 @@ app.post(
       if (!data.athlete) {
         return res.status(500).json({
           error:
-            "Strava no devolvió los datos del atleta",
+            "Strava no devolviÃ³ los datos del atleta",
         });
       }
 
@@ -436,62 +711,45 @@ app.post(
         athlete.lastname
       );
 
-      const user =
-        await prisma.user.upsert({
+            const userId =
+        getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autorizado",
+        });
+      }
+
+      const stravaId =
+        String(athlete.id);
+
+      const existingStravaUser =
+        await prisma.user.findUnique({
           where: {
-            stravaId:
-              String(athlete.id),
+            stravaId,
+          },
+        });
+
+      if (
+        existingStravaUser &&
+        existingStravaUser.id !== userId
+      ) {
+        return res.status(409).json({
+          error:
+            "Esta cuenta de Strava ya está vinculada a otro usuario de ViaRank",
+        });
+      }
+
+      const user =
+        await prisma.user.update({
+          where: {
+            id: userId,
           },
 
-          update: {
-            firstName:
-              athlete.firstname || "",
-
-            lastName:
-              athlete.lastname || "",
-
-            profilePicture:
-              athlete.profile_medium ||
-              athlete.profile ||
-              null,
-
-            city:
-              athlete.city || null,
-
-            country:
-              athlete.country || null,
-
-            accessToken:
-              data.access_token,
-
-            refreshToken:
-              data.refresh_token,
-
-            expiresAt:
-              data.expires_at,
-          },
-
-          create: {
-            stravaId:
-              String(athlete.id),
-
-            firstName:
-              athlete.firstname || "",
-
-            lastName:
-              athlete.lastname || "",
-
-            profilePicture:
-              athlete.profile_medium ||
-              athlete.profile ||
-              null,
-
-            city:
-              athlete.city || null,
-
-            country:
-              athlete.country || null,
-
+          data: {
+            stravaId,
+profilePicture:
+  athlete.profile || athlete.profile_medium || null,
             accessToken:
               data.access_token,
 
@@ -504,11 +762,7 @@ app.post(
         });
 
       console.log(
-        "Usuario guardado en PostgreSQL"
-      );
-
-      console.log(
-        "ID ViaRank:",
+        "Strava vinculado al usuario ViaRank:",
         user.id
       );
 
@@ -516,25 +770,12 @@ app.post(
         "Strava ID:",
         user.stravaId
       );
-      const authToken = jwt.sign(
-  {
-    userId: user.id,
-  },
-  JWT_SECRET,
-  {
-    expiresIn: "7d",
-  }
-);
+
       return res.json({
         success: true,
 
-        authToken,
-
         message:
-          "Cuenta de Strava conectada correctamente",
-
-        athlete:
-          data.athlete,
+          "Cuenta de Strava vinculada correctamente",
 
         user: {
           id: user.id,
@@ -618,7 +859,7 @@ app.post(
 
           return res.status(502).json({
             error:
-              "No se pudo revocar la autorización en Strava",
+              "No se pudo revocar la autorizaciÃ³n en Strava",
           });
         }
       }
@@ -692,7 +933,7 @@ app.delete(
       }
 
       // Intentar revocar el acceso de ViaRank en Strava.
-      // Si Strava falla, la eliminación local continúa.
+      // Si Strava falla, la eliminaciÃ³n local continÃºa.
       if (user.accessToken) {
         try {
           const response = await fetch(
@@ -711,31 +952,31 @@ app.delete(
               await response.text();
 
             console.error(
-              "No se pudo revocar Strava durante la eliminación:",
+              "No se pudo revocar Strava durante la eliminaciÃ³n:",
               data
             );
           }
         } catch (error) {
           console.error(
-            "Error comunicándose con Strava durante la eliminación:",
+            "Error comunicÃ¡ndose con Strava durante la eliminaciÃ³n:",
             error
           );
         }
       }
 
       // Eliminar todos los datos de ViaRank
-      // dentro de una única transacción.
+      // dentro de una Ãºnica transacciÃ³n.
       await prisma.$transaction(
         async (tx) => {
           // Grupos administrados por el usuario.
-          // Sus membresías se eliminan por Cascade.
+          // Sus membresÃ­as se eliminan por Cascade.
           await tx.sportGroup.deleteMany({
             where: {
               administratorId: userId,
             },
           });
 
-          // Membresías del usuario en otros grupos.
+          // MembresÃ­as del usuario en otros grupos.
           await tx.groupMember.deleteMany({
             where: {
               userId,
@@ -824,7 +1065,7 @@ app.delete(
       if (requesterId === userId) {
         return res.status(400).json({
           error:
-            "No podés eliminar tu propia cuenta desde el panel de administración",
+            "No podÃ©s eliminar tu propia cuenta desde el panel de administraciÃ³n",
         });
       }
 
@@ -856,7 +1097,7 @@ app.delete(
       }
 
       // Intentar revocar el acceso del usuario en Strava.
-      // Si Strava falla, la eliminación local continúa.
+      // Si Strava falla, la eliminaciÃ³n local continÃºa.
       if (user.accessToken) {
         try {
           const response = await fetch(
@@ -889,14 +1130,14 @@ app.delete(
 
       await prisma.$transaction(
         async (tx) => {
-          // Si administra grupos, también se eliminan.
+          // Si administra grupos, tambiÃ©n se eliminan.
           await tx.sportGroup.deleteMany({
             where: {
               administratorId: userId,
             },
           });
 
-          // Eliminar membresías.
+          // Eliminar membresÃ­as.
           await tx.groupMember.deleteMany({
             where: {
               userId,
@@ -1017,13 +1258,13 @@ async function refreshStravaToken(
     );
 
     throw new Error(
-      "Strava rechazó la renovación del token"
+      "Strava rechazÃ³ la renovaciÃ³n del token"
     );
   }
 
   if (!data.access_token) {
     throw new Error(
-      "Strava no devolvió un nuevo access token"
+      "Strava no devolviÃ³ un nuevo access token"
     );
   }
 
@@ -1054,7 +1295,7 @@ async function refreshStravaToken(
 }
 
 /* =========================================================
-   OBTENER ACCESS TOKEN VÁLIDO
+   OBTENER ACCESS TOKEN VÃLIDO
 ========================================================= */
 
 async function getValidStravaAccessToken(
@@ -1078,14 +1319,14 @@ async function getValidStravaAccessToken(
 
   if (!tokenNeedsRefresh) {
     console.log(
-      "Access Token todavía válido"
+      "Access Token todavÃ­a vÃ¡lido"
     );
 
     return user.accessToken;
   }
 
   console.log(
-    "Access Token vencido o próximo a vencer"
+    "Access Token vencido o prÃ³ximo a vencer"
   );
 
   return await refreshStravaToken(
@@ -1095,7 +1336,7 @@ async function getValidStravaAccessToken(
 
 /* =========================================================
    IMPORTAR TODAS LAS ACTIVIDADES DESDE STRAVA
-   PAGINACIÓN AUTOMÁTICA
+   PAGINACIÃ“N AUTOMÃTICA
 ========================================================= */
 
 app.post(
@@ -1127,7 +1368,7 @@ if (!userId) {
       if (!user) {
         return res.status(404).json({
           error:
-            "No hay ningún usuario conectado con Strava",
+            "No hay ningÃºn usuario conectado con Strava",
         });
       }
 
@@ -1143,7 +1384,7 @@ if (!userId) {
       if (!accessToken) {
         return res.status(401).json({
           error:
-            "No se pudo obtener un Access Token válido",
+            "No se pudo obtener un Access Token vÃ¡lido",
         });
       }
 
@@ -1155,7 +1396,7 @@ if (!userId) {
 
       while (true) {
         console.log(
-          `Pidiendo actividades a Strava - página ${page}...`
+          `Pidiendo actividades a Strava - pÃ¡gina ${page}...`
         );
 
         const response =
@@ -1192,12 +1433,12 @@ if (!userId) {
             .status(500)
             .json({
               error:
-                "Strava devolvió una respuesta inesperada",
+                "Strava devolviÃ³ una respuesta inesperada",
             });
         }
 
         console.log(
-          `Página ${page}: ${pageData.length} actividades`
+          `PÃ¡gina ${page}: ${pageData.length} actividades`
         );
 
         allActivities.push(
@@ -1215,7 +1456,7 @@ if (!userId) {
       }
 
       console.log(
-        `Strava devolvió ${allActivities.length} actividades en total`
+        `Strava devolviÃ³ ${allActivities.length} actividades en total`
       );
 
       let imported = 0;
@@ -1687,7 +1928,7 @@ if (period === "year") {
 ========================================================= */
 
 /* ---------------------------------------------------------
-   GENERAR CÓDIGO ÚNICO DE GRUPO
+   GENERAR CÃ“DIGO ÃšNICO DE GRUPO
 --------------------------------------------------------- */
 
 async function generateUniqueJoinCode() {
@@ -1769,7 +2010,7 @@ if (!administratorId) {
   ) {
         return res.status(400).json({
           error:
-            "Deporte no válido",
+            "Deporte no vÃ¡lido",
         });
       }
 
@@ -2010,7 +2251,7 @@ if (isSuperAdmin) {
 );
 
 /* ---------------------------------------------------------
-   UNIRSE A UN GRUPO POR CÓDIGO
+   UNIRSE A UN GRUPO POR CÃ“DIGO
 --------------------------------------------------------- */
 
 app.post(
@@ -2033,7 +2274,7 @@ if (!userId) {
       if (!userId || !joinCode) {
         return res.status(400).json({
           error:
-            "Faltan usuario o código de grupo",
+            "Faltan usuario o cÃ³digo de grupo",
         });
       }
 
@@ -2064,7 +2305,7 @@ if (!userId) {
       if (!group) {
         return res.status(404).json({
           error:
-            "Código de grupo inválido",
+            "CÃ³digo de grupo invÃ¡lido",
         });
       }
 
@@ -2105,7 +2346,7 @@ if (!userId) {
       });
     } catch (error) {
       console.error(
-        "Error uniéndose al grupo:",
+        "Error uniÃ©ndose al grupo:",
         error
       );
 
@@ -2471,7 +2712,7 @@ app.patch(
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenés permiso para administrar este grupo",
+            "No tenÃ©s permiso para administrar este grupo",
         });
       }
 
@@ -2573,7 +2814,7 @@ if (!administratorId) {
       if (!canDelete) {
         return res.status(403).json({
           error:
-            "No tenés permiso para eliminar este grupo",
+            "No tenÃ©s permiso para eliminar este grupo",
         });
       }
 
@@ -2837,7 +3078,7 @@ if (!requesterId) {
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenés permiso para quitar miembros de este grupo",
+            "No tenÃ©s permiso para quitar miembros de este grupo",
         });
       }
 

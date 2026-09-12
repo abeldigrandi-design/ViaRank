@@ -9,12 +9,16 @@ import "./index.css";
 import App from "./App";
 import ExchangeToken from "./pages/ExchangeToken";
 import SupportPrivacy from "./pages/SupportPrivacy";
-
+import ValidateActivity from "./pages/ValidateActivity";
 createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
     <Routes>
       <Route path="/" element={<App />} />
       <Route path="/support" element={<SupportPrivacy />} />
+<Route
+  path="/validar-actividad"
+  element={<ValidateActivity />}
+/>
       <Route
         path="/exchange_token"
         element={<ExchangeToken />}

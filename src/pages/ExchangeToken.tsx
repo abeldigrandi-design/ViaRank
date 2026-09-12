@@ -30,9 +30,10 @@ export default function ExchangeToken() {
           `${import.meta.env.VITE_API_URL || "http://localhost:3001"}/exchange_token`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+           headers: {
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+},
             body: JSON.stringify({ code }),
           }
         );
@@ -44,11 +45,6 @@ export default function ExchangeToken() {
         if (!response.ok) {
           throw new Error(JSON.stringify(data));
         }
-        localStorage.setItem(
-  "viarank_auth_token",
-  data.authToken
-);
-    
         navigate("/", { replace: true });
 
       } catch (err) {

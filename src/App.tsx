@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import LoginButton from "./components/LoginButton";
 import viarankHeaderLogo from "./assets/viarank-header-logo-clean.png";
 import heroImage from "./assets/hero-sport.png";
 import sportCiclismo from "./assets/sports/sport-ciclismo.png";
@@ -100,6 +99,13 @@ type GroupMembersResponse = {
 function App() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [phoneFirstName, setPhoneFirstName] = useState("");
+const [phoneLastName, setPhoneLastName] = useState("");
+const [phoneNumber, setPhoneNumber] = useState("");
+const [phoneCode, setPhoneCode] = useState("");
+const [phoneStep, setPhoneStep] = useState<"request" | "verify">("request");
+const [phoneLoading, setPhoneLoading] = useState(false);
+const [phoneMessage, setPhoneMessage] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
   const handleResize = () => {
@@ -246,13 +252,8 @@ const response = await fetch(
         data
       );
 
-      if (data.connected) {
-        setConnected(true);
-        setUser(data.user);
-      } else {
-        setConnected(false);
-        setUser(null);
-      }
+      setConnected(Boolean(data.connected));
+setUser(data.user || null);
     } catch (err) {
       console.error(
         "Error comprobando Strava:",
@@ -264,7 +265,94 @@ const response = await fetch(
       setLoading(false);
     }
   }
+  async function requestPhoneCode() {
+  try {
+    setPhoneLoading(true);
+    setPhoneMessage("");
 
+    const response = await fetch(
+      `${API_URL}/api/auth/request-code`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          firstName: phoneFirstName,
+          lastName: phoneLastName,
+          phone: phoneNumber,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setPhoneMessage(
+        data.error || "No se pudo generar el código"
+      );
+      return;
+    }
+
+    setPhoneStep("verify");
+    setPhoneMessage(
+      "Código generado. Revisá el código de verificación."
+    );
+  } catch (error) {
+    console.error(error);
+    setPhoneMessage(
+      "No se pudo conectar con ViaRank"
+    );
+  } finally {
+    setPhoneLoading(false);
+  }
+}
+  async function verifyPhoneCode() {
+  try {
+    setPhoneLoading(true);
+    setPhoneMessage("");
+
+    const response = await fetch(
+      `${API_URL}/api/auth/verify-code`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: phoneNumber,
+          code: phoneCode,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setPhoneMessage(
+        data.error || "No se pudo verificar el código"
+      );
+      return;
+    }
+
+    localStorage.setItem(
+      "viarank_auth_token",
+      data.authToken
+    );
+
+    setUser(data.user);
+    setConnected(false);
+    setPhoneMessage("");
+  } catch (error) {
+    console.error(error);
+
+    setPhoneMessage(
+      "No se pudo conectar con ViaRank"
+    );
+  } finally {
+    setPhoneLoading(false);
+  }
+}
   /* =====================================================
      CARGAR RANKING
   ===================================================== */
@@ -964,7 +1052,7 @@ async function removeGroupMember(
   ===================================================== */
 
   function logout() {
-  
+
     localStorage.removeItem(
       "viarank_auth_token"
     );
@@ -998,20 +1086,7 @@ async function removeGroupMember(
     return `${minutes} min`;
   }
 
-  /* =====================================================
-     MEDALLA
-  ===================================================== */
-
-  function getMedal(
-    position: number
-  ) {
-    if (position === 1) return "🥇";
-    if (position === 2) return "🥈";
-    if (position === 3) return "🥉";
-
-    return `#${position}`;
-  }
-
+  
   /* =====================================================
      DEPORTE
   ===================================================== */
@@ -1077,19 +1152,20 @@ async function removeGroupMember(
      PANTALLA SIN CONEXIÓN
   ===================================================== */
 
-  if (!connected) {
+  if (!user) {
     return (
       <div
         style={{
           ...styles.page,
           minHeight: "100vh",
-          backgroundImage: `linear-gradient(
-            rgba(7, 18, 35, 0.52),
-            rgba(7, 18, 35, 0.72)
-          ), url(${heroImage})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
+          backgroundImage: `
+  radial-gradient(circle at 75% 20%, rgba(0, 119, 255, 0.32) 0%, transparent 38%),
+  radial-gradient(circle at 15% 85%, rgba(255, 94, 0, 0.12) 0%, transparent 32%),
+  linear-gradient(135deg, #050b18 0%, #081a35 48%, #06285a 100%)
+`,
+backgroundSize: "cover",
+backgroundPosition: "center",
+backgroundRepeat: "no-repeat",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1136,38 +1212,181 @@ async function removeGroupMember(
             Tu actividad. Tu comunidad.
           </h1>
 
-          <p
-            style={{
-              margin: "0 auto 30px",
-              maxWidth: "470px",
-              color: "#d5dbea",
-              fontSize: "18px",
-              lineHeight: 1.6,
-            }}
-          >
-            Conectá tu cuenta de Strava para seguir tu actividad
-            y compartirla con tu comunidad deportiva.
-          </p>
+                    {phoneStep === "request" ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                maxWidth: "420px",
+                margin: "0 auto",
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  color: "#d5dbea",
+                  fontSize: "17px",
+                  lineHeight: 1.5,
+                }}
+              >
+                Creá tu cuenta o ingresá a ViaRank con tu teléfono.
+              </p>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <LoginButton />
-          </div>
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder="Nombre"
+                value={phoneFirstName}
+                onChange={(e) =>
+                  setPhoneFirstName(e.target.value)
+                }
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "16px",
+                   background: "#ffffff",
 
-          <p
-            style={{
-              margin: "18px 0 0",
-              color: "#aeb8c8",
-              fontSize: "14px",
-            }}
-          >
-            Es rápido, seguro y oficial.
-          </p>
-        </div>
+color: "#111827",
+caretColor: "#111827",
+                }}
+              />
+
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder="Apellido"
+                value={phoneLastName}
+                onChange={(e) =>
+                  setPhoneLastName(e.target.value)
+                }
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "16px",
+       background: "#ffffff",
+color: "#111827",
+caretColor: "#111827",
+                }}
+              />
+
+             <input
+  type="tel"
+  autoComplete="tel"
+  placeholder="Teléfono (ej: +5491123456789)"
+  value={phoneNumber}
+  onChange={(e) =>
+    setPhoneNumber(e.target.value)
+  }
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "16px",
+                 background: "#ffffff",
+color: "#111827",
+caretColor: "#111827",
+                }}
+              />
+
+              <button
+                onClick={requestPhoneCode}
+disabled={phoneLoading}
+                style={{
+                  padding: "14px 18px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontSize: "16px",
+
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {phoneLoading
+  ? "Enviando..."
+  : "Enviar código"}
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                maxWidth: "420px",
+                margin: "0 auto",
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  color: "#d5dbea",
+                  fontSize: "17px",
+                }}
+              >
+                Ingresá el código de 6 dígitos.
+              </p>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Código"
+                value={phoneCode}
+                onChange={(e) =>
+                  setPhoneCode(e.target.value)
+                }
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "20px",
+                  textAlign: "center",
+                  letterSpacing: "6px",
+                background: "#ffffff",
+color: "#111827",
+caretColor: "#111827",
+                }}
+              />
+
+              <button
+                onClick={verifyPhoneCode}
+disabled={phoneLoading}
+                style={{
+                  padding: "14px 18px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {phoneLoading
+  ? "Verificando..."
+  : "Ingresar a ViaRank"}
+              </button>
+            </div>
+          )}
+
+          {phoneMessage && (
+            <p
+              style={{
+                margin: "14px 0",
+                color: "#ffffff",
+                fontSize: "14px",
+              }}
+            >
+              {phoneMessage}
+            </p>
+          )}
+
+               </div>
       </div>
     );
   }
@@ -1377,28 +1596,18 @@ async function removeGroupMember(
 
                   <div
                     style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "58px",
-                      width: "190px",
-                      background: "white",
-                      borderRadius: "14px",
-                      padding: "8px",
-                      boxShadow: "0 12px 30px rgba(15,23,42,0.22)",
-                      border: "1px solid #e5e7eb",
-                      zIndex: 103,
-                    }}
+  position: "absolute",
+  right: 0,
+  top: "58px",
+  width: "190px",
+  background: "#071d38",
+  borderRadius: "14px",
+  padding: "8px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+  border: "1px solid #148cff",
+  zIndex: 103,
+}}
                   >
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        fontSize: "13px",
-                        color: "#64748b",
-                        borderBottom: "1px solid #eef2f7",
-                      }}
-                    >
-                      {user?.firstName} {user?.lastName}
-                    </div>
 
                     <button
                       onClick={() => {
@@ -1425,7 +1634,7 @@ async function removeGroupMember(
                         cursor: "pointer",
                         fontSize: "14px",
                         fontWeight: 700,
-                        color: "#111827",
+                        color: "#f8fafc",
                       }}
                     >
                       Crear grupo
@@ -1434,11 +1643,38 @@ async function removeGroupMember(
                                         <div
                       style={{
                         height: "1px",
-                        background: "#eef2f7",
+                        background: "rgba(20,140,255,0.35)",
                         margin: "4px 8px",
                       }}
                     />
+                 <button
+  onClick={() => {
+    setMenuOpen(false);
+    window.location.href = "/validar-actividad";
+  }}
+  style={{
+    width: "100%",
+    padding: "10px 12px",
+    border: "none",
+    background: "transparent",
+    borderRadius: "9px",
+    textAlign: "left",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#f8fafc",
+  }}
+>
+  Validar actividad
+</button>
 
+<div
+  style={{
+    height: "1px",
+    background: "rgba(20,140,255,0.35)",
+    margin: "4px 8px",
+  }}
+/>
                     <button
                       onClick={() => {
                         setMenuOpen(false);
@@ -1454,7 +1690,7 @@ async function removeGroupMember(
                         cursor: "pointer",
                         fontSize: "14px",
                         fontWeight: 600,
-                        color: "#111827",
+                        color: "#f8fafc",
                       }}
                     >
                       Soporte y privacidad
@@ -1463,7 +1699,7 @@ async function removeGroupMember(
                     <div
                       style={{
                         height: "1px",
-                        background: "#eef2f7",
+                        background: "rgba(20,140,255,0.35)",
                         margin: "4px 8px",
                       }}
                     />
@@ -1484,7 +1720,7 @@ async function removeGroupMember(
                         cursor: "pointer",
                         fontSize: "14px",
                         fontWeight: 600,
-                        color: "#111827",
+                        color: "#f8fafc",
                       }}
                     >
                       Cerrar sesión
@@ -1845,16 +2081,20 @@ async function removeGroupMember(
   </section>
 )}
         <section
-          id="mis-grupos-viarank"
-          style={{
-            background: "white",
-            borderRadius: "18px",
-            padding: "24px",
-            marginBottom: "24px",
-            boxShadow:
-              "0 8px 24px rgba(0,0,0,0.08)",
-          }}
-        >
+  id="mis-grupos-viarank"
+  style={{
+    background:
+      "linear-gradient(135deg, #0a2342 0%, #0d3158 55%, #08203b 100%)",
+    borderRadius: "20px",
+    padding: "24px",
+    marginBottom: "24px",
+    border: "1px solid #148cff",
+    boxShadow:
+      "0 0 0 1px rgba(20, 140, 255, 0.12), 0 0 22px rgba(20, 140, 255, 0.30), 0 16px 34px rgba(0, 0, 0, 0.28)",
+    position: "relative",
+    overflow: "hidden",
+  }}
+>
           <div
             style={{
               display: "flex",
@@ -1869,6 +2109,8 @@ async function removeGroupMember(
                 style={{
                   margin: 0,
                   fontSize: "24px",
+                color: "#f8fafc",
+fontWeight: 800,
                 }}
               >
                 Mis grupos
@@ -1877,7 +2119,7 @@ async function removeGroupMember(
               <p
                 style={{
                   margin: "6px 0 0",
-                  color: "#64748b",
+                  color: "#b8c7da",
                 }}
               >
                 Competencias internas de ViaRank
@@ -1907,8 +2149,8 @@ async function removeGroupMember(
 display: showCreateGroup
   ? "block"
   : "none",
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "#0d3158",
+border: "1px solid #148cff",
     borderRadius: "14px",
     padding: "18px",
     marginBottom: "20px",
@@ -1944,8 +2186,9 @@ display: showCreateGroup
         minWidth: "220px",
         padding: "12px",
         borderRadius: "10px",
-        border:
-          "1px solid #cbd5e1",
+        border: "1px solid #148cff",
+background: "#071d38",
+color: "#f8fafc",
       }}
     />
 
@@ -1960,9 +2203,9 @@ display: showCreateGroup
         minWidth: "170px",
         padding: "12px",
         borderRadius: "10px",
-        border:
-          "1px solid #cbd5e1",
-        background: "#ffffff",
+        border: "1px solid #148cff",
+background: "#071d38",
+color: "#f8fafc",
       }}
     >
      <option value="WALK">
@@ -2017,8 +2260,9 @@ display: showCreateGroup
         minWidth: "170px",
         padding: "12px",
         borderRadius: "10px",
-        border: "1px solid #cbd5e1",
-        background: "#ffffff",
+        border: "1px solid #148cff",
+background: "#071d38",
+color: "#f8fafc",
       }}
     >
       <option value="PUBLIC">Público</option>
@@ -2029,15 +2273,18 @@ display: showCreateGroup
       onClick={createGroup}
       disabled={creatingGroup}
       style={{
-        padding: "12px 20px",
-        border: "none",
-        borderRadius: "10px",
-        cursor:
-          creatingGroup
-            ? "not-allowed"
-            : "pointer",
-        fontWeight: 700,
-      }}
+  padding: "13px 26px",
+  border: "1px solid rgba(92, 180, 255, 0.75)",
+  borderRadius: "12px",
+  cursor: creatingGroup ? "not-allowed" : "pointer",
+  fontWeight: 800,
+  fontSize: "15px",
+  color: "#ffffff",
+  background:
+    "linear-gradient(135deg, #087cff 0%, #1597ff 55%, #087cff 100%)",
+  boxShadow:
+    "0 0 18px rgba(20, 140, 255, 0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
+}}
     >
       {creatingGroup
         ? "Creando..."
@@ -2060,13 +2307,18 @@ display: showCreateGroup
   loadGroups(sport);
 }}
     style={{
-      width: "100%",
-      padding: "12px",
-      borderRadius: "10px",
-      border: "1px solid #cbd5e1",
-      background: "#ffffff",
-      cursor: "pointer",
-    }}
+  width: "100%",
+  padding: "13px 14px",
+  borderRadius: "12px",
+  border: "1px solid rgba(74, 163, 255, 0.75)",
+  background: "#071d38",
+  color: "#f8fafc",
+  cursor: "pointer",
+  fontSize: "15px",
+  fontWeight: 600,
+  outline: "none",
+  boxShadow: "inset 0 0 14px rgba(20, 140, 255, 0.08)",
+}}
   >
     <option value="">
       Elegir deporte
@@ -2103,31 +2355,41 @@ display: showCreateGroup
                 )
               }
               placeholder="Código del grupo"
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: "10px",
-                border:
-                  "1px solid #cbd5e1",
-                textTransform:
-                  "uppercase",
-              }}
+             style={{
+  flex: 1,
+  padding: "13px 14px",
+  borderRadius: "12px",
+  border: "1px solid rgba(74, 163, 255, 0.75)",
+  background: "#071d38",
+  color: "#ffffff",
+  fontSize: "15px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  outline: "none",
+  boxShadow: "inset 0 0 14px rgba(20, 140, 255, 0.08)",
+}}
             />
 
             <button
               onClick={joinGroup}
               style={{
-                padding: "12px 20px",
-                border: "none",
-                borderRadius: "10px",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
+  padding: "13px 26px",
+  border: "1px solid rgba(92, 180, 255, 0.75)",
+  borderRadius: "12px",
+  cursor: "pointer",
+  fontWeight: 800,
+  fontSize: "15px",
+  color: "#ffffff",
+  background:
+    "linear-gradient(135deg, #087cff 0%, #1597ff 55%, #087cff 100%)",
+  boxShadow:
+    "0 0 18px rgba(20, 140, 255, 0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
+}}
             >
               Unirme
             </button>
           </div>
-          
+
           {/* LISTA DE GRUPOS */}
 
           {groupsLoading ? (
@@ -2183,7 +2445,7 @@ display: showCreateGroup
                       <div
                         style={{
                           color:
-                            "#64748b",
+                            "#7dd3fc",
                           marginBottom:
                             "5px",
                         }}
@@ -2228,7 +2490,7 @@ display: showCreateGroup
                           fontSize:
                             "13px",
                           color:
-                            "#64748b",
+                            "#7dd3fc",
                           marginTop:
                             "4px",
                         }}
@@ -2574,9 +2836,15 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
   style={{
     ...styles.filtersCard,
     flexDirection: isMobile ? "column" : "row",
+background:
+  "linear-gradient(135deg, #0a2342 0%, #0d3158 55%, #08203b 100%)",
+border: "1px solid #148cff",
+boxShadow:
+  "0 0 18px rgba(20, 140, 255, 0.22)",
+color: "#f8fafc",
   }}
 >
-          
+
 
           <div>
             <p style={styles.filterLabel}>
@@ -2588,7 +2856,15 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
               onChange={(e) =>
                 setPeriod(e.target.value)
               }
-              style={styles.select}
+              style={{
+  ...styles.select,
+  background: "#071d38",
+  color: "#f8fafc",
+  border: "1px solid rgba(74, 163, 255, 0.75)",
+  borderRadius: "12px",
+  fontWeight: 600,
+  boxShadow: "inset 0 0 14px rgba(20, 140, 255, 0.08)",
+}}
             >
               <option value="">
                 Total acumulado
@@ -2613,12 +2889,15 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
 {selectedGroup && (
   <section
     style={{
-      background: "#ffffff",
-      borderRadius: "18px",
-      padding: "24px",
-      marginBottom: "24px",
-      boxShadow:
-        "0 8px 24px rgba(0,0,0,0.08)",
+      background:
+  "linear-gradient(135deg, #0a2342 0%, #0d3158 55%, #08203b 100%)",
+borderRadius: "18px",
+padding: "24px",
+marginBottom: "24px",
+border: "1px solid #148cff",
+boxShadow:
+  "0 0 18px rgba(20, 140, 255, 0.22)",
+color: "#f8fafc",
     }}
   >
     <div
@@ -2643,7 +2922,7 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
         <p
           style={{
             margin: "6px 0 0",
-            color: "#64748b",
+            color: "#aeb8c8",
           }}
         >
           {sportName(selectedGroup.sport)}
@@ -2692,11 +2971,11 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
       key={athlete.userId}
       style={{
         background: isTopThree
-          ? "#fff7ed"
-          : "#ffffff",
-        border: isTopThree
-          ? "2px solid #f97316"
-          : "1px solid #e2e8f0",
+  ? "#123a63"
+  : "#0d3158",
+       border: isTopThree
+  ? "2px solid #148cff"
+  : "1px solid rgba(20, 140, 255, 0.55)",
         borderRadius: isTopThree
           ? "14px"
           : "12px",
@@ -2859,196 +3138,295 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
     )}
   </section>
 )}
-        {/* RANKING */}
-{!selectedGroup && (
-        <section id="ranking-viarank">
-          <div style={styles.rankingTitleRow}>
-            <div>
-              <h2 style={styles.rankingTitle}>
-                🏆 Ranking
-              </h2>
+       {/* MI ACTIVIDAD */}
+{!selectedGroup && (() => {
+  const athlete = ranking.find(
+    (item) => item.userId === user?.id
+  );
 
-              <p style={styles.rankingSubtitle}>
-                {sport
-                  ? sportName(sport)
-                  : "Todos los deportes"}
-                {" · "}
-                {period === "week"
-                  ? "Semana en curso"
-                  : period === "month"
-                  ? "Mes en curso"
-                  : period === "year"
-                  ? "Último año"
-                  : "Todo"}
-              </p>
+  return (
+    <section
+      id="ranking-viarank"
+      style={{
+        background:
+          "linear-gradient(135deg, #071d38 0%, #0a2b50 55%, #0d3158 100%)",
+        border: "1px solid rgba(20, 140, 255, 0.65)",
+        borderRadius: "18px",
+        padding: isMobile ? "18px" : "24px",
+        boxShadow:
+          "0 12px 28px rgba(7, 29, 56, 0.25)",
+        color: "#ffffff",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: isMobile
+            ? "flex-start"
+            : "center",
+          justifyContent: "space-between",
+          flexDirection: isMobile
+            ? "column"
+            : "row",
+          gap: "12px",
+          marginBottom: "22px",
+        }}
+      >
+        <div>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "27px",
+              color: "#ffffff",
+            }}
+          >
+            Mi actividad
+          </h2>
+
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "#8ecbff",
+            }}
+          >
+            {sport
+              ? sportName(sport)
+              : "Todos los deportes"}
+            {" · "}
+            {period === "week"
+              ? "Semana en curso"
+              : period === "month"
+              ? "Mes en curso"
+              : period === "year"
+              ? "Año en curso"
+              : "Total acumulado"}
+          </p>
+        </div>
+
+        <div
+          style={{
+            padding: "8px 14px",
+            borderRadius: "999px",
+            background: "rgba(20, 140, 255, 0.16)",
+            border:
+              "1px solid rgba(74, 163, 255, 0.75)",
+            color: "#8ecbff",
+            fontWeight: 700,
+          }}
+        >
+          Mis datos
+        </div>
+      </div>
+
+      {error && (
+        <div style={styles.error}>
+          {error}
+        </div>
+      )}
+
+      {!athlete ? (
+        <div
+          style={{
+            padding: "24px",
+            borderRadius: "16px",
+            background:
+              "rgba(255, 255, 255, 0.05)",
+            border:
+              "1px solid rgba(142, 203, 255, 0.25)",
+            textAlign: "center",
+          }}
+        >
+          <h3
+            style={{
+              margin: "0 0 8px",
+              color: "#ffffff",
+            }}
+          >
+            Todavía no tenés actividad
+          </h3>
+
+          <p
+            style={{
+              margin: 0,
+              color: "#8ecbff",
+            }}
+          >
+            Actualizá tus actividades para ver
+            tus kilómetros y estadísticas.
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "18px",
+            flexWrap: "wrap",
+            padding: "20px",
+            borderRadius: "16px",
+            background:
+              "rgba(255, 255, 255, 0.06)",
+            border:
+              "1px solid rgba(142, 203, 255, 0.30)",
+          }}
+        >
+          {athlete.profilePicture ? (
+            <img
+              src={athlete.profilePicture}
+              alt={`${athlete.firstName} ${athlete.lastName}`}
+              style={{
+                width: "58px",
+                height: "58px",
+                borderRadius: "50%",
+                objectFit: "cover",
+                border:
+                  "2px solid #148cff",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "58px",
+                height: "58px",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#0d3158",
+                border:
+                  "2px solid #148cff",
+                fontSize: "26px",
+              }}
+            >
+              👤
+            </div>
+          )}
+
+          <div
+            style={{
+              minWidth: "150px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: 800,
+                color: "#ffffff",
+              }}
+            >
+              {athlete.firstName}{" "}
+              {athlete.lastName}
             </div>
 
-            <div style={styles.countBadge}>
-              {ranking.length} atletas
+            <div
+              style={{
+                marginTop: "4px",
+                color: "#8ecbff",
+                fontSize: "14px",
+              }}
+            >
+              {athlete.activities} actividades
             </div>
           </div>
 
-          {error && (
-            <div style={styles.error}>
-              {error}
+          <div
+            style={{
+              display: "flex",
+              flex: 1,
+              justifyContent: "space-around",
+              gap: "16px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                textAlign: "center",
+                minWidth: "100px",
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: "24px",
+                  color: "#ffffff",
+                }}
+              >
+                {athlete.distanceKm.toLocaleString(
+                  "es-AR",
+                  {
+                    minimumFractionDigits: 2,
+                  }
+                )}
+              </strong>
+
+              <span
+                style={{
+                  color: "#8ecbff",
+                }}
+              >
+                km
+              </span>
             </div>
-          )}
 
-          {ranking.length === 0 ? (
-            <div style={styles.emptyCard}>
-              <div style={styles.emptyIcon}>
-                🏃
-              </div>
+            <div
+              style={{
+                textAlign: "center",
+                minWidth: "100px",
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: "24px",
+                  color: "#ffffff",
+                }}
+              >
+                {formatTime(
+                  athlete.movingTime
+                )}
+              </strong>
 
-              <h3>
-                Todavía no hay atletas
-              </h3>
-
-              <p>
-                No hay actividades para
-                los filtros seleccionados.
-              </p>
+              <span
+                style={{
+                  color: "#8ecbff",
+                }}
+              >
+                tiempo
+              </span>
             </div>
-          ) : (
-            <div style={styles.rankingList}>
-              {ranking.map(
-                (athlete) => (
-                  <div
-                    key={athlete.userId}
-                    style={{
-                      ...styles.athleteCard,
-                      flexWrap: isMobile ? "wrap" : "nowrap",
-                      ...(athlete.position <=
-                      3
-                        ? styles.topAthlete
-                        : {}),
-                    }}
-                  >
 
-                    {/* POSICIÓN */}
+            <div
+              style={{
+                textAlign: "center",
+                minWidth: "100px",
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: "24px",
+                  color: "#ffffff",
+                }}
+              >
+                {Math.round(
+                  athlete.elevationGain
+                ).toLocaleString("es-AR")}
+              </strong>
 
-                    <div style={styles.position}>
-                      <span
-                        style={{
-                          fontSize:
-                            athlete.position <=
-                            3
-                              ? "32px"
-                              : "20px",
-                        }}
-                      >
-                        {getMedal(
-                          athlete.position
-                        )}
-                      </span>
-                    </div>
-
-                    {/* FOTO */}
-
-                    {athlete.profilePicture ? (
-                      <img
-                        src={
-                          athlete.profilePicture
-                        }
-                        alt={`${athlete.firstName} ${athlete.lastName}`}
-                        style={
-                          styles.athleteImage
-                        }
-                      />
-                    ) : (
-                      <div
-                        style={
-                          styles.athletePlaceholder
-                        }
-                      >
-                        👤
-                      </div>
-                    )}
-
-                    {/* NOMBRE */}
-
-                    <div style={styles.athleteMain}>
-                      <h3
-                        style={
-                          styles.athleteName
-                        }
-                      >
-                        {athlete.firstName}{" "}
-                        {athlete.lastName}
-                      </h3>
-
-                      <p
-                        style={
-                          styles.athleteActivities
-                        }
-                      >
-                        {athlete.activities}{" "}
-                        actividades
-                      </p>
-                    </div>
-
-                    {/* ESTADÍSTICAS */}
-
-                    <div
-  style={{
-    ...styles.stats,
-    gap: isMobile ? "12px" : "25px",
-    flexWrap: isMobile ? "wrap" : "nowrap",
-    justifyContent: isMobile ? "space-between" : "initial",
-    width: isMobile ? "100%" : "auto",
-  }}
->
-
-                      <div style={styles.stat}>
-                        <strong>
-                          {athlete.distanceKm.toLocaleString(
-                            "es-AR",
-                            {
-                              minimumFractionDigits:
-                                2,
-                            }
-                          )}
-                        </strong>
-
-                        <span>
-                          km
-                        </span>
-                      </div>
-
-                      <div style={styles.stat}>
-                        <strong>
-                          {formatTime(
-                            athlete.movingTime
-                          )}
-                        </strong>
-
-                        <span>
-                          tiempo
-                        </span>
-                      </div>
-
-                      <div style={styles.stat}>
-                        <strong>
-                          {Math.round(
-                            athlete.elevationGain
-                          ).toLocaleString(
-                            "es-AR"
-                          )}
-                        </strong>
-
-                        <span>
-                          m desnivel
-                        </span>
-                      </div>
-
-                    </div>
-                  </div>
-                )
-              )}
+              <span
+                style={{
+                  color: "#8ecbff",
+                }}
+              >
+                m desnivel
+              </span>
             </div>
-          )}
-        </section>
-)}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+})()}
         {/* FOOTER */}
 
         <footer style={styles.footer}>
@@ -3073,20 +3451,22 @@ boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
 const styles: {
   [key: string]: React.CSSProperties;
 } = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "linear-gradient(135deg, #f5f7fb 0%, #eef2f7 100%)",
-    fontFamily:
-      "Arial, Helvetica, sans-serif",
-    color: "#18202a",
-  },
+ page: {
+  minHeight: "100vh",
+  background: "#ffffff",
+  fontFamily:
+    "Arial, Helvetica, sans-serif",
+  color: "#f8fafc",
+},
 
   container: {
-    maxWidth: "1100px",
-    margin: "0 auto",
-    padding: "30px 20px 50px",
-  },
+  maxWidth: "1100px",
+  margin: "24px auto",
+  padding: "30px 20px 50px",
+  background: "#071a33",
+  borderRadius: "24px",
+  boxShadow: "0 20px 60px rgba(7, 26, 51, 0.18)",
+},
 
   loadingPage: {
     minHeight: "100vh",
