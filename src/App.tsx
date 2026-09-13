@@ -141,7 +141,7 @@ function canManageGroup(
   const [period, setPeriod] = useState("month");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 const [groups, setGroups] = useState<
@@ -1133,20 +1133,7 @@ async function removeGroupMember(
      LOADING
   ===================================================== */
 
-  if (loading) {
-    return (
-      <div style={styles.loadingPage}>
-        <div style={styles.logo}>
-          🏆 ViaRank
-        </div>
-
-        <p>
-          Comprobando conexión con
-          Strava...
-        </p>
-      </div>
-    );
-  }
+  
 
   /* =====================================================
      PANTALLA SIN CONEXIÓN
@@ -2530,18 +2517,20 @@ color: "#f8fafc",
   onPointerLeave={(e) => {
     e.currentTarget.style.transform = "scale(1)";
   }}
-  style={{
-      padding: "12px 18px",
-      border: "none",
-      borderRadius: "10px",
-      cursor: "pointer",
-      fontWeight: 700,
-      width: isMobile ? "100%" : "auto",
-      background: isMobile ? "#f1f5f9" : "transparent",
-transition: "transform 0.12s ease, background 0.12s ease",
-transform: "scale(1)",
-boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-    }}
+ style={{
+  padding: "12px 18px",
+  border: "2px solid #38bdf8",
+  borderRadius: "10px",
+  cursor: "pointer",
+  fontWeight: 700,
+  color: "#ffffff",
+  width: isMobile ? "100%" : "auto",
+  background:
+    "linear-gradient(135deg, #0b2a4a 0%, #0f3d68 55%, #148cff 100%)",
+  transition: "transform 0.12s ease, background 0.12s ease",
+  transform: "scale(1)",
+  boxShadow: "0 0 10px rgba(20, 140, 255, 0.45)",
+}}
   >
     Ver ranking
   </button>
