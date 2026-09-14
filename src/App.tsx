@@ -167,7 +167,8 @@ const [groupRanking, setGroupRanking] =
 
 const [groupRankingLoading, setGroupRankingLoading] =
   useState(false);
-
+const [groupSexFilter, setGroupSexFilter] =
+  useState("");
 const [newGroupName, setNewGroupName] =
   useState("");
 
@@ -274,7 +275,7 @@ useEffect(() => {
   if (selectedGroup) {
     loadGroupRanking(selectedGroup.id);
   }
-}, [period]);
+}, [period, groupSexFilter]);
   /* =====================================================
      ESTADO STRAVA
   ===================================================== */
@@ -727,14 +728,22 @@ async function loadGroupRanking(
     const params =
       new URLSearchParams();
 
-    if (period) {
-      params.set(
-        "period",
-        period
-      );
-    }
+   if (period) {
+  params.set(
+    "period",
+    period
+  );
+}
 
-    const url =
+if (groupSexFilter) {
+  params.set(
+    "sex",
+    groupSexFilter
+  );
+}
+
+
+   const url =
       `${API_URL}/api/groups/${groupId}/ranking` +
       (params.toString()
         ? `?${params.toString()}`
@@ -2987,6 +2996,39 @@ color: "#f8fafc",
               </option>
             </select>
           </div>
+<div>
+  <p style={styles.filterLabel}>
+    SEXO
+  </p>
+
+  <select
+    value={groupSexFilter}
+    onChange={(e) =>
+      setGroupSexFilter(e.target.value)
+    }
+    style={{
+      ...styles.select,
+      background: "#071d38",
+      color: "#f8fafc",
+      border: "1px solid rgba(74, 163, 255, 0.75)",
+      borderRadius: "12px",
+      fontWeight: 600,
+      boxShadow: "inset 0 0 14px rgba(20, 140, 255, 0.08)",
+    }}
+  >
+    <option value="">
+      General
+    </option>
+
+    <option value="FEMALE">
+      Femenino
+    </option>
+
+    <option value="MALE">
+      Masculino
+    </option>
+  </select>
+</div>
         </section>
 {/* RANKING INTERNO DEL GRUPO */}
 

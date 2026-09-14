@@ -2594,7 +2594,10 @@ app.get(
         String(
           req.query.period || ""
         ).toLowerCase();
-
+const sex =
+  String(
+    req.query.sex || ""
+  ).toUpperCase();
       const group =
         await prisma.sportGroup.findUnique({
           where: {
@@ -2611,6 +2614,7 @@ app.get(
         firstName: true,
         lastName: true,
         profilePicture: true,
+sex: true,
       },
     },
   },
@@ -2633,11 +2637,19 @@ app.get(
         });
       }
 
-      const memberIds =
-        group.members.map(
-          (member: { userId: string }) =>
-            member.userId
-        );
+      const rankingMembers =
+  sex === "MALE" || sex === "FEMALE"
+    ? group.members.filter(
+        (member) =>
+          member.user.sex === sex
+      )
+    : group.members;
+
+const memberIds =
+  rankingMembers.map(
+    (member) =>
+      member.userId
+  );
 
       let startDate:
         | Date
@@ -2727,7 +2739,7 @@ if (period === "year") {
             elevationGain: number;
           }
         >();
-          for (const member of group.members) {
+        for (const member of rankingMembers) {
   rankingMap.set(
     member.userId,
     {
