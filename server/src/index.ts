@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 dotenv.config();
 
 const app = express();
@@ -129,7 +129,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 /* =========================================================
-   REGISTRO / ACCESO POR TELÉFONO
+   REGISTRO / ACCESO POR EMAIL
 ========================================================= */
 
 app.post(
@@ -142,34 +142,49 @@ app.post(
       const lastName =
         String(req.body.lastName || "").trim();
 
-      const phone =
-        String(req.body.phone || "")
+      const email =
+        String(req.body.email || "")
           .trim()
-          .replace(/\s+/g, "");
+          .toLowerCase();
 
-      if (!phone) {
+      const sex =
+        String(req.body.sex || "")
+          .trim()
+          .toUpperCase();
+
+      if (!email) {
         return res.status(400).json({
-          error: "El teléfono es obligatorio",
+          error: "El email es obligatorio",
         });
       }
 
-      const phoneRegex =
-        /^\+?[0-9]{8,15}$/;
+      const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      if (!phoneRegex.test(phone)) {
+      if (!emailRegex.test(email)) {
         return res.status(400).json({
-          error: "El teléfono no es válido",
+          error: "El email no es válido",
+        });
+      }
+
+      if (
+        sex &&
+        sex !== "MALE" &&
+        sex !== "FEMALE"
+      ) {
+        return res.status(400).json({
+          error: "El sexo seleccionado no es válido",
         });
       }
 
       const existingUser =
         await prisma.user.findUnique({
-          where: { phone },
+          where: { email },
         });
 
       const existingPending =
-        await prisma.pendingPhoneVerification.findUnique({
-          where: { phone },
+        await prisma.pendingEmailVerification.findUnique({
+          where: { email },
         });
 
       if (
@@ -186,11 +201,22 @@ app.post(
 
       if (
         !existingUser &&
-        (!firstName || !lastName)
+        (!firstName || !lastName || !sex)
       ) {
         return res.status(400).json({
           error:
-            "Nombre y apellido son obligatorios para registrarse",
+            "Nombre, apellido y sexo son obligatorios para registrarse",
+        });
+      }
+
+      if (
+        existingUser &&
+        !existingUser.sex &&
+        !sex
+      ) {
+        return res.status(400).json({
+          error:
+            "Seleccioná sexo para completar tu perfil",
         });
       }
 
@@ -208,8 +234,8 @@ app.post(
             10 * 60 * 1000
         );
 
-      await prisma.pendingPhoneVerification.upsert({
-        where: { phone },
+      await prisma.pendingEmailVerification.upsert({
+        where: { email },
 
         update: {
           firstName:
@@ -220,13 +246,19 @@ app.post(
             existingUser?.lastName ||
             lastName,
 
+          sex:
+            existingUser?.sex ||
+            (sex === "MALE" || sex === "FEMALE"
+              ? sex
+              : null),
+
           code,
           expiresAt,
           attempts: 0,
         },
 
         create: {
-          phone,
+          email,
 
           firstName:
             existingUser?.firstName ||
@@ -236,6 +268,12 @@ app.post(
             existingUser?.lastName ||
             lastName,
 
+          sex:
+            existingUser?.sex ||
+            (sex === "MALE" || sex === "FEMALE"
+              ? sex
+              : null),
+
           code,
           expiresAt,
           attempts: 0,
@@ -243,7 +281,7 @@ app.post(
       });
 
       console.log(
-        `Código ViaRank para ${phone}: ${code}`
+        `Código ViaRank para ${email}: ${code}`
       );
 
       return res.json({
@@ -253,7 +291,7 @@ app.post(
       });
     } catch (error) {
       console.error(
-        "Error generando código de teléfono:",
+        "Error generando código de email:",
         error
       );
 
@@ -264,35 +302,34 @@ app.post(
     }
   }
 );
-
 app.post(
   "/api/auth/verify-code",
   async (req, res) => {
     try {
-      const phone =
-        String(req.body.phone || "")
+      const email =
+        String(req.body.email || "")
           .trim()
-          .replace(/\s+/g, "");
+          .toLowerCase();
 
       const code =
         String(req.body.code || "").trim();
 
-      if (!phone || !code) {
+      if (!email || !code) {
         return res.status(400).json({
           error:
-            "Teléfono y código son obligatorios",
+            "Email y código son obligatorios",
         });
       }
 
       const pending =
-        await prisma.pendingPhoneVerification.findUnique({
-          where: { phone },
+        await prisma.pendingEmailVerification.findUnique({
+          where: { email },
         });
 
       if (!pending) {
         return res.status(404).json({
           error:
-            "No hay una verificación pendiente para este teléfono",
+            "No hay una verificación pendiente para este email",
         });
       }
 
@@ -303,9 +340,12 @@ app.post(
         });
       }
 
-      if (pending.code !== code && code !== "1234") {
-        await prisma.pendingPhoneVerification.update({
-          where: { phone },
+      if (
+        pending.code !== code &&
+        code !== "1234"
+      ) {
+        await prisma.pendingEmailVerification.update({
+          where: { email },
 
           data: {
             attempts: {
@@ -330,7 +370,7 @@ app.post(
 
       const existingUser =
         await prisma.user.findUnique({
-          where: { phone },
+          where: { email },
         });
 
       const verifiedUser =
@@ -341,7 +381,11 @@ app.post(
               },
 
               data: {
-                phoneVerified: true,
+                emailVerified: true,
+
+                sex:
+                  existingUser.sex ||
+                  pending.sex,
               },
             })
           : await prisma.user.create({
@@ -352,17 +396,36 @@ app.post(
                 lastName:
                   pending.lastName,
 
-                phone:
-                  pending.phone,
+                email:
+                  pending.email,
 
-                phoneVerified: true,
+                emailVerified: true,
+
+                sex:
+                  pending.sex,
               },
             });
 
-      await prisma.pendingPhoneVerification.delete({
-        where: { phone },
+      await prisma.pendingEmailVerification.delete({
+        where: { email },
       });
+const refreshToken =
+  randomBytes(48).toString("hex");
 
+const sessionExpiresAt =
+  new Date();
+
+sessionExpiresAt.setFullYear(
+  sessionExpiresAt.getFullYear() + 1
+);
+
+await prisma.userSession.create({
+  data: {
+    userId: verifiedUser.id,
+    refreshToken,
+    expiresAt: sessionExpiresAt,
+  },
+});
       const authToken =
         jwt.sign(
           {
@@ -377,28 +440,175 @@ app.post(
       return res.json({
         success: true,
         authToken,
+        refreshToken,
 
         user: {
           id: verifiedUser.id,
+
           firstName:
             verifiedUser.firstName,
+
           lastName:
             verifiedUser.lastName,
-          phone:
-            verifiedUser.phone,
+
+          email:
+            verifiedUser.email,
+
+          sex:
+            verifiedUser.sex,
+
           role:
             verifiedUser.role,
         },
       });
     } catch (error) {
       console.error(
-        "Error verificando código de teléfono:",
+        "Error verificando código de email:",
         error
       );
 
       return res.status(500).json({
         error:
           "No se pudo verificar el código",
+      });
+    }
+  }
+);
+app.post(
+  "/api/auth/refresh",
+  async (req, res) => {
+    try {
+      const refreshToken =
+        String(
+          req.body.refreshToken || ""
+        ).trim();
+
+      if (!refreshToken) {
+        return res.status(400).json({
+          error:
+            "Refresh token obligatorio",
+        });
+      }
+
+      const session =
+        await prisma.userSession.findUnique({
+          where: {
+            refreshToken,
+          },
+          include: {
+            user: true,
+          },
+        });
+
+      if (!session) {
+        return res.status(401).json({
+          error:
+            "Sesión no válida",
+        });
+      }
+
+      if (
+        session.revokedAt ||
+        session.expiresAt < new Date()
+      ) {
+        return res.status(401).json({
+          error:
+            "Sesión no válida",
+        });
+      }
+
+      const authToken =
+        jwt.sign(
+          {
+            userId: session.userId,
+          },
+          JWT_SECRET,
+          {
+            expiresIn: "7d",
+          }
+        );
+
+      return res.json({
+        success: true,
+        authToken,
+
+        user: {
+          id: session.user.id,
+          firstName:
+            session.user.firstName,
+          lastName:
+            session.user.lastName,
+          email:
+            session.user.email,
+          sex:
+            session.user.sex,
+          role:
+            session.user.role,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Error renovando sesión:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo renovar la sesión",
+      });
+    }
+  }
+);
+app.post(
+  "/api/auth/logout",
+  async (req, res) => {
+    try {
+      const refreshToken =
+        String(
+          req.body.refreshToken || ""
+        ).trim();
+
+      if (!refreshToken) {
+        return res.status(400).json({
+          error:
+            "Refresh token obligatorio",
+        });
+      }
+
+      const session =
+        await prisma.userSession.findUnique({
+          where: {
+            refreshToken,
+          },
+        });
+
+      if (!session) {
+        return res.json({
+          success: true,
+        });
+      }
+
+      await prisma.userSession.update({
+        where: {
+          id: session.id,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+
+      return res.json({
+        success: true,
+      });
+    } catch (error) {
+      console.error(
+        "Error cerrando sesión:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo cerrar la sesión",
       });
     }
   }

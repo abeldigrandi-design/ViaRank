@@ -99,13 +99,14 @@ type GroupMembersResponse = {
 function App() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [phoneFirstName, setPhoneFirstName] = useState("");
-const [phoneLastName, setPhoneLastName] = useState("");
-const [phoneNumber, setPhoneNumber] = useState("");
-const [phoneCode, setPhoneCode] = useState("");
-const [phoneStep, setPhoneStep] = useState<"request" | "verify">("request");
-const [phoneLoading, setPhoneLoading] = useState(false);
-const [phoneMessage, setPhoneMessage] = useState("");
+ const [emailFirstName, setEmailFirstName] = useState("");
+const [emailLastName, setEmailLastName] = useState("");
+const [emailAddress, setEmailAddress] = useState("");
+const [emailSex, setEmailSex] = useState<"MALE" | "FEMALE" | "">("");
+const [emailCode, setEmailCode] = useState("");
+const [emailStep, setEmailStep] = useState<"request" | "verify">("request");
+const [emailLoading, setEmailLoading] = useState(false);
+const [emailMessage, setEmailMessage] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
   const handleResize = () => {
@@ -195,10 +196,64 @@ const [adminUsersLoading, setAdminUsersLoading] =
   /* =====================================================
      COMPROBAR CONEXIÓN CON STRAVA
   ===================================================== */
+async function restoreSession() {
+  const refreshToken =
+    localStorage.getItem(
+      "viarank_refresh_token"
+    );
 
-  useEffect(() => {
-    checkStrava();
-  }, []);
+  if (!refreshToken) {
+    await checkStrava();
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          refreshToken,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      localStorage.removeItem(
+        "viarank_refresh_token"
+      );
+
+      await checkStrava();
+      return;
+    }
+
+    const data =
+      await response.json();
+
+    localStorage.setItem(
+      "viarank_auth_token",
+      data.authToken
+    );
+
+    setUser(data.user);
+
+    await checkStrava();
+  } catch (error) {
+    console.error(
+      "Error restaurando sesión:",
+      error
+    );
+
+    await checkStrava();
+  }
+}
+ useEffect(() => {
+  restoreSession();
+}, []);
 
   /* =====================================================
      CARGAR RANKING
@@ -265,10 +320,10 @@ setUser(data.user || null);
       setLoading(false);
     }
   }
-  async function requestPhoneCode() {
+ async function requestEmailCode() {
   try {
-    setPhoneLoading(true);
-    setPhoneMessage("");
+   setEmailLoading(true);
+setEmailMessage("");
 
     const response = await fetch(
       `${API_URL}/api/auth/request-code`,
@@ -278,9 +333,10 @@ setUser(data.user || null);
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          firstName: phoneFirstName,
-          lastName: phoneLastName,
-          phone: phoneNumber,
+         firstName: emailFirstName,
+lastName: emailLastName,
+email: emailAddress,
+sex: emailSex,
         }),
       }
     );
@@ -288,29 +344,30 @@ setUser(data.user || null);
     const data = await response.json();
 
     if (!response.ok) {
-      setPhoneMessage(
+      setEmailMessage(
         data.error || "No se pudo generar el código"
       );
       return;
     }
 
-    setPhoneStep("verify");
-    setPhoneMessage(
+    setEmailStep("verify");
+setEmailMessage(
       "Código generado. Revisá el código de verificación."
     );
   } catch (error) {
     console.error(error);
-    setPhoneMessage(
-      "No se pudo conectar con ViaRank"
-    );
+    setEmailMessage(
+  "No se pudo conectar con ViaRank"
+);
+  
   } finally {
-    setPhoneLoading(false);
+    setEmailLoading(false);
   }
 }
-  async function verifyPhoneCode() {
+  async function verifyEmailCode() {
   try {
-    setPhoneLoading(true);
-    setPhoneMessage("");
+    setEmailLoading(true);
+setEmailMessage("");
 
     const response = await fetch(
       `${API_URL}/api/auth/verify-code`,
@@ -319,38 +376,45 @@ setUser(data.user || null);
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          phone: phoneNumber,
-          code: phoneCode,
-        }),
+       body: JSON.stringify({
+  email: emailAddress,
+  code: emailCode,
+}),
       }
     );
 
     const data = await response.json();
 
     if (!response.ok) {
-      setPhoneMessage(
+      setEmailMessage(
         data.error || "No se pudo verificar el código"
       );
       return;
     }
 
     localStorage.setItem(
-      "viarank_auth_token",
-      data.authToken
-    );
+  "viarank_auth_token",
+  data.authToken
+);
+
+localStorage.setItem(
+  "viarank_refresh_token",
+  data.refreshToken
+);
+
+setUser(data.user);
 
     setUser(data.user);
-    setConnected(false);
-    setPhoneMessage("");
+    await checkStrava();
+    setEmailMessage("");
   } catch (error) {
     console.error(error);
 
-    setPhoneMessage(
-      "No se pudo conectar con ViaRank"
-    );
+    setEmailMessage(
+  "No se pudo conectar con ViaRank"
+);
   } finally {
-    setPhoneLoading(false);
+    setEmailLoading(false);
   }
 }
   /* =====================================================
@@ -1051,11 +1115,41 @@ async function removeGroupMember(
      CERRAR SESIÓN
   ===================================================== */
 
-  function logout() {
+  async function logout() {
+const refreshToken =
+  localStorage.getItem(
+    "viarank_refresh_token"
+  );
+
+if (refreshToken) {
+  try {
+    await fetch(
+      `${API_URL}/api/auth/logout`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          refreshToken,
+        }),
+      }
+    );
+  } catch (error) {
+    console.error(
+      "Error cerrando sesión en el servidor:",
+      error
+    );
+  }
+}
 
     localStorage.removeItem(
-      "viarank_auth_token"
-    );
+  "viarank_auth_token"
+);
+
+localStorage.removeItem(
+  "viarank_refresh_token"
+);
 
     setConnected(false);
     setUser(null);
@@ -1199,7 +1293,7 @@ backgroundRepeat: "no-repeat",
             Tu actividad. Tu comunidad.
           </h1>
 
-                    {phoneStep === "request" ? (
+                    {emailStep === "request" ? (
             <div
               style={{
                 display: "flex",
@@ -1217,17 +1311,17 @@ backgroundRepeat: "no-repeat",
                   lineHeight: 1.5,
                 }}
               >
-                Creá tu cuenta o ingresá a ViaRank con tu teléfono.
+                Creá tu cuenta o ingresá a ViaRank con tu email.
               </p>
 
               <input
                 type="text"
                 autoComplete="off"
                 placeholder="Nombre"
-                value={phoneFirstName}
-                onChange={(e) =>
-                  setPhoneFirstName(e.target.value)
-                }
+                value={emailFirstName}
+onChange={(e) =>
+  setEmailFirstName(e.target.value)
+}
                 style={{
                   padding: "14px 16px",
                   borderRadius: "12px",
@@ -1244,10 +1338,10 @@ caretColor: "#111827",
                 type="text"
                 autoComplete="off"
                 placeholder="Apellido"
-                value={phoneLastName}
-                onChange={(e) =>
-                  setPhoneLastName(e.target.value)
-                }
+               value={emailLastName}
+onChange={(e) =>
+  setEmailLastName(e.target.value)
+}
                 style={{
                   padding: "14px 16px",
                   borderRadius: "12px",
@@ -1260,13 +1354,13 @@ caretColor: "#111827",
               />
 
              <input
-  type="tel"
-  autoComplete="tel"
-  placeholder="Teléfono (ej: +5491123456789)"
-  value={phoneNumber}
-  onChange={(e) =>
-    setPhoneNumber(e.target.value)
-  }
+  type="email"
+  autoComplete="email"
+placeholder="Email"
+value={emailAddress}
+onChange={(e) =>
+  setEmailAddress(e.target.value)
+}
                 style={{
                   padding: "14px 16px",
                   borderRadius: "12px",
@@ -1277,10 +1371,31 @@ color: "#111827",
 caretColor: "#111827",
                 }}
               />
-
+<select
+  value={emailSex}
+  onChange={(e) =>
+    setEmailSex(
+      e.target.value as "MALE" | "FEMALE" | ""
+    )
+  }
+  style={{
+    padding: "14px 16px",
+    borderRadius: "10px",
+    border: "1px solid #cbd5e1",
+    fontSize: "16px",
+    width: "100%",
+    boxSizing: "border-box",
+    background: "#0f2f57",
+color: "#ffffff",
+  }}
+>
+  <option value="">Seleccioná sexo</option>
+  <option value="FEMALE">Femenino</option>
+  <option value="MALE">Masculino</option>
+</select>
               <button
-                onClick={requestPhoneCode}
-disabled={phoneLoading}
+                onClick={requestEmailCode}
+disabled={emailLoading}
                 style={{
                   padding: "14px 18px",
                   borderRadius: "12px",
@@ -1293,7 +1408,7 @@ disabled={phoneLoading}
                   cursor: "pointer",
                 }}
               >
-                {phoneLoading
+               {emailLoading
   ? "Enviando..."
   : "Enviar código"}
               </button>
@@ -1323,10 +1438,10 @@ disabled={phoneLoading}
                 inputMode="numeric"
                 maxLength={6}
                 placeholder="Código"
-                value={phoneCode}
-                onChange={(e) =>
-                  setPhoneCode(e.target.value)
-                }
+               value={emailCode}
+onChange={(e) =>
+  setEmailCode(e.target.value)
+}
                 style={{
                   padding: "14px 16px",
                   borderRadius: "12px",
@@ -1341,8 +1456,8 @@ caretColor: "#111827",
               />
 
               <button
-                onClick={verifyPhoneCode}
-disabled={phoneLoading}
+               onClick={verifyEmailCode}
+disabled={emailLoading}
                 style={{
                   padding: "14px 18px",
                   borderRadius: "12px",
@@ -1354,14 +1469,14 @@ disabled={phoneLoading}
                   cursor: "pointer",
                 }}
               >
-                {phoneLoading
+                {emailLoading
   ? "Verificando..."
   : "Ingresar a ViaRank"}
               </button>
             </div>
           )}
 
-          {phoneMessage && (
+       {emailMessage && (
             <p
               style={{
                 margin: "14px 0",
@@ -1369,7 +1484,7 @@ disabled={phoneLoading}
                 fontSize: "14px",
               }}
             >
-              {phoneMessage}
+              {emailMessage}
             </p>
           )}
 
