@@ -939,16 +939,152 @@ app.post(
             stravaId,
           },
         });
+const currentUser =
+  await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+  });
 
+if (!currentUser) {
+  return res.status(404).json({
+    error: "Usuario de ViaRank no encontrado",
+  });
+}
       if (
-        existingStravaUser &&
-        existingStravaUser.id !== userId
-      ) {
-        return res.status(409).json({
-          error:
-            "Esta cuenta de Strava ya está vinculada a otro usuario de ViaRank",
+  existingStravaUser &&
+  existingStravaUser.id !== userId
+) {
+  const historicalUserId =
+    existingStravaUser.id;
+
+  const mergedRole =
+    currentUser.role === "SUPER_ADMIN" ||
+    existingStravaUser.role === "SUPER_ADMIN"
+      ? "SUPER_ADMIN"
+      : currentUser.role === "ADMIN" ||
+          existingStravaUser.role === "ADMIN"
+        ? "ADMIN"
+        : "USER";
+
+  await prisma.$transaction(
+    async (tx) => {
+      const currentMemberships =
+        await tx.groupMember.findMany({
+          where: {
+            userId,
+          },
+          select: {
+            groupId: true,
+          },
+        });
+
+      const currentGroupIds =
+        currentMemberships.map(
+          (membership) =>
+            membership.groupId
+        );
+
+      if (currentGroupIds.length > 0) {
+        await tx.groupMember.deleteMany({
+          where: {
+            userId:
+              historicalUserId,
+            groupId: {
+              in: currentGroupIds,
+            },
+          },
         });
       }
+
+      await tx.groupMember.updateMany({
+        where: {
+          userId:
+            historicalUserId,
+        },
+        data: {
+          userId,
+        },
+      });
+
+      await tx.activity.updateMany({
+        where: {
+          userId:
+            historicalUserId,
+        },
+        data: {
+          userId,
+        },
+      });
+
+      await tx.sportGroup.updateMany({
+        where: {
+          administratorId:
+            historicalUserId,
+        },
+        data: {
+          administratorId:
+            userId,
+        },
+      });
+
+      await tx.userSession.updateMany({
+        where: {
+          userId:
+            historicalUserId,
+        },
+        data: {
+          userId,
+        },
+      });
+
+      await tx.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          role: mergedRole,
+          sex:
+            currentUser.sex ||
+            existingStravaUser.sex,
+          city:
+            currentUser.city ||
+            existingStravaUser.city,
+          country:
+            currentUser.country ||
+            existingStravaUser.country,
+        },
+      });
+
+     await tx.user.delete({
+  where: {
+    id:
+      historicalUserId,
+  },
+});
+
+await tx.user.update({
+  where: {
+    id: userId,
+  },
+  data: {
+    stravaId,
+    profilePicture:
+      athlete.profile ||
+      athlete.profile_medium ||
+      null,
+    accessToken:
+      data.access_token,
+    refreshToken:
+      data.refresh_token,
+    expiresAt:
+      data.expires_at,
+  },
+});
+
+    }
+  );
+}
 
       const user =
         await prisma.user.update({
