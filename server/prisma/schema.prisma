@@ -41,9 +41,6 @@ model User {
   lastName            String
   sex                 Sex?
  email               String?       @unique
-phone               String?       @unique
-phoneVerified       Boolean       @default(false)
-
 emailVerified              Boolean   @default(false)
 
 profilePicture      String?
@@ -83,17 +80,6 @@ model PendingEmailVerification {
   lastName  String
   sex       Sex?
  code      String
-  expiresAt DateTime
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-model PendingPhoneVerification {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  firstName String
-  lastName  String
-  code      String
   expiresAt DateTime
   attempts  Int      @default(0)
   createdAt DateTime @default(now())
@@ -148,3 +134,4 @@ model GroupMember {
   @@index([groupId])
   @@index([userId])
 }
+
