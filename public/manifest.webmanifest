@@ -1,0 +1,25 @@
+{
+  "name": "ViaRank",
+  "short_name": "ViaRank",
+  "description": "ViaRank - Tu actividad. Tu comunidad.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071d38",
+  "theme_color": "#071d38",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/viarank-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/viarank-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
