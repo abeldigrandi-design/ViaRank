@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { loginWithStrava } from "../services/strava";
+import stravaConnectOfficial from "../assets/strava-connect-official.svg";
 import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 export default function ValidateActivity() {
   const navigate = useNavigate();
@@ -170,57 +171,29 @@ padding: "24px 18px 40px",
                 textAlign: "center",
               }}
             >
-              <div
-                style={{
-                  width: "150px",
-                  height: "150px",
-                  margin: "0 auto 24px",
-                  borderRadius: "28px",
-                  background:
-                    "linear-gradient(135deg, #ff7a00 0%, #fc4c02 55%, #ff3300 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 12px 30px rgba(252,76,2,0.32)",
-                }}
-              >
-                <svg
-                  width="88"
-                  height="88"
-                  viewBox="0 0 100 100"
-                  aria-label="Strava"
-                >
-                  <polygon
-                    points="50,10 78,60 61,60 50,40 39,60 22,60"
-                    fill="white"
-                  />
-                  <polygon
-                    points="61,60 78,60 65,90 50,64"
-                    fill="#ffd2c2"
-                  />
-                </svg>
-              </div>
-
-              <button
-                onClick={loginWithStrava}
-                style={{
-                  width: "100%",
-                  padding: "14px 20px",
-                  border: "1px solid #ff7a00",
-                  borderRadius: "12px",
-                  background:
-                    "linear-gradient(135deg, #ff7a00 0%, #fc4c02 55%, #ff3300 100%)",
-                  color: "#ffffff",
-                  fontWeight: 800,
-                  fontSize: "16px",
-                  cursor: "pointer",
-                  
-                }}
-              >
-                Conectar con Strava
-              </button>
-
-              <div
+         
+              
+             
+<button
+  onClick={loginWithStrava}
+  style={{
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+  }}
+>
+  <img
+    src={stravaConnectOfficial}
+    alt="Connect with Strava"
+    style={{
+      width: "193px",
+      height: "48px",
+      display: "block",
+    }}
+  />
+</button>
+                            <div
                 style={{
                   marginTop: "12px",
                   color: "#94a3b8",
