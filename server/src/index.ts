@@ -3531,6 +3531,67 @@ if (!requesterId) {
   }
 );
 /* =========================================================
+   WEBHOOK STRAVA - VERIFICACION
+========================================================= */
+
+app.get("/api/strava/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (
+    mode === "subscribe" &&
+    token === process.env.STRAVA_WEBHOOK_VERIFY_TOKEN
+  ) {
+    console.log("Webhook de Strava verificado");
+
+    return res.json({
+      "hub.challenge": challenge,
+    });
+  }
+
+  return res.sendStatus(403);
+});
+/* =========================================================
+   WEBHOOK STRAVA - RECIBIR EVENTOS
+========================================================= */
+
+app.post("/api/strava/webhook", async (req, res) => {
+  try {
+    const event = req.body;
+
+    console.log("Evento recibido desde Strava:", event);
+
+    // Strava necesita recibir una respuesta 200 rapidamente.
+    res.sendStatus(200);
+
+    if (!event) {
+      return;
+    }
+
+    const {
+      object_type,
+      object_id,
+      aspect_type,
+      owner_id,
+    } = event;
+
+    console.log(
+      `Strava webhook: ${object_type} ${aspect_type} - ID ${object_id} - atleta ${owner_id}`
+    );
+  } catch (error) {
+    console.error(
+      "Error procesando webhook de Strava:",
+      error
+    );
+
+    if (!res.headersSent) {
+      res.sendStatus(200);
+    }
+  }
+});
+
+/* =========================================================
    INICIAR SERVIDOR
 ========================================================= */
 
