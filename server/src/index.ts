@@ -1733,7 +1733,32 @@ if (!userId) {
             "No se pudo obtener un Access Token vÃ¡lido",
         });
       }
+const latestActivity =
+  await prisma.activity.findFirst({
+    where: {
+      userId: user.id,
+    },
+    orderBy: {
+      startDate: "desc",
+    },
+    select: {
+      startDate: true,
+    },
+  });
 
+const after =
+  latestActivity
+    ? Math.floor(
+        latestActivity.startDate.getTime() /
+          1000
+      )
+    : null;
+
+console.log(
+  after
+    ? `Sincronizando actividades posteriores a ${latestActivity?.startDate.toISOString()}`
+    : "Primera sincronización: importando historial completo"
+);
       const allActivities: any[] =
         [];
 
@@ -1747,7 +1772,7 @@ if (!userId) {
 
         const response =
           await fetch(
-            `https://www.strava.com/api/v3/athlete/activities?per_page=${perPage}&page=${page}`,
+            `https://www.strava.com/api/v3/athlete/activities?per_page=${perPage}&page=${page}${after ? `&after=${after}` : ""}`,
             {
               headers: {
                 Authorization:

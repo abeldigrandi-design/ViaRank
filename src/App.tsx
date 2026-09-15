@@ -259,7 +259,64 @@ async function restoreSession() {
   /* =====================================================
      CARGAR RANKING
   ===================================================== */
+useEffect(() => {
+  if (!connected) {
+    return;
+  }
 
+  const syncStravaOnLogin = async () => {
+    try {
+      console.log(
+        "Sincronizando Strava automáticamente..."
+      );
+
+      const authToken =
+        localStorage.getItem(
+          "viarank_auth_token"
+        );
+
+      if (!authToken) {
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/strava-activities/import`,
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "Error en sincronización automática:",
+          data
+        );
+        return;
+      }
+
+      console.log(
+        "Sincronización automática completada:",
+        data
+      );
+
+      await loadRanking();
+      await loadGroups();
+    } catch (error) {
+      console.error(
+        "Error sincronizando Strava automáticamente:",
+        error
+      );
+    }
+  };
+
+  syncStravaOnLogin();
+}, [connected]);
 useEffect(() => {
   if (connected) {
     loadRanking();
