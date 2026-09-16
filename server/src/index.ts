@@ -1289,16 +1289,23 @@ app.delete(
       // Si Strava falla, la eliminaciÃ³n local continÃºa.
       if (user.accessToken) {
         try {
-          const response = await fetch(
-            "https://www.strava.com/oauth/revoke",
-            {
-              method: "POST",
-              headers: {
-                Authorization:
-                  `Bearer ${user.accessToken}`,
-              },
-            }
-          );
+          const credentials = Buffer.from(
+  `${process.env.STRAVA_CLIENT_ID}:${process.env.STRAVA_CLIENT_SECRET}`
+).toString("base64");
+
+const response = await fetch(
+  "https://www.strava.com/oauth/revoke",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      token: user.accessToken,
+    }),
+  }
+);
 
           if (!response.ok) {
             const data =
@@ -1453,16 +1460,23 @@ app.delete(
       // Si Strava falla, la eliminaciÃ³n local continÃºa.
       if (user.accessToken) {
         try {
-          const response = await fetch(
-            "https://www.strava.com/oauth/revoke",
-            {
-              method: "POST",
-              headers: {
-                Authorization:
-                  `Bearer ${user.accessToken}`,
-              },
-            }
-          );
+          const credentials = Buffer.from(
+  `${process.env.STRAVA_CLIENT_ID}:${process.env.STRAVA_CLIENT_SECRET}`
+).toString("base64");
+
+const response = await fetch(
+  "https://www.strava.com/oauth/revoke",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      token: user.accessToken,
+    }),
+  }
+);
 
           if (!response.ok) {
             const data =
