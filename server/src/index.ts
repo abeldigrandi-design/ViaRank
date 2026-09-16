@@ -3600,6 +3600,39 @@ app.post("/api/strava/webhook", async (req, res) => {
     console.log(
       `Strava webhook: ${object_type} ${aspect_type} - ID ${object_id} - atleta ${owner_id}`
     );
+if (
+  object_type === "athlete" &&
+  aspect_type === "update" &&
+  event.updates?.authorized === "false"
+) {
+  const stravaId = String(owner_id);
+
+  const user = await prisma.user.findUnique({
+    where: {
+      stravaId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (user) {
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        accessToken: null,
+        refreshToken: null,
+        expiresAt: null,
+      },
+    });
+
+    console.log(
+      `Strava desconectado por webhook para atleta ${stravaId}`
+    );
+  }
+}
   } catch (error) {
     console.error(
       "Error procesando webhook de Strava:",
