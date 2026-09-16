@@ -1793,7 +1793,7 @@ console.log(
 
         const response =
           await fetch(
-            `https://api-v3.strava.com/athlete/activities?per_page=${perPage}&page=${page}${after ? `&after=${after}` : ""}`,
+            `https://www.strava.com/api/v3/athlete/activities?per_page=${perPage}&page=${page}${after ? `&after=${after}` : ""}`,
             {
               headers: {
                 Authorization:
@@ -3657,3 +3657,4 @@ app.listen(
     );
   }
 );
+
