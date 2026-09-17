@@ -105,6 +105,7 @@ const [emailAddress, setEmailAddress] = useState("");
 const [emailSex, setEmailSex] = useState<"MALE" | "FEMALE" | "">("");
 const [emailCode, setEmailCode] = useState("");
 const [emailStep, setEmailStep] = useState<"request" | "verify">("request");
+const [emailMode, setEmailMode] = useState<"register" | "login">("register");
 const [emailLoading, setEmailLoading] = useState(false);
 const [emailMessage, setEmailMessage] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -1379,7 +1380,8 @@ backgroundRepeat: "no-repeat",
               >
                 Creá tu cuenta o ingresá a ViaRank con tu email.
               </p>
-
+              {emailMode === "register" && (
+              <>
               <input
                 type="text"
                 autoComplete="off"
@@ -1418,7 +1420,8 @@ color: "#111827",
 caretColor: "#111827",
                 }}
               />
-
+          </>
+           )}
              <input
   type="email"
   autoComplete="email"
@@ -1437,6 +1440,7 @@ color: "#111827",
 caretColor: "#111827",
                 }}
               />
+{emailMode === "register" && (
 <select
   value={emailSex}
   onChange={(e) =>
@@ -1459,7 +1463,9 @@ color: "#ffffff",
   <option value="FEMALE">Femenino</option>
   <option value="MALE">Masculino</option>
 </select>
+)}
               <button
+                
                 onClick={requestEmailCode}
 disabled={emailLoading}
                 style={{
@@ -1478,6 +1484,25 @@ disabled={emailLoading}
   ? "Enviando..."
   : "Enviar código"}
               </button>
+     <button
+  type="button"
+  onClick={() => {
+    setEmailMode(emailMode === "register" ? "login" : "register");
+    setEmailMessage("");
+  }}
+  style={{
+    border: "none",
+    background: "transparent",
+    color: "#ffffff",
+    fontSize: "15px",
+    cursor: "pointer",
+    textDecoration: "underline",
+  }}
+>
+  {emailMode === "register"
+    ? "¿Ya tenés una cuenta? Ingresar"
+    : "¿No tenés una cuenta? Crear cuenta"}
+</button>
             </div>
           ) : (
             <div
