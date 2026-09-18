@@ -1,5 +1,5 @@
 const CLIENT_ID = import.meta.env.VITE_STRAVA_CLIENT_ID;
-const REDIRECT_URI = `${window.location.origin}/exchange_token`;
+const REDIRECT_URI = import.meta.env.VITE_STRAVA_REDIRECT_URI;
 
 export function loginWithStrava() {
   console.log("CLIENT_ID:", CLIENT_ID);

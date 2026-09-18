@@ -11,7 +11,7 @@ import sportKayak from "./assets/sports/sport-kayak.png";
 import sportRemo from "./assets/sports/sport-remo.png";
 import sportVela from "./assets/sports/sport-vela.png";
 import sportWindsurf from "./assets/sports/sport-windsurf.png";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_URL = import.meta.env.VITE_API_URL;
 type RankingAthlete = {
   position: number;
   userId: string;
