@@ -1148,6 +1148,18 @@ profilePicture:
     }
   }
 );
+app.get("/exchange_token", (req, res) => {
+  const code = req.query.code;
+
+  if (!code || typeof code !== "string") {
+    return res.status(400).send("No se recibió el código de Strava");
+  }
+
+  return res.redirect(
+   `viarank://exchange_token?code=${encodeURIComponent(code)}`
+  );
+});
+
 /* =========================================================
    DESCONECTAR STRAVA
 ========================================================= */
