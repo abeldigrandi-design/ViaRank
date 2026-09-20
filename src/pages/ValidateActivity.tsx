@@ -1,10 +1,18 @@
 import { useNavigate } from "react-router-dom";
+import { registerPlugin } from "@capacitor/core";
 import { loginWithStrava } from "../services/strava";
 import stravaConnectOfficial from "../assets/strava-connect-official.svg";
 import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
+interface HealthConnectPlugin {
+  requestHealthPermissions(): Promise<void>;
+}
+
+const HealthConnect = registerPlugin<HealthConnectPlugin>("HealthConnect");
 export default function ValidateActivity() {
   const navigate = useNavigate();
-
+async function requestHealthConnectPermissions() {
+  await HealthConnect.requestHealthPermissions();
+}
   return (
     <div
       style={{
@@ -207,7 +215,22 @@ padding: "24px 18px 40px",
             </div>
           </div>
         </div>
-
+<button
+  onClick={requestHealthConnectPermissions}
+  style={{
+    marginTop: "20px",
+    padding: "12px 20px",
+    borderRadius: "10px",
+    border: "1px solid #148cff",
+    background: "#148cff",
+    color: "#ffffff",
+    fontSize: "15px",
+    fontWeight: 700,
+    cursor: "pointer",
+  }}
+>
+  Conectar con Health Connect
+</button>
         {/* COMO FUNCIONA */}
         <div
           style={{
