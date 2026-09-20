@@ -1989,6 +1989,12 @@ case "Wheelchair":
           },
 
           create: {
+                      externalId:
+              String(
+                activity.id
+              ),
+
+            source: "STRAVA",
             stravaId:
               String(
                 activity.id

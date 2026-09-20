@@ -34,6 +34,12 @@ enum Sex {
   MALE
   FEMALE
 }
+enum ActivitySource {
+  STRAVA
+  GOOGLE_HEALTH
+  RIDE_WITH_GPS
+  IGPSPORT
+}
 model User {
   id                  String        @id @default(cuid())
   stravaId            String?       @unique
@@ -87,7 +93,9 @@ model PendingEmailVerification {
 }
 model Activity {
   id            String       @id @default(cuid())
-  stravaId      String       @unique
+  externalId    String
+source        ActivitySource @default(STRAVA)
+stravaId      String?        @unique
   userId        String
   user          User         @relation(fields: [userId], references: [id])
   type          ActivityType
@@ -99,6 +107,7 @@ model Activity {
   calories      Int?
   startDate     DateTime
   createdAt     DateTime     @default(now())
+  @@unique([source, externalId])
 }
 
 model SportGroup {
