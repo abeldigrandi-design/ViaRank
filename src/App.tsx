@@ -135,11 +135,12 @@ function canManageGroup(
     group.administrator.id === user.id
 );
 }
-  const [ranking, setRanking] = useState<
+  const [, setRanking] = useState<
     RankingAthlete[]
   >([]);
 
   const [sport, setSport] = useState("");
+  const [myActivityBySport, setMyActivityBySport] = useState<Record<string, RankingAthlete>>({});
   const [period, setPeriod] = useState("month");
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -321,6 +322,7 @@ useEffect(() => {
 useEffect(() => {
   if (connected) {
     loadRanking();
+    loadMyActivityBySport();
     loadGroups();
 
     if (isSuperAdmin) {
@@ -538,6 +540,57 @@ setUser(data.user);
       );
     }
   }
+async function loadMyActivityBySport() {
+  if (!user?.id) return;
+
+  const sports = [
+    "RIDE", "RUN", "SWIM", "HIKE", "WALK",
+    "WHEELCHAIR", "KAYAK", "ROW", "SAIL", "WINDSURF"
+  ];
+
+  try {
+    const results = await Promise.all(
+      sports.map(async (sportType) => {
+        const params = new URLSearchParams({
+          sport: sportType,
+          period,
+        });
+
+        const response = await fetch(
+          `${API_URL}/api/ranking?${params.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+            },
+          }
+        );
+
+        if (!response.ok) return null;
+
+        const data: RankingResponse = await response.json();
+        const athlete = (data.ranking || []).find(
+          (item) => item.userId === user.id
+        );
+
+        return athlete
+          ? [sportType, athlete] as const
+          : null;
+      })
+    );
+
+    const bySport: Record<string, RankingAthlete> = {};
+
+    results.forEach((result) => {
+      if (result) {
+        bySport[result[0]] = result[1];
+      }
+    });
+
+    setMyActivityBySport(bySport);
+  } catch (err) {
+    console.error("Error cargando actividad por deporte:", err);
+  }
+}
 /* =====================================================
    CARGAR GRUPOS
 ===================================================== */
@@ -3368,8 +3421,21 @@ color: "#f8fafc",
 )}
        {/* MI ACTIVIDAD */}
 {!selectedGroup && (() => {
-  const athlete = ranking.find(
-    (item) => item.userId === user?.id
+  const sportOrder = [
+    "RIDE",
+    "RUN",
+    "SWIM",
+    "HIKE",
+    "WALK",
+    "WHEELCHAIR",
+    "KAYAK",
+    "ROW",
+    "SAIL",
+    "WINDSURF",
+  ];
+
+  const activeSports = sportOrder.filter(
+    (sportType) => myActivityBySport[sportType]
   );
 
   return (
@@ -3389,13 +3455,9 @@ color: "#f8fafc",
       <div
         style={{
           display: "flex",
-          alignItems: isMobile
-            ? "flex-start"
-            : "center",
+          alignItems: isMobile ? "flex-start" : "center",
           justifyContent: "space-between",
-          flexDirection: isMobile
-            ? "column"
-            : "row",
+          flexDirection: isMobile ? "column" : "row",
           gap: "12px",
           marginBottom: "22px",
         }}
@@ -3417,10 +3479,6 @@ color: "#f8fafc",
               color: "#8ecbff",
             }}
           >
-            {sport
-              ? sportName(sport)
-              : "Todos los deportes"}
-            {" · "}
             {period === "week"
               ? "Semana en curso"
               : period === "month"
@@ -3446,19 +3504,14 @@ color: "#f8fafc",
         </div>
       </div>
 
-      {error && (
-        <div style={styles.error}>
-          {error}
-        </div>
-      )}
+      {error && <div style={styles.error}>{error}</div>}
 
-      {!athlete ? (
+      {activeSports.length === 0 ? (
         <div
           style={{
             padding: "24px",
             borderRadius: "16px",
-            background:
-              "rgba(255, 255, 255, 0.05)",
+            background: "rgba(255, 255, 255, 0.05)",
             border:
               "1px solid rgba(142, 203, 255, 0.25)",
             textAlign: "center",
@@ -3479,177 +3532,139 @@ color: "#f8fafc",
               color: "#8ecbff",
             }}
           >
-            Actualizá tus actividades para ver
-            tus kilómetros y estadísticas.
+            Validá tus actividades para ver tus kilómetros y estadísticas.
           </p>
         </div>
       ) : (
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: "18px",
-            flexWrap: "wrap",
-            padding: "20px",
-            borderRadius: "16px",
-            background:
-              "rgba(255, 255, 255, 0.06)",
-            border:
-              "1px solid rgba(142, 203, 255, 0.30)",
+            flexDirection: "column",
+            gap: "14px",
           }}
         >
-          {athlete.profilePicture ? (
-            <img
-              src={athlete.profilePicture}
-              alt={`${athlete.firstName} ${athlete.lastName}`}
-              style={{
-                width: "58px",
-                height: "58px",
-                borderRadius: "50%",
-                objectFit: "cover",
-                border:
-                  "2px solid #148cff",
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: "58px",
-                height: "58px",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "#0d3158",
-                border:
-                  "2px solid #148cff",
-                fontSize: "26px",
-              }}
-            >
-              👤
-            </div>
-          )}
+          {activeSports.map((sportType) => {
+            const athlete = myActivityBySport[sportType];
 
-          <div
-            style={{
-              minWidth: "150px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "18px",
-                fontWeight: 800,
-                color: "#ffffff",
-              }}
-            >
-              {athlete.firstName}{" "}
-              {athlete.lastName}
-            </div>
-
-            <div
-              style={{
-                marginTop: "4px",
-                color: "#8ecbff",
-                fontSize: "14px",
-              }}
-            >
-              {athlete.activities} actividades
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flex: 1,
-              justifyContent: "space-around",
-              gap: "16px",
-              flexWrap: "wrap",
-            }}
-          >
-            <div
-              style={{
-                textAlign: "center",
-                minWidth: "100px",
-              }}
-            >
-              <strong
+            return (
+              <div
+                key={sportType}
                 style={{
-                  display: "block",
-                  fontSize: "24px",
-                  color: "#ffffff",
+                  padding: "20px",
+                  borderRadius: "16px",
+                  background:
+                    "rgba(255, 255, 255, 0.06)",
+                  border:
+                    "1px solid rgba(142, 203, 255, 0.30)",
                 }}
               >
-                {athlete.distanceKm.toLocaleString(
-                  "es-AR",
-                  {
-                    minimumFractionDigits: 2,
-                  }
-                )}
-              </strong>
+                <div
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 800,
+                    color: "#ffffff",
+                    marginBottom: "16px",
+                  }}
+                >
+                  {sportName(sportType)}
+                </div>
 
-              <span
-                style={{
-                  color: "#8ecbff",
-                }}
-              >
-                km
-              </span>
-            </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-around",
+                    gap: "16px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      textAlign: "center",
+                      minWidth: "90px",
+                    }}
+                  >
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: "24px",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {athlete.activities}
+                    </strong>
+                    <span style={{ color: "#8ecbff" }}>
+                      actividades
+                    </span>
+                  </div>
 
-            <div
-              style={{
-                textAlign: "center",
-                minWidth: "100px",
-              }}
-            >
-              <strong
-                style={{
-                  display: "block",
-                  fontSize: "24px",
-                  color: "#ffffff",
-                }}
-              >
-                {formatTime(
-                  athlete.movingTime
-                )}
-              </strong>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      minWidth: "90px",
+                    }}
+                  >
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: "24px",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {athlete.distanceKm.toLocaleString(
+                        "es-AR",
+                        { minimumFractionDigits: 2 }
+                      )}
+                    </strong>
+                    <span style={{ color: "#8ecbff" }}>
+                      km
+                    </span>
+                  </div>
 
-              <span
-                style={{
-                  color: "#8ecbff",
-                }}
-              >
-                tiempo
-              </span>
-            </div>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      minWidth: "90px",
+                    }}
+                  >
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: "24px",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {formatTime(athlete.movingTime)}
+                    </strong>
+                    <span style={{ color: "#8ecbff" }}>
+                      tiempo
+                    </span>
+                  </div>
 
-            <div
-              style={{
-                textAlign: "center",
-                minWidth: "100px",
-              }}
-            >
-              <strong
-                style={{
-                  display: "block",
-                  fontSize: "24px",
-                  color: "#ffffff",
-                }}
-              >
-                {Math.round(
-                  athlete.elevationGain
-                ).toLocaleString("es-AR")}
-              </strong>
-
-              <span
-                style={{
-                  color: "#8ecbff",
-                }}
-              >
-                m desnivel
-              </span>
-            </div>
-          </div>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      minWidth: "90px",
+                    }}
+                  >
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: "24px",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {Math.round(
+                        athlete.elevationGain
+                      ).toLocaleString("es-AR")}
+                    </strong>
+                    <span style={{ color: "#8ecbff" }}>
+                      m desnivel
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

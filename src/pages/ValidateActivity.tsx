@@ -5,13 +5,41 @@ import stravaConnectOfficial from "../assets/strava-connect-official.svg";
 import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 interface HealthConnectPlugin {
   requestHealthPermissions(): Promise<void>;
+  checkPermissions(): Promise<{ exercise: boolean; distance: boolean; allGranted: boolean }>;
+  readActivities(): Promise<{ count: number; activities: unknown[] }>;
+  readDistances(): Promise<{ count: number; totalKilometers: number; distances: unknown[] }>;
 }
 
 const HealthConnect = registerPlugin<HealthConnectPlugin>("HealthConnect");
 export default function ValidateActivity() {
   const navigate = useNavigate();
 async function requestHealthConnectPermissions() {
-  await HealthConnect.requestHealthPermissions();
+  try {
+    await HealthConnect.requestHealthPermissions();
+    const permissions = await HealthConnect.checkPermissions();
+    if (permissions.allGranted) {
+      const result = await HealthConnect.readDistances();
+      const distancias = (result.distances as any[]).slice().sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      const grupos: any[][] = [];
+      for (const d of distancias) {
+        const ultimoGrupo = grupos[grupos.length - 1];
+        const ultimoRegistro = ultimoGrupo?.[ultimoGrupo.length - 1];
+        const diferenciaMinutos = ultimoRegistro ? (new Date(d.startTime).getTime() - new Date(ultimoRegistro.endTime).getTime()) / 60000 : Infinity;
+        if (ultimoGrupo && diferenciaMinutos <= 3) {
+          ultimoGrupo.push(d);
+        } else {
+          grupos.push([d]);
+        }
+      }
+      const resumen = grupos.map((g: any[]) => ({ inicio: g[0].startTime, fin: g[g.length - 1].endTime, kilometros: g.reduce((s: number, d: any) => s + Number(d.kilometers), 0), registros: g.length, duracionMinutos: (new Date(g[g.length - 1].endTime).getTime() - new Date(g[0].startTime).getTime()) / 60000 }));
+      const candidatas = resumen.filter((a: any) => a.duracionMinutos >= 5 && a.registros >= 5);
+      alert("Actividades candidatas: " + candidatas.length + "\n\n" + candidatas.slice().reverse().slice(0, 10).map((a: any) => String(a.inicio) + " -> " + String(a.fin) + "\n" + a.kilometros.toFixed(3) + " km | " + a.duracionMinutos.toFixed(0) + " min | " + a.registros + " registros").join("\n\n"));
+    } else {
+      alert("Health Connect: faltan permisos");
+    }
+  } catch (error) {
+    alert("Error Health Connect: " + String(error));
+  }
 }
   return (
     <div
