@@ -2076,6 +2076,118 @@ case "Wheelchair":
     }
   }
 );
+/* =========================================================
+   ACTIVIDADES REGISTRADAS CON VIARANK
+========================================================= */
+
+app.post(
+  "/api/activities/viarank",
+  async (req, res) => {
+    try {
+      const userId =
+        getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "Sesión no válida",
+        });
+      }
+
+      const {
+        externalId,
+        type,
+        distance,
+        movingTime,
+        startDate,
+      } = req.body;
+
+      if (
+        !externalId ||
+        !type ||
+        typeof distance !== "number" ||
+        typeof movingTime !== "number" ||
+        !startDate
+      ) {
+        return res.status(400).json({
+          error: "Datos de actividad incompletos",
+        });
+      }
+
+      const tiposValidos = [
+        "RIDE",
+        "RUN",
+        "WALK",
+        "HIKE",
+        "SWIM",
+      ];
+
+      if (!tiposValidos.includes(type)) {
+        return res.status(400).json({
+          error: "Tipo de actividad no válido",
+        });
+      }
+
+      const activity =
+        await prisma.activity.upsert({
+          where: {
+            source_externalId: {
+              source: "VIARANK",
+              externalId: String(externalId),
+            },
+          },
+
+          update: {},
+
+          create: {
+            externalId:
+              String(externalId),
+
+            source: "VIARANK",
+
+            userId,
+
+            type,
+
+            name:
+              type === "WALK"
+                ? "Caminata ViaRank"
+                : "Actividad ViaRank",
+
+            distance,
+
+            movingTime,
+
+            elevationGain: 0,
+
+            averageSpeed:
+              movingTime > 0
+                ? distance / movingTime
+                : null,
+
+            calories: null,
+
+            startDate:
+              new Date(startDate),
+          },
+        });
+
+      return res.json({
+        success: true,
+        activity,
+      });
+    } catch (error) {
+      console.error(
+        "Error guardando actividad ViaRank:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo guardar la actividad",
+      });
+    }
+  }
+);
 
 /* =========================================================
    RANKING DEPORTIVO

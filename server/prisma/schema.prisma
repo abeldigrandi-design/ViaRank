@@ -39,6 +39,7 @@ enum ActivitySource {
   GOOGLE_HEALTH
   RIDE_WITH_GPS
   IGPSPORT
+  VIARANK
 }
 model User {
   id                  String        @id @default(cuid())
