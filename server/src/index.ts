@@ -2148,10 +2148,12 @@ app.post(
 
             type,
 
-            name:
-              type === "WALK"
-                ? "Caminata ViaRank"
-                : "Actividad ViaRank",
+           name:
+  type === "WALK"
+    ? "Caminata ViaRank"
+    : type === "RIDE"
+      ? "Ciclismo ViaRank"
+      : "Actividad ViaRank",
 
             distance,
 
