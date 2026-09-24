@@ -14,7 +14,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HealthConnectPlugin.class);
-
+        registerPlugin(ActivityTrackingPlugin.class);
         healthPermissionLauncher = registerForActivityResult(
             androidx.health.connect.client.PermissionController.createRequestPermissionResultContract(),
             grantedPermissions -> {

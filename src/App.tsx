@@ -1896,6 +1896,28 @@ disabled={emailLoading}
                  <button
   onClick={() => {
     setMenuOpen(false);
+    window.location.href = "/registrar-actividad";
+  }}
+  style={{
+    width: "100%",
+    padding: "10px 12px",
+    border: "none",
+    background: "transparent",
+    borderRadius: "9px",
+    textAlign: "left",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#f8fafc",
+  }}
+>
+  Registrar actividad
+</button>
+
+<div style={{ height: "1px", background: "rgba(20,140,255,0.35)", margin: "4px 8px" }} />
+                 <button
+  onClick={() => {
+    setMenuOpen(false);
     window.location.href = "/validar-actividad";
   }}
   style={{

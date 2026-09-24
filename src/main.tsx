@@ -11,6 +11,7 @@ import App from "./App";
 import ExchangeToken from "./pages/ExchangeToken";
 import SupportPrivacy from "./pages/SupportPrivacy";
 import ValidateActivity from "./pages/ValidateActivity";
+import RecordActivity from "./pages/RecordActivity";
 CapacitorApp.addListener("appUrlOpen", ({ url }) => {
   try {
     const incomingUrl = new URL(url);
@@ -32,6 +33,7 @@ createRoot(document.getElementById("root")!).render(
     <Routes>
       <Route path="/" element={<App />} />
       <Route path="/support" element={<SupportPrivacy />} />
+      <Route path="/registrar-actividad" element={<RecordActivity />} />
 <Route
   path="/validar-actividad"
   element={<ValidateActivity />}
