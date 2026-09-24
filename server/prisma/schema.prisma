@@ -94,7 +94,7 @@ model PendingEmailVerification {
 }
 model Activity {
   id            String       @id @default(cuid())
-  externalId    String
+  externalId    String?
 source        ActivitySource @default(STRAVA)
 stravaId      String?        @unique
   userId        String
