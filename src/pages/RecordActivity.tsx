@@ -40,11 +40,12 @@ function distanciaMetros(a: PuntoGPS, b: PuntoGPS) {
 }
 
 export default function RecordActivity() {
+const [deporte, setDeporte] = useState<"WALK" | "RIDE">("WALK");
   const [registrando, setRegistrando] = useState(false);
   const [distancia, setDistancia] = useState(0);
   const [mensaje, setMensaje] = useState(
-    "Preparado para registrar una caminata."
-  );
+  "Preparado para registrar una actividad."
+);
 
   const watchId = useRef<string | null>(null);
   const ultimoPunto = useRef<PuntoGPS | null>(null);
@@ -70,7 +71,11 @@ useEffect(() => {
       setDistancia(0);
       ultimoPunto.current = null;
       setRegistrando(true);
-      setMensaje("Registrando caminata...");
+      setMensaje(
+  deporte === "RIDE"
+    ? "Registrando ciclismo..."
+    : "Registrando caminata..."
+);
 
 await ActivityTracking.startTracking();
       watchId.current = await Geolocation.watchPosition(
@@ -101,14 +106,14 @@ await ActivityTracking.startTracking();
           }
 
           ultimoPunto.current = nuevoPunto;
-
-          setMensaje(
-            `Registrando. Precisión GPS: ${Math.round(
-              posicion.coords.accuracy
-            )} m`
-          );
-        }
-      );
+setMensaje(
+  deporte === "RIDE"
+    ? `Registrando ciclismo. Precisión GPS: ${Math.round(posicion.coords.accuracy)} m`
+    : `Registrando caminata. Precisión GPS: ${Math.round(posicion.coords.accuracy)} m`
+);
+      }
+    );
+                 
     } catch (error) {
       console.error(error);
       setRegistrando(false);
@@ -130,7 +135,7 @@ const respuesta = await fetch(`${API_URL}/api/activities/viarank`, {
   },
   body: JSON.stringify({
     externalId: `viarank-${resultado.startTime}`,
-    type: "WALK",
+    type: deporte,
     distance: resultado.distance,
     movingTime: resultado.duration,
     startDate: new Date(resultado.startTime).toISOString(),
@@ -178,7 +183,41 @@ if (watchId.current !== null) {
 
         <h1 style={{ marginTop: "24px" }}>Registrar actividad</h1>
 
-        <h2 style={{ marginTop: "32px" }}>🚶 Caminata</h2>
+       <div style={{ display: "flex", gap: "12px", marginTop: "32px" }}>
+  <button
+    onClick={() => setDeporte("WALK")}
+    disabled={registrando}
+    style={{
+      flex: 1,
+      padding: "14px",
+      border: `1px solid ${deporte === "WALK" ? "#148cff" : "#475569"}`,
+      borderRadius: "12px",
+      background: deporte === "WALK" ? "#148cff" : "transparent",
+      color: "white",
+      fontSize: "18px",
+      cursor: registrando ? "default" : "pointer",
+    }}
+  >
+    🚶 Caminata
+  </button>
+
+  <button
+    onClick={() => setDeporte("RIDE")}
+    disabled={registrando}
+    style={{
+      flex: 1,
+      padding: "14px",
+      border: `1px solid ${deporte === "RIDE" ? "#148cff" : "#475569"}`,
+      borderRadius: "12px",
+      background: deporte === "RIDE" ? "#148cff" : "transparent",
+      color: "white",
+      fontSize: "18px",
+      cursor: registrando ? "default" : "pointer",
+    }}
+  >
+    🚴 Ciclismo
+  </button>
+</div>
 
         <div
           style={{
