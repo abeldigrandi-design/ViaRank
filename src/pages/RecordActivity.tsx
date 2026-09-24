@@ -122,36 +122,54 @@ setMensaje(
   };
 
   const finalizar = async () => {
-const resultado = await ActivityTracking.stopTracking();
-console.log("Actividad ViaRank finalizada:", resultado);
-  ultimoPunto.current = null;
-setRegistrando(false);
-setMensaje("Actividad finalizada.");  
-const respuesta = await fetch(`${API_URL}/api/activities/viarank`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
-  },
-  body: JSON.stringify({
-    externalId: `viarank-${resultado.startTime}`,
-    type: deporte,
-    distance: resultado.distance,
-    movingTime: resultado.duration,
-    startDate: new Date(resultado.startTime).toISOString(),
-  }),
-});
-if (!respuesta.ok) {
-  throw new Error("No se pudo guardar la actividad en ViaRank");
-}
-if (watchId.current !== null) {
-      await Geolocation.clearWatch({ id: watchId.current });
-      watchId.current = null;
-    }
+    let resultado;
 
-    ultimoPunto.current = null;
-    setRegistrando(false);
-    setMensaje("Actividad finalizada.");
+    try {
+      resultado = await ActivityTracking.stopTracking();
+
+      if (watchId.current !== null) {
+        await Geolocation.clearWatch({ id: watchId.current });
+        watchId.current = null;
+      }
+
+      ultimoPunto.current = null;
+      setRegistrando(false);
+
+      const respuesta = await fetch(`${API_URL}/api/activities/viarank`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+        },
+        body: JSON.stringify({
+          externalId: `viarank-${resultado.startTime}`,
+          type: deporte,
+          distance: resultado.distance,
+          movingTime: resultado.duration,
+          startDate: new Date(resultado.startTime).toISOString(),
+        }),
+      });
+
+      if (!respuesta.ok) {
+        throw new Error(`Error del servidor: ${respuesta.status}`);
+      }
+
+      setDistancia(resultado.distance);
+      setMensaje("Actividad guardada correctamente.");
+    } catch (error) {
+      console.error("Error al finalizar actividad ViaRank:", error);
+
+      if (watchId.current !== null) {
+        try {
+          await Geolocation.clearWatch({ id: watchId.current });
+        } catch {}
+        watchId.current = null;
+      }
+
+      ultimoPunto.current = null;
+      setRegistrando(false);
+      setMensaje("La actividad finalizó, pero no se pudo guardar.");
+    }
   };
 
   return (
