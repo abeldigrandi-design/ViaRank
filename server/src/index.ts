@@ -2272,9 +2272,16 @@ app.get(
               member.userId === userId
           );
 
-        const canView =
-          requester.role === "SUPER_ADMIN" ||
-          group.administratorId === requesterId;
+                  const requesterIsMember =
+  group.members.some(
+    (member) =>
+      member.userId === requesterId
+  );
+
+const canView =
+  requester.role === "SUPER_ADMIN" ||
+  group.administratorId === requesterId ||
+  requesterIsMember;
 
         if (!canView || !targetIsMember) {
           return res.status(403).json({
