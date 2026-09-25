@@ -3373,17 +3373,19 @@ color: "#f8fafc",
           ? "14px"
           : "12px",
         padding: isMobile
-          ? "10px 12px"
+          ? "6px 10px"
           : "12px 16px",
         display: "flex",
-        flexWrap: "wrap",
+       flexWrap: "wrap",
         alignItems: "center",
         gap: isMobile
           ? "8px"
           : "12px",
-        minHeight: isTopThree
-          ? "78px"
-          : "64px",
+       minHeight: isMobile
+  ? "48px"
+  : isTopThree
+    ? "78px"
+    : "64px",
       }}
     >
       <div
@@ -3393,7 +3395,7 @@ color: "#f8fafc",
             : "42px",
           fontSize: isTopThree
             ? isMobile
-              ? "24px"
+              ? "18px"
               : "28px"
             : isMobile
             ? "17px"
@@ -3416,12 +3418,16 @@ color: "#f8fafc",
           src={athlete.profilePicture}
           alt={`${athlete.firstName} ${athlete.lastName}`}
           style={{
-            width: isTopThree
-              ? "48px"
-              : "42px",
-            height: isTopThree
-              ? "48px"
-              : "42px",
+            width: isMobile
+  ? "38px"
+  : isTopThree
+  ? "48px"
+  : "42px",
+height: isMobile
+  ? "38px"
+  : isTopThree
+  ? "48px"
+  : "42px",
             borderRadius: "50%",
             objectFit: "cover",
             flexShrink: 0,
@@ -3458,88 +3464,54 @@ color: "#f8fafc",
         <div
           style={{
             fontWeight: 800,
+maxWidth: isMobile ? "82px" : "none",
             fontSize: isMobile
-              ? "15px"
+              ? "13px"
               : "17px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
+           whiteSpace: isMobile ? "normal" : "nowrap",
+           overflow: isMobile ? "visible" : "hidden",
+            textOverflow: isMobile ? "clip" : "ellipsis",
           }}
         >
           {athlete.firstName}{" "}
           {athlete.lastName}
+</div>
+<div style={{ flex: 1, minWidth: 0 }}>
+<div
+  style={{
+    fontSize: isMobile
+      ? "16px"
+      : "19px",
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+    marginTop: "2px",
+  }}
+>
+  {athlete.distanceKm.toLocaleString(
+    "es-AR"
+  )}{" "}
+  km
 {athlete.hasOverlap && (
   <span
     title="Posible superposición de actividades"
     style={{
       display: "inline-block",
-      width: "10px",
-      height: "19px",
+      width: "8px",
+      height: "16px",
       background: "#ffeb00",
       border: "1px solid #111",
       borderRadius: 0,
-      marginLeft: "11px",
+      marginLeft: "7px",
       verticalAlign: "middle",
     }}
   />
 )}
+</div>
+</div>
         </div>
-
-        <div
-          style={{
-            color: "#64748b",
-            fontSize: isMobile
-              ? "12px"
-              : "13px",
-            marginTop: "2px",
-          }}
-        >
-          {athlete.activities} actividades
-        </div>
-      </div>
-
-      <div
-        style={{
-          textAlign: "right",
-          marginLeft: "auto",
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            fontSize: isMobile
-              ? "16px"
-              : "19px",
-            fontWeight: 800,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {athlete.distanceKm.toLocaleString(
-            "es-AR"
-          )}{" "}
-          km
-        </div>
-
-        <div
-          style={{
-            color: "#64748b",
-            fontSize: isMobile
-              ? "11px"
-              : "12px",
-            marginTop: "2px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {athlete.hours.toLocaleString(
-            "es-AR"
-          )}{" "}
-          h ·{" "}
-          {athlete.elevationGain.toLocaleString(
-            "es-AR"
-          )}{" "}
-          m
-        </div>
-      </div>
+      
+    
+      
 {activityHistoryAthlete &&
   activityHistoryAthlete.userId === athlete.userId && (
     <div
