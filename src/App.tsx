@@ -3473,12 +3473,12 @@ color: "#f8fafc",
     title="Posible superposición de actividades"
     style={{
       display: "inline-block",
-      width: "8px",
-      height: "16px",
+      width: "10px",
+      height: "19px",
       background: "#ffeb00",
       border: "1px solid #111",
       borderRadius: 0,
-      marginLeft: "7px",
+      marginLeft: "11px",
       verticalAlign: "middle",
     }}
   />
