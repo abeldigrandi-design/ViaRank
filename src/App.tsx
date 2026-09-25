@@ -24,6 +24,7 @@ type RankingAthlete = {
   elevationGain: number;
   distanceKm: number;
   hours: number;
+hasOverlap?: boolean;
 };
 type ActivityHistoryItem = {
   id: string;
@@ -39,6 +40,7 @@ type ActivityHistoryItem = {
   startDate: string;
   distanceKm: number;
   endDate: string;
+hasOverlap?: boolean;
 };
 
 type ActivityHistoryResponse = {
@@ -3350,7 +3352,14 @@ color: "#f8fafc",
   return (
     <div
       key={athlete.userId}
-      onClick={() => loadActivityHistory(athlete)}
+      onClick={() => {
+  if (activityHistoryAthlete?.userId === athlete.userId) {
+    setActivityHistoryAthlete(null);
+    setActivityHistory([]);
+  } else {
+    loadActivityHistory(athlete);
+  }
+}}
       title="Ver historial de actividades"
       style={{
         cursor: "pointer",
@@ -3367,6 +3376,7 @@ color: "#f8fafc",
           ? "10px 12px"
           : "12px 16px",
         display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
         gap: isMobile
           ? "8px"
@@ -3458,6 +3468,21 @@ color: "#f8fafc",
         >
           {athlete.firstName}{" "}
           {athlete.lastName}
+{athlete.hasOverlap && (
+  <span
+    title="Posible superposición de actividades"
+    style={{
+      display: "inline-block",
+      width: "8px",
+      height: "16px",
+      background: "#ffeb00",
+      border: "1px solid #111",
+      borderRadius: 0,
+      marginLeft: "7px",
+      verticalAlign: "middle",
+    }}
+  />
+)}
         </div>
 
         <div
@@ -3538,7 +3563,24 @@ color: "#f8fafc",
               borderBottom: "1px solid rgba(255,255,255,0.10)",
             }}
           >
-            <strong>{activity.name}</strong>
+            <strong>
+  {activity.name}
+  {activity.hasOverlap && (
+    <span
+      title="Actividad con posible superposición"
+      style={{
+        display: "inline-block",
+        width: "8px",
+        height: "16px",
+        background: "#ffeb00",
+        border: "1px solid #111",
+        borderRadius: 0,
+        marginLeft: "7px",
+        verticalAlign: "middle",
+      }}
+    />
+  )}
+</strong>
             <div style={{ fontSize: "13px", marginTop: "4px" }}>
               {new Date(activity.startDate).toLocaleString("es-AR")}
               {" · "}

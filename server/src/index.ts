@@ -2311,13 +2311,44 @@ app.get(
             startDate: true,
           },
         });
+const overlappingActivityIds =
+  new Set<string>();
 
+for (let i = 0; i < activities.length; i++) {
+  const a = activities[i];
+
+  const aStart = new Date(a.startDate);
+  const aEnd = new Date(
+    aStart.getTime() +
+      a.movingTime * 1000
+  );
+
+  for (let j = i + 1; j < activities.length; j++) {
+    const b = activities[j];
+
+    const bStart = new Date(b.startDate);
+    const bEnd = new Date(
+      bStart.getTime() +
+        b.movingTime * 1000
+    );
+
+    const overlaps =
+      aStart < bEnd &&
+      bStart < aEnd;
+
+    if (overlaps) {
+      overlappingActivityIds.add(a.id);
+      overlappingActivityIds.add(b.id);
+    }
+  }
+}
       return res.json({
         success: true,
         count: activities.length,
         activities: activities.map(
           (activity) => ({
             ...activity,
+hasOverlap: overlappingActivityIds.has(activity.id),
             distanceKm: Number(
               (activity.distance / 1000).toFixed(2)
             ),
@@ -3184,7 +3215,60 @@ if (period === "year") {
             },
           },
         });
+      // ---------------------------------------------------------
+      // DETECTAR ACTIVIDADES SUPERPUESTAS POR ATLETA
+      // ---------------------------------------------------------
 
+      const overlappingActivityIds = new Set<string>();
+      const activitiesByUser = new Map<string, typeof activities>();
+
+      for (const activity of activities) {
+        const list =
+          activitiesByUser.get(activity.userId) || [];
+
+        list.push(activity);
+        activitiesByUser.set(activity.userId, list);
+      }
+
+      for (const userActivities of activitiesByUser.values()) {
+        for (let i = 0; i < userActivities.length; i++) {
+          const a = userActivities[i];
+
+          const aStart = new Date(a.startDate);
+          const aEnd = new Date(
+            aStart.getTime() +
+              a.movingTime * 1000
+          );
+
+          for (let j = i + 1; j < userActivities.length; j++) {
+            const b = userActivities[j];
+
+            const bStart = new Date(b.startDate);
+            const bEnd = new Date(
+              bStart.getTime() +
+                b.movingTime * 1000
+            );
+
+            // Deben ser del mismo día
+            const sameDay =
+              aStart.getFullYear() === bStart.getFullYear() &&
+              aStart.getMonth() === bStart.getMonth() &&
+              aStart.getDate() === bStart.getDate();
+
+            if (!sameDay) continue;
+
+            // Detectar superposición total o parcial
+            const overlaps =
+              aStart < bEnd &&
+              bStart < aEnd;
+
+            if (overlaps) {
+              overlappingActivityIds.add(a.id);
+              overlappingActivityIds.add(b.id);
+            }
+          }
+        }
+      }
       const rankingMap =
         new Map<
           string,
@@ -3298,6 +3382,11 @@ if (period === "year") {
                     3600
                   ).toFixed(2)
                 ),
+hasOverlap: activities.some(
+  (activity) =>
+    activity.userId === athlete.userId &&
+    overlappingActivityIds.has(activity.id)
+),
             })
           );
 
