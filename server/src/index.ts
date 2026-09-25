@@ -2195,6 +2195,153 @@ app.post(
    RANKING DEPORTIVO
 ========================================================= */
 
+/* ---------------------------------------------------------
+   HISTORIAL DE ACTIVIDADES
+--------------------------------------------------------- */
+
+app.get(
+  "/api/activities/history",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const userId =
+        String(req.query.userId || requesterId);
+
+      const sport =
+        String(req.query.sport || "").toUpperCase();
+
+      const groupId =
+        String(req.query.groupId || "");
+
+      const requester =
+        await prisma.user.findUnique({
+          where: {
+            id: requesterId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (!requester) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      if (userId !== requesterId) {
+        if (!groupId) {
+          return res.status(403).json({
+            error: "No tenés permiso para ver estas actividades",
+          });
+        }
+
+        const group =
+          await prisma.sportGroup.findUnique({
+            where: {
+              id: groupId,
+            },
+            select: {
+              administratorId: true,
+              members: {
+                select: {
+                  userId: true,
+                },
+              },
+            },
+          });
+
+        if (!group) {
+          return res.status(404).json({
+            error: "Grupo no encontrado",
+          });
+        }
+
+        const targetIsMember =
+          group.members.some(
+            (member) =>
+              member.userId === userId
+          );
+
+        const canView =
+          requester.role === "SUPER_ADMIN" ||
+          group.administratorId === requesterId;
+
+        if (!canView || !targetIsMember) {
+          return res.status(403).json({
+            error: "No tenés permiso para ver estas actividades",
+          });
+        }
+      }
+
+      const where: any = {
+        userId,
+      };
+
+      if (sport) {
+        where.type = sport;
+      }
+
+      const activities =
+        await prisma.activity.findMany({
+          where,
+          orderBy: {
+            startDate: "desc",
+          },
+          select: {
+            id: true,
+            externalId: true,
+            source: true,
+            type: true,
+            name: true,
+            distance: true,
+            movingTime: true,
+            elevationGain: true,
+            averageSpeed: true,
+            calories: true,
+            startDate: true,
+          },
+        });
+
+      return res.json({
+        success: true,
+        count: activities.length,
+        activities: activities.map(
+          (activity) => ({
+            ...activity,
+            distanceKm: Number(
+              (activity.distance / 1000).toFixed(2)
+            ),
+            endDate: new Date(
+              activity.startDate.getTime() +
+                activity.movingTime * 1000
+            ),
+          })
+        ),
+      });
+    } catch (error) {
+      console.error(
+        "Error cargando historial de actividades:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo cargar el historial de actividades",
+      });
+    }
+  }
+);
+
 app.get(
   "/api/ranking",
   async (req, res) => {

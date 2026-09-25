@@ -25,7 +25,27 @@ type RankingAthlete = {
   distanceKm: number;
   hours: number;
 };
+type ActivityHistoryItem = {
+  id: string;
+  externalId: string;
+  source: string;
+  type: string;
+  name: string;
+  distance: number;
+  movingTime: number;
+  elevationGain: number;
+  averageSpeed: number | null;
+  calories: number | null;
+  startDate: string;
+  distanceKm: number;
+  endDate: string;
+};
 
+type ActivityHistoryResponse = {
+  success: boolean;
+  count: number;
+  activities: ActivityHistoryItem[];
+};
 type RankingResponse = {
   success: boolean;
   count: number;
@@ -166,7 +186,14 @@ const [selectedGroup, setSelectedGroup] =
 
 const [groupRanking, setGroupRanking] =
   useState<RankingAthlete[]>([]);
+const [activityHistory, setActivityHistory] =
+  useState<ActivityHistoryItem[]>([]);
 
+const [activityHistoryLoading, setActivityHistoryLoading] =
+  useState(false);
+
+const [activityHistoryAthlete, setActivityHistoryAthlete] =
+  useState<RankingAthlete | null>(null);
 const [groupRankingLoading, setGroupRankingLoading] =
   useState(false);
 const [groupSexFilter, setGroupSexFilter] =
@@ -823,6 +850,57 @@ async function joinGroup() {
     alert(
       "No se pudo ingresar al grupo."
     );
+  }
+}
+async function loadActivityHistory(
+  athlete: RankingAthlete
+) {
+  if (!selectedGroup) return;
+
+  try {
+    setActivityHistoryLoading(true);
+    setActivityHistory([]);
+    setActivityHistoryAthlete(athlete);
+    setError("");
+
+    const params = new URLSearchParams({
+      userId: athlete.userId,
+      groupId: selectedGroup.id,
+      sport: selectedGroup.sport,
+    });
+
+    const response = await fetch(
+      `${API_URL}/api/activities/history?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem(
+            "viarank_auth_token"
+          )}`,
+        },
+      }
+    );
+
+    const data: ActivityHistoryResponse =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        (data as any).error ||
+          "No se pudo cargar el historial."
+      );
+    }
+
+    setActivityHistory(data.activities || []);
+  } catch (err) {
+    console.error(
+      "Error cargando historial de actividades:",
+      err
+    );
+    setError(
+      "No se pudo cargar el historial de actividades."
+    );
+  } finally {
+    setActivityHistoryLoading(false);
   }
 }
 /* =====================================================
@@ -3272,7 +3350,10 @@ color: "#f8fafc",
   return (
     <div
       key={athlete.userId}
+      onClick={() => loadActivityHistory(athlete)}
+      title="Ver historial de actividades"
       style={{
+        cursor: "pointer",
         background: isTopThree
   ? "#123a63"
   : "#0d3158",
@@ -3434,9 +3515,47 @@ color: "#f8fafc",
           m
         </div>
       </div>
+{activityHistoryAthlete &&
+  activityHistoryAthlete.userId === athlete.userId && (
+    <div
+      style={{
+        width: "100%",
+        marginTop: "12px",
+        paddingTop: "12px",
+        borderTop: "1px solid rgba(255,255,255,0.15)",
+      }}
+    >
+      {activityHistoryLoading ? (
+        <div>Cargando historial...</div>
+      ) : activityHistory.length === 0 ? (
+        <div>No hay actividades registradas.</div>
+      ) : (
+        activityHistory.map((activity) => (
+          <div
+            key={activity.id}
+            style={{
+              padding: "10px 0",
+              borderBottom: "1px solid rgba(255,255,255,0.10)",
+            }}
+          >
+            <strong>{activity.name}</strong>
+            <div style={{ fontSize: "13px", marginTop: "4px" }}>
+              {new Date(activity.startDate).toLocaleString("es-AR")}
+              {" · "}
+              {activity.distanceKm.toLocaleString("es-AR")} km
+              {" · "}
+              {activity.source}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )}
     </div>
   );
 })}
+
+   
       </div>
     )}
   </section>
