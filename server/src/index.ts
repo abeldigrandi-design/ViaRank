@@ -3980,6 +3980,15 @@ app.post("/api/strava/webhook", async (req, res) => {
       `Strava webhook: ${object_type} ${aspect_type} - ID ${object_id} - atleta ${owner_id}`
     );
 if (
+  object_type === "activity" &&
+  aspect_type === "delete"
+) {
+  await prisma.activity.deleteMany({
+    where: { source: "STRAVA", externalId: String(object_id) },
+  });
+}
+
+if (
   object_type === "athlete" &&
   aspect_type === "update" &&
   event.updates?.authorized === "false"
