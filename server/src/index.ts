@@ -3996,6 +3996,10 @@ if (
   });
 
   if (user) {
+    await prisma.activity.deleteMany({
+      where: { userId: user.id, source: "STRAVA" },
+    });
+
     await prisma.user.update({
       where: {
         id: user.id,
