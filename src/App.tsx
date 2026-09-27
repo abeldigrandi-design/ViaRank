@@ -121,6 +121,7 @@ type GroupMembersResponse = {
 function App() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [sessionRestoring, setSessionRestoring] = useState(true);
  const [emailFirstName, setEmailFirstName] = useState("");
 const [emailLastName, setEmailLastName] = useState("");
 const [emailAddress, setEmailAddress] = useState("");
@@ -236,6 +237,7 @@ async function restoreSession() {
 
   if (!refreshToken) {
     await checkStrava();
+    setSessionRestoring(false);
     return;
   }
 
@@ -281,6 +283,8 @@ async function restoreSession() {
     );
 
     await checkStrava();
+  } finally {
+    setSessionRestoring(false);
   }
 }
  useEffect(() => {
@@ -1432,6 +1436,14 @@ localStorage.removeItem(
   /* =====================================================
      PANTALLA SIN CONEXIÓN
   ===================================================== */
+
+  if (sessionRestoring) {
+    return (
+      <div style={{ ...styles.page, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "white", fontSize: "18px" }}>Iniciando ViaRank...</div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
