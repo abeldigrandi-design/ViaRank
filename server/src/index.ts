@@ -3989,6 +3989,123 @@ if (
 }
 
 if (
+  object_type === "activity" &&
+  aspect_type === "update"
+) {
+  const stravaId = String(owner_id);
+
+  const user = await prisma.user.findUnique({
+    where: {
+      stravaId,
+    },
+    select: {
+      id: true,
+      accessToken: true,
+      refreshToken: true,
+      expiresAt: true,
+    },
+  });
+
+  if (user) {
+    const accessToken =
+      await getValidStravaAccessToken(user);
+
+    const response = await fetch(
+      `https://www.strava.com/api/v3/activities/${object_id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (response.ok) {
+      const activity: any = await response.json();
+
+      let type:
+        | "RIDE"
+        | "RUN"
+        | "WALK"
+        | "HIKE"
+        | "SWIM"
+        | "KAYAK"
+        | "ROW"
+        | "SAIL"
+        | "WINDSURF"
+        | "WHEELCHAIR"
+        | null = null;
+
+      switch (activity.type) {
+        case "Ride":
+        case "VirtualRide":
+        case "EBikeRide":
+          type = "RIDE";
+          break;
+        case "Run":
+        case "VirtualRun":
+          type = "RUN";
+          break;
+        case "Walk":
+          type = "WALK";
+          break;
+        case "Hike":
+          type = "HIKE";
+          break;
+        case "Swim":
+          type = "SWIM";
+          break;
+        case "Kayaking":
+          type = "KAYAK";
+          break;
+        case "Rowing":
+          type = "ROW";
+          break;
+        case "Sail":
+          type = "SAIL";
+          break;
+        case "Windsurf":
+          type = "WINDSURF";
+          break;
+        case "Wheelchair":
+          type = "WHEELCHAIR";
+          break;
+      }
+
+      if (type) {
+        await prisma.activity.updateMany({
+          where: {
+            userId: user.id,
+            source: "STRAVA",
+            externalId: String(object_id),
+          },
+          data: {
+            name: activity.name,
+            type,
+            distance: activity.distance || 0,
+            movingTime: activity.moving_time || 0,
+            elevationGain:
+              activity.total_elevation_gain || 0,
+            averageSpeed:
+              activity.average_speed || null,
+            calories: activity.calories
+              ? Math.round(activity.calories)
+              : null,
+            startDate: new Date(activity.start_date),
+          },
+        });
+
+        console.log(
+          `Actividad Strava ${object_id} actualizada mediante webhook`
+        );
+      }
+    } else {
+      console.error(
+        `No se pudo obtener la actividad Strava ${object_id}: ${response.status}`
+      );
+    }
+  }
+}
+if (
   object_type === "athlete" &&
   aspect_type === "update" &&
   event.updates?.authorized === "false"
