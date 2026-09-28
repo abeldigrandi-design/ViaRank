@@ -2940,14 +2940,32 @@ if (isSuperAdmin) {
                 members: true,
               },
             },
+
+            members: {
+              where: {
+                userId: requesterId,
+              },
+              select: {
+                userId: true,
+              },
+            },
           },
         });
+
+      const groupsWithMembership = groups.map((group) => ({
+        ...group,
+        isMember:
+          group.administratorId === requesterId ||
+          group.members.length > 0,
+        members: undefined,
+      }));
+
 
       return res.json({
         success: true,
         count:
-          groups.length,
-        groups,
+          groupsWithMembership.length,
+        groups: groupsWithMembership,
       });
     } catch (error) {
       console.error(
