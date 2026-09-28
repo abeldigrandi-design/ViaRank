@@ -3504,19 +3504,13 @@ maxWidth: isMobile ? "82px" : "none",
   )}{" "}
   km
 {athlete.hasOverlap && (
-  <span
-    title="Posible superposición de actividades"
-    style={{
-      display: "inline-block",
-      width: "8px",
-      height: "16px",
-      background: "#ffeb00",
-      border: "1px solid #111",
-      borderRadius: 0,
-      marginLeft: "7px",
-      verticalAlign: "middle",
-    }}
-  />
+  <span style={{ display: "inline-flex", alignItems: "center" }}>
+    <span
+      title="Posible superposición de actividades"
+      style={{ display: "inline-block", width: "8px", height: "16px", background: "#ffff00", border: "1px solid #111", borderRadius: 0, marginLeft: "7px", verticalAlign: "middle" }}
+    />
+    <span style={{ color: "#ff3030", fontSize: "13px", fontWeight: 900, marginLeft: "5px", animation: "viarankVarBlink 0.8s infinite" }}>VAR</span>
+  </span>
 )}
 </div>
 </div>
