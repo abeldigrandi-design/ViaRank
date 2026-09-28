@@ -30,10 +30,12 @@ enum ActivityType {
   WINDSURF
   WHEELCHAIR
 }
+
 enum Sex {
   MALE
   FEMALE
 }
+
 enum ActivitySource {
   STRAVA
   GOOGLE_HEALTH
@@ -41,37 +43,39 @@ enum ActivitySource {
   IGPSPORT
   VIARANK
 }
+
 model User {
-  id                  String        @id @default(cuid())
-  stravaId            String?       @unique
-  firstName           String
-  lastName            String
-  sex                 Sex?
- email               String?       @unique
-emailVerified              Boolean   @default(false)
+  id            String  @id @default(cuid())
+  stravaId      String? @unique
+  firstName     String
+  lastName      String
+  sex           Sex?
+  email         String? @unique
+  emailVerified Boolean @default(false)
 
-profilePicture      String?
-  city                String?
-  country             String?
+  profilePicture String?
+  city           String?
+  country        String?
 
-  accessToken         String?
-  refreshToken        String?
-  expiresAt           Int?
+  accessToken  String?
+  refreshToken String?
+  expiresAt    Int?
 
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  role                UserRole      @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  role      UserRole @default(USER)
 
-  activities          Activity[]
-  groupMemberships    GroupMember[]
-  administeredGroups  SportGroup[]  @relation("GroupAdministrator")
-sessions            UserSession[]
+  activities         Activity[]
+  groupMemberships   GroupMember[]
+  administeredGroups SportGroup[]  @relation("GroupAdministrator")
+  sessions           UserSession[]
 }
+
 model UserSession {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
-  refreshToken String   @unique
-  createdAt    DateTime @default(now())
+  refreshToken String    @unique
+  createdAt    DateTime  @default(now())
   expiresAt    DateTime
   revokedAt    DateTime?
 
@@ -80,25 +84,27 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
 }
+
 model PendingEmailVerification {
   id        String   @id @default(cuid())
   email     String   @unique
   firstName String
   lastName  String
   sex       Sex?
- code      String
+  code      String
   expiresAt DateTime
   attempts  Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
 model Activity {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   externalId    String?
-source        ActivitySource @default(STRAVA)
-stravaId      String?        @unique
+  source        ActivitySource @default(STRAVA)
+  stravaId      String?        @unique
   userId        String
-  user          User         @relation(fields: [userId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
   type          ActivityType
   name          String
   distance      Float
@@ -107,41 +113,63 @@ stravaId      String?        @unique
   averageSpeed  Float?
   calories      Int?
   startDate     DateTime
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime       @default(now())
+
   @@unique([source, externalId])
 }
 
 model SportGroup {
-  id              String        @id @default(cuid())
-  name            String
-  sport           ActivityType
-  joinCode        String        @unique
-  visibility      GroupVisibility @default(PUBLIC)
+  id         String          @id @default(cuid())
+  name       String
+  sport      ActivityType
+  joinCode   String          @unique
+  visibility GroupVisibility @default(PUBLIC)
 
   administratorId String
-  administrator   User          @relation("GroupAdministrator", fields: [administratorId], references: [id])
+  administrator   User   @relation("GroupAdministrator", fields: [administratorId], references: [id])
 
-  members         GroupMember[]
+  members GroupMember[]
+  events  GroupEvent[]
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([sport])
   @@index([administratorId])
 }
 
 model GroupMember {
-  id        String     @id @default(cuid())
-  userId    String
-  groupId   String
+  id      String @id @default(cuid())
+  userId  String
+  groupId String
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group     SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  joinedAt  DateTime   @default(now())
+  joinedAt DateTime @default(now())
 
   @@unique([userId, groupId])
   @@index([groupId])
   @@index([userId])
 }
 
+model GroupEvent {
+  id      String     @id @default(cuid())
+  groupId String
+  group   SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  title           String
+  eventDate       DateTime
+  departureTime   String
+  meetingPlace    String
+  destination     String?
+  estimatedReturn String?
+  plannedSpeed    String?
+  rules           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([eventDate])
+}

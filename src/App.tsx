@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import SportPage from "./pages/SportPage";
+import GroupPage from "./pages/GroupPage";
 import viarankHeaderLogo from "./assets/viarank-header-logo-clean.png";
 import heroImage from "./assets/hero-sport.png";
 import sportCiclismo from "./assets/sports/sport-ciclismo.png";
@@ -59,6 +61,7 @@ type SportGroup = {
   sport: string;
   joinCode: string;
   visibility: "PUBLIC" | "PRIVATE";
+  isMember?: boolean;
 
   administrator: {
     id: string;
@@ -86,6 +89,7 @@ type GroupRankingResponse = {
     sport: string;
     joinCode: string;
   visibility: "PUBLIC" | "PRIVATE";
+  isMember?: boolean;
 
     administrator: {
       id: string;
@@ -163,6 +167,7 @@ function canManageGroup(
   >([]);
 
   const [sport, setSport] = useState("");
+  const [sportPage, setSportPage] = useState<string | null>(null);
   const [myActivityBySport, setMyActivityBySport] = useState<Record<string, RankingAthlete>>({});
   const [period, setPeriod] = useState("month");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -189,13 +194,13 @@ const [selectedGroup, setSelectedGroup] =
 
 const [groupRanking, setGroupRanking] =
   useState<RankingAthlete[]>([]);
-const [activityHistory, setActivityHistory] =
+const [, setActivityHistory] =
   useState<ActivityHistoryItem[]>([]);
 
-const [activityHistoryLoading, setActivityHistoryLoading] =
+const [, setActivityHistoryLoading] =
   useState(false);
 
-const [activityHistoryAthlete, setActivityHistoryAthlete] =
+const [, setActivityHistoryAthlete] =
   useState<RankingAthlete | null>(null);
 const [groupRankingLoading, setGroupRankingLoading] =
   useState(false);
@@ -356,13 +361,20 @@ useEffect(() => {
   if (connected) {
     loadRanking();
     loadMyActivityBySport();
+  }
+}, [connected, sport, period]);
+
+useEffect(() => {
+  if (connected) {
+    loadMyActivityBySport();
     loadGroups();
 
     if (isSuperAdmin) {
       loadAdminUsers();
     }
   }
-}, [connected, sport, period, isSuperAdmin]);
+}, [connected, sport, isSuperAdmin]);
+
 
 useEffect(() => {
   if (selectedGroup) {
@@ -1728,6 +1740,105 @@ disabled={emailLoading}
       </div>
     );
   }
+  async function createGroupEvent(
+    groupId: string,
+    eventData: {
+      title: string;
+      eventDate: string;
+      departureTime: string;
+      meetingPlace: string;
+      destination: string;
+      estimatedReturn: string;
+      plannedSpeed: string;
+      rules: string;
+    }
+  ) {
+    const response = await fetch(
+      `${API_URL}/api/groups/${groupId}/events`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+        },
+        body: JSON.stringify(eventData),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo guardar el evento");
+    }
+
+    return data.event;
+  }
+  if (selectedGroup) {
+    return (
+      <GroupPage
+        group={selectedGroup}
+        ranking={groupRanking}
+        loading={groupRankingLoading}
+        period={period}
+        sexFilter={groupSexFilter}
+        profilePicture={user?.profilePicture}
+        onCreateEvent={createGroupEvent}
+        onPeriodChange={setPeriod}
+        onSexFilterChange={setGroupSexFilter}
+        onBack={() => {
+          setSelectedGroup(null);
+          setGroupRanking([]);
+        }}
+        onOpenAthlete={(athlete) => {
+          loadActivityHistory(athlete);
+        }}
+      />
+    );
+  }
+
+  if (sportPage) {
+      const sportImages: Record<string, string> = {
+        RIDE: sportCiclismo,
+        RUN: sportCarrera,
+        SWIM: sportNatacion,
+        HIKE: sportSenderismo,
+        WALK: sportCaminata,
+        WHEELCHAIR: sportSillaRuedas,
+        KAYAK: sportKayak,
+        ROW: sportRemo,
+        SAIL: sportVela,
+        WINDSURF: sportWindsurf,
+      };
+
+      const cleanSportName = sportName(sportPage)
+        .replace(/^[^\p{L}]+/u, "")
+        .trim();
+
+      return (
+        <SportPage
+          sport={sportPage}
+          sportName={cleanSportName}
+          sportImage={sportImages[sportPage]}
+          athlete={myActivityBySport[sportPage]}
+          groups={groups}
+          groupsLoading={groupsLoading}
+          period={period}
+          profilePicture={user?.profilePicture}
+          joinCode={joinCode}
+          onPeriodChange={setPeriod}
+          onJoinCodeChange={setJoinCode}
+          onJoin={joinGroup}
+          onBack={() => {
+            setSportPage(null);
+            setSport("");
+          }}
+          onOpenGroup={(groupId) => {
+            loadGroupRanking(groupId);
+          }}
+        />
+      );
+    }
+
   /* =====================================================
      PANTALLA PRINCIPAL
   ===================================================== */
@@ -2205,14 +2316,8 @@ disabled={emailLoading}
                 key={value}
                 onClick={() => {
                   setSport(value);
-                  window.setTimeout(() => {
-                    document
-                      .getElementById("ranking-viarank")
-                      ?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                  }, 100);
+                  setSportPage(value);
+                  loadGroups(value);
                 }}
                 style={{
                   width: isMobile ? "82px" : "94px",
@@ -3279,307 +3384,6 @@ color: "#f8fafc",
   </select>
 </div>
         </section>
-{/* RANKING INTERNO DEL GRUPO */}
-
-{selectedGroup && (
-  <section
-    style={{
-      background:
-  "linear-gradient(135deg, #0a2342 0%, #0d3158 55%, #08203b 100%)",
-borderRadius: "18px",
-padding: "24px",
-marginBottom: "24px",
-border: "1px solid #148cff",
-boxShadow:
-  "0 0 18px rgba(20, 140, 255, 0.22)",
-color: "#f8fafc",
-    }}
-  >
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "20px",
-        marginBottom: "22px",
-      }}
-    >
-      <div>
-        <h2
-          style={{
-            margin: 0,
-            fontSize: "28px",
-          }}
-        >
-          {"\u{1F3C6}"} {selectedGroup.name}
-        </h2>
-
-        <p
-          style={{
-            margin: "6px 0 0",
-            color: "#aeb8c8",
-          }}
-        >
-          {sportName(selectedGroup.sport)}
-          {" · "}
-          {selectedGroup.members} atletas
-        </p>
-      </div>
-
-      <button
-        onClick={() => {
-          setSelectedGroup(null);
-          setGroupRanking([]);
-        }}
-        style={{
-          padding: "10px 16px",
-          border: "none",
-          borderRadius: "10px",
-          cursor: "pointer",
-          fontWeight: 700,
-        }}
-      >
-        Cerrar ranking
-      </button>
-    </div>
-
-    {groupRankingLoading ? (
-      <p>Cargando ranking del grupo...</p>
-    ) : groupRanking.length === 0 ? (
-      <p>
-        Todavía no hay actividades para este grupo.
-      </p>
-    ) : (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-        }}
-      >
-      {groupRanking.map((athlete) => {
-  const isTopThree =
-    athlete.position <= 3;
-
-  return (
-    <div
-      key={athlete.userId}
-      onClick={() => {
-  if (activityHistoryAthlete?.userId === athlete.userId) {
-    setActivityHistoryAthlete(null);
-    setActivityHistory([]);
-  } else {
-    loadActivityHistory(athlete);
-  }
-}}
-      title="Ver historial de actividades"
-      style={{
-        cursor: "pointer",
-        background: isTopThree
-  ? "#123a63"
-  : "#0d3158",
-       border: isTopThree
-  ? "2px solid #148cff"
-  : "1px solid rgba(20, 140, 255, 0.55)",
-        borderRadius: isTopThree
-          ? "14px"
-          : "12px",
-        padding: isMobile
-          ? "6px 10px"
-          : "12px 16px",
-        display: "flex",
-       flexWrap: "wrap",
-        alignItems: "center",
-        gap: isMobile
-          ? "8px"
-          : "12px",
-       minHeight: isMobile
-  ? "48px"
-  : isTopThree
-    ? "78px"
-    : "64px",
-      }}
-    >
-      <div
-        style={{
-          minWidth: isMobile
-            ? "34px"
-            : "42px",
-          fontSize: isTopThree
-            ? isMobile
-              ? "18px"
-              : "28px"
-            : isMobile
-            ? "17px"
-            : "19px",
-          fontWeight: 800,
-          textAlign: "center",
-        }}
-      >
-        {athlete.position === 1
-          ? "\u{1F947}"
-          : athlete.position === 2
-          ? "\u{1F948}"
-          : athlete.position === 3
-          ? "\u{1F949}"
-          : `${athlete.position}\u00BA`}
-      </div>
-
-      {athlete.profilePicture ? (
-        <img
-          src={athlete.profilePicture}
-          alt={`${athlete.firstName} ${athlete.lastName}`}
-          style={{
-            width: isMobile
-  ? "38px"
-  : isTopThree
-  ? "48px"
-  : "42px",
-height: isMobile
-  ? "38px"
-  : isTopThree
-  ? "48px"
-  : "42px",
-            borderRadius: "50%",
-            objectFit: "cover",
-            flexShrink: 0,
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            width: isTopThree
-              ? "48px"
-              : "42px",
-            height: isTopThree
-              ? "48px"
-              : "42px",
-            borderRadius: "50%",
-            background: "#e2e8f0",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "20px",
-            flexShrink: 0,
-          }}
-        >
-          {"\u{1F464}"}
-        </div>
-      )}
-
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        <div
-          style={{
-            fontWeight: 800,
-maxWidth: isMobile ? "82px" : "none",
-            fontSize: isMobile
-              ? "13px"
-              : "17px",
-           whiteSpace: isMobile ? "normal" : "nowrap",
-           overflow: isMobile ? "visible" : "hidden",
-            textOverflow: isMobile ? "clip" : "ellipsis",
-          }}
-        >
-          {athlete.firstName}{" "}
-          {athlete.lastName}
-</div>
-<div style={{ flex: 1, minWidth: 0 }}>
-<div
-  style={{
-    fontSize: isMobile
-      ? "16px"
-      : "19px",
-    fontWeight: 800,
-    whiteSpace: "nowrap",
-    marginTop: "2px",
-  }}
->
-  {athlete.distanceKm.toLocaleString(
-    "es-AR"
-  )}{" "}
-  km
-{athlete.hasOverlap && (
-  <span style={{ display: "inline-flex", alignItems: "center" }}>
-    <span
-      title="Posible superposición de actividades"
-      style={{ display: "inline-block", width: "8px", height: "16px", background: "#ffff00", border: "1px solid #111", borderRadius: 0, marginLeft: "7px", verticalAlign: "middle" }}
-    />
-    <span style={{ color: "#ff3030", fontSize: "13px", fontWeight: 900, marginLeft: "5px", animation: "viarankVarBlink 0.8s infinite" }}>VAR</span>
-  </span>
-)}
-</div>
-</div>
-        </div>
-      
-    
-      
-{activityHistoryAthlete &&
-  activityHistoryAthlete.userId === athlete.userId && (
-    <div
-      style={{
-        width: "100%",
-        marginTop: "12px",
-        paddingTop: "12px",
-        borderTop: "1px solid rgba(255,255,255,0.15)",
-      }}
-    >
-      {activityHistoryLoading ? (
-        <div>Cargando historial...</div>
-      ) : activityHistory.length === 0 ? (
-        <div>No hay actividades registradas.</div>
-      ) : (
-        activityHistory.map((activity) => (
-          <div
-            key={activity.id}
-            style={{
-              padding: "10px 0",
-              borderBottom: "1px solid rgba(255,255,255,0.10)",
-            }}
-          >
-            <strong>
-  {activity.name}
-  {activity.hasOverlap && (
-    <span
-      title="Actividad con posible superposición"
-      style={{
-        display: "inline-block",
-        width: "8px",
-        height: "16px",
-        background: "#ffeb00",
-        border: "1px solid #111",
-        borderRadius: 0,
-        marginLeft: "7px",
-        verticalAlign: "middle",
-      }}
-    />
-  )}
-</strong>
-            <div style={{ fontSize: "13px", marginTop: "4px" }}>
-              {new Date(activity.startDate).toLocaleString("es-AR")}
-              {" · "}
-              {activity.distanceKm.toLocaleString("es-AR")} km
-              {" · "}
-              {activity.source}
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  )}
-    </div>
-  );
-})}
-
-   
-      </div>
-    )}
-  </section>
-)}
        {/* MI ACTIVIDAD */}
 {!selectedGroup && (() => {
   const sportOrder = [
@@ -3707,7 +3511,7 @@ maxWidth: isMobile ? "82px" : "none",
           {activeSports.map((sportType) => {
             const athlete = myActivityBySport[sportType];
 
-            return (
+    return (
               <div
                 key={sportType}
                 style={{

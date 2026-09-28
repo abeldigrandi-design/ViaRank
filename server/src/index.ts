@@ -2949,6 +2949,24 @@ if (isSuperAdmin) {
                 userId: true,
               },
             },
+
+            events: {
+              where: {
+                eventDate: {
+                  gte: new Date(),
+                },
+              },
+              orderBy: {
+                eventDate: "asc",
+              },
+              take: 1,
+              select: {
+                id: true,
+                eventDate: true,
+                departureTime: true,
+                title: true,
+              },
+            },
           },
         });
 
@@ -2958,6 +2976,11 @@ if (isSuperAdmin) {
           group.administratorId === requesterId ||
           group.members.length > 0,
         members: undefined,
+        upcomingEvent:
+          group.events.length > 0
+            ? group.events[0]
+            : null,
+        events: undefined,
       }));
 
 
@@ -3426,6 +3449,7 @@ hasOverlap: activities.some(
           id: group.id,
           name: group.name,
           sport: group.sport,
+          visibility: group.visibility,
           joinCode:
             group.joinCode,
           administrator:
@@ -3549,6 +3573,155 @@ app.patch(
     }
   }
 );
+/* =========================================================
+   EVENTOS DEL GRUPO
+========================================================= */
+
+app.get(
+  "/api/groups/:groupId/events",
+  async (req, res) => {
+    try {
+      const { groupId } = req.params;
+
+      const group = await prisma.sportGroup.findUnique({
+        where: { id: groupId },
+        select: { id: true },
+      });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      const events = await prisma.groupEvent.findMany({
+        where: { groupId },
+        orderBy: { eventDate: "asc" },
+      });
+
+      return res.json({
+        success: true,
+        events,
+      });
+    } catch (error) {
+      console.error("Error obteniendo eventos:", error);
+
+      return res.status(500).json({
+        error: "No se pudieron obtener los eventos",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/groups/:groupId/events",
+  async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const {
+        title,
+        eventDate,
+        departureTime,
+        meetingPlace,
+        destination,
+        estimatedReturn,
+        plannedSpeed,
+        rules,
+      } = req.body;
+
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const group = await prisma.sportGroup.findUnique({
+        where: { id: groupId },
+        select: {
+          id: true,
+          administratorId: true,
+        },
+      });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      const canManage =
+        user.role === "SUPER_ADMIN" ||
+        group.administratorId === userId;
+
+      if (!canManage) {
+        return res.status(403).json({
+          error: "No tenés permiso para crear eventos en este grupo",
+        });
+      }
+
+      if (!title || !eventDate || !departureTime || !meetingPlace) {
+        return res.status(400).json({
+          error:
+            "Título, fecha, hora de salida y lugar de encuentro son obligatorios",
+        });
+      }
+
+      const parsedDate = new Date(eventDate);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({
+          error: "La fecha del evento no es válida",
+        });
+      }
+
+      const event = await prisma.groupEvent.create({
+        data: {
+          groupId,
+          title: String(title).trim(),
+          eventDate: parsedDate,
+          departureTime: String(departureTime).trim(),
+          meetingPlace: String(meetingPlace).trim(),
+          destination: destination ? String(destination).trim() : null,
+          estimatedReturn: estimatedReturn
+            ? String(estimatedReturn).trim()
+            : null,
+          plannedSpeed: plannedSpeed
+            ? String(plannedSpeed).trim()
+            : null,
+          rules: rules ? String(rules).trim() : null,
+        },
+      });
+
+      return res.status(201).json({
+        success: true,
+        event,
+      });
+    } catch (error) {
+      console.error("Error creando evento:", error);
+
+      return res.status(500).json({
+        error: "No se pudo crear el evento",
+      });
+    }
+  }
+);
+
 /* =========================================================
    ELIMINAR GRUPO
 ========================================================= */
