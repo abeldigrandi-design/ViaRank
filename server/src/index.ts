@@ -303,6 +303,139 @@ app.post(
   }
 );
 app.post(
+  "/api/auth/register",
+  async (req, res) => {
+    try {
+      const firstName =
+        String(req.body.firstName || "").trim();
+
+      const lastName =
+        String(req.body.lastName || "").trim();
+
+      const email =
+        String(req.body.email || "")
+          .trim()
+          .toLowerCase();
+
+      const sex =
+        String(req.body.sex || "")
+          .trim()
+          .toUpperCase();
+
+      if (!firstName || !lastName || !email || !sex) {
+        return res.status(400).json({
+          error:
+            "Nombre, apellido, sexo y email son obligatorios",
+        });
+      }
+
+      const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          error: "El email no es válido",
+        });
+      }
+
+      if (
+        sex !== "MALE" &&
+        sex !== "FEMALE"
+      ) {
+        return res.status(400).json({
+          error:
+            "El sexo seleccionado no es válido",
+        });
+      }
+
+      const existingUser =
+        await prisma.user.findUnique({
+          where: { email },
+        });
+
+      if (existingUser) {
+        return res.status(409).json({
+          error:
+            "Ya existe una cuenta con este email",
+        });
+      }
+
+      const user =
+        await prisma.user.create({
+          data: {
+            firstName,
+            lastName,
+            email,
+            emailVerified: false,
+            sex:
+              sex === "MALE"
+                ? "MALE"
+                : "FEMALE",
+          },
+        });
+
+      const refreshToken =
+        randomBytes(48).toString("hex");
+
+      const sessionExpiresAt =
+        new Date();
+
+      sessionExpiresAt.setFullYear(
+        sessionExpiresAt.getFullYear() + 1
+      );
+
+      await prisma.userSession.create({
+        data: {
+          userId: user.id,
+          refreshToken,
+          expiresAt: sessionExpiresAt,
+        },
+      });
+
+      const authToken =
+        jwt.sign(
+          {
+            userId: user.id,
+          },
+          JWT_SECRET,
+          {
+            expiresIn: "7d",
+          }
+        );
+
+      return res.status(201).json({
+        success: true,
+        authToken,
+        refreshToken,
+
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          sex: user.sex,
+          role: user.role,
+          profilePicture:
+            user.profilePicture,
+          city: user.city,
+          country: user.country,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Error registrando usuario:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo crear la cuenta",
+      });
+    }
+  }
+);
+
+app.post(
   "/api/auth/verify-code",
   async (req, res) => {
     try {
@@ -1774,6 +1907,7 @@ const latestActivity =
   await prisma.activity.findFirst({
     where: {
       userId: user.id,
+      source: "STRAVA",
     },
     orderBy: {
       startDate: "desc",

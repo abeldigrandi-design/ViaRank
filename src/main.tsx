@@ -16,7 +16,7 @@ CapacitorApp.addListener("appUrlOpen", ({ url }) => {
   try {
     const incomingUrl = new URL(url);
 
-    if (incomingUrl.pathname === "/exchange_token") {
+    if (incomingUrl.host === "exchange_token" || incomingUrl.pathname === "/exchange_token") {
       const code = incomingUrl.searchParams.get("code");
 
       if (code) {
