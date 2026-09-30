@@ -1,4 +1,5 @@
 import sportCiclismo from "../assets/sports/sport-ciclismo.png";
+import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 type RankingAthlete = {
   position: number;
   userId: string;
@@ -11,6 +12,23 @@ type RankingAthlete = {
   elevationGain: number;
   distanceKm: number;
   hours: number;
+  hasOverlap?: boolean;
+};
+
+type ActivityHistoryItem = {
+  id: string;
+  externalId: string;
+  source: string;
+  type: string;
+  name: string;
+  distance: number;
+  movingTime: number;
+  elevationGain: number;
+  averageSpeed: number | null;
+  calories: number | null;
+  startDate: string;
+  distanceKm: number;
+  endDate: string;
   hasOverlap?: boolean;
 };
 
@@ -47,6 +65,9 @@ type Props = {
   period: string;
   sexFilter: string;
   profilePicture?: string | null;
+  activityHistory: ActivityHistoryItem[];
+  activityHistoryLoading: boolean;
+  activityHistoryAthlete: RankingAthlete | null;
   onPeriodChange: (period: string) => void;
   onSexFilterChange: (sex: string) => void;
   onBack: () => void;
@@ -75,6 +96,9 @@ export default function GroupPage({
   period,
   sexFilter,
   profilePicture,
+  activityHistory,
+  activityHistoryLoading,
+  activityHistoryAthlete,
   onPeriodChange,
   onSexFilterChange,
   onBack,
@@ -198,16 +222,17 @@ export default function GroupPage({
             ‹
           </button>
 
-          <strong
+          <img
+            src={viarankHeaderLogo}
+            alt="ViaRank"
             style={{
-              textAlign: "center",
-              fontSize: "23px",
-              letterSpacing: "-1px",
+              width: "120px",
+              height: "38px",
+              objectFit: "contain",
+              display: "block",
+              justifySelf: "center",
             }}
-          >
-            <span style={{ color: "#fff" }}>Via</span>
-            <span style={{ color: "#168cff" }}>Rank</span>
-          </strong>
+          />
 
           <div
             style={{
@@ -336,25 +361,41 @@ export default function GroupPage({
                 style={{
                   display: "block",
                   fontSize: "12px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  lineHeight: 1.3,
                 }}
               >
-                {group.administrator.firstName}{" "}
-                {group.administrator.lastName}
+                <span style={{ display: "block" }}>
+                  {group.administrator.firstName}
+                </span>
+                <span style={{ display: "block" }}>
+                  {group.administrator.lastName}
+                </span>
               </strong>
             </div>
 
             <div style={{ textAlign: "center" }}>
               <div
                 style={{
-                  color: "#38bdf8",
-                  fontSize: "20px",
-                  lineHeight: 1,
+                  display: "flex",
+                  justifyContent: "center",
+                  marginBottom: "2px",
                 }}
               >
-                ♟♟
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="#38bdf8"
+                  style={{ display: "block" }}
+                >
+                  <circle cx="12" cy="7" r="3" />
+                  <circle cx="5.5" cy="9" r="2.4" />
+                  <circle cx="18.5" cy="9" r="2.4" />
+                  <path d="M7 18c0-3.3 2.2-5.5 5-5.5s5 2.2 5 5.5v1H7v-1Z" />
+                  <path d="M1.5 18c0-2.7 1.7-4.6 4-4.6 1 0 1.9.4 2.6 1-1.1 1.2-1.7 2.8-1.7 4.6H1.5v-1Z" />
+                  <path d="M22.5 18c0-2.7-1.7-4.6-4-4.6-1 0-1.9.4-2.6 1 1.1 1.2 1.7 2.8 1.7 4.6h4.9v-1Z" />
+                </svg>
               </div>
               <strong style={{ fontSize: "12px" }}>
                 {group.members}
@@ -517,7 +558,7 @@ export default function GroupPage({
                       ? "1px solid #ff8a00"
                       : "1px solid #285473",
                   background:
-                    sexFilter === value ? "#553412" : "#0c2945",
+                    sexFilter === value ? "#123b5d" : "#0c2945",
                   color: "#fff",
                   fontWeight: 800,
                   cursor: "pointer",
@@ -540,102 +581,209 @@ export default function GroupPage({
             </div>
           ) : (
             <div style={{ display: "grid", gap: "8px" }}>
-              {ranking.map((athlete) => (
-                <button
-                  key={athlete.userId}
-                  onClick={() => onOpenAthlete(athlete)}
-                  style={{
-                    ...card,
-                    border: "1px solid #1c527c",
-                    padding: "10px 11px",
-                    display: "grid",
-                    gridTemplateColumns: "30px 42px 1fr auto 18px",
-                    gap: "8px",
-                    alignItems: "center",
-                    color: "#fff",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                >
-                  <strong style={{ textAlign: "center", fontSize: "16px" }}>
-                    {athlete.position}
-                  </strong>
+              {ranking.map((athlete) => {
+                const isOpen =
+                  activityHistoryAthlete?.userId === athlete.userId;
 
-                  {athlete.profilePicture ? (
-                    <img
-                      src={athlete.profilePicture}
-                      alt=""
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "50%",
-                        objectFit: "cover",
-                        border: "2px solid #2878b7",
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "50%",
-                        background: "#173d61",
-                        border: "2px solid #2878b7",
-                      }}
-                    />
-                  )}
-
-                  <div style={{ minWidth: 0 }}>
-                    <strong style={{ fontSize: "13px" }}>
-                      {athlete.firstName} {athlete.lastName}
-                    </strong>
-
-                    {athlete.hasOverlap && (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          marginLeft: "7px",
-                        }}
-                      >
-                        <span
-                          title="Posible superposición de actividades"
-                          style={{
-                            display: "inline-block",
-                            width: "15px",
-                            height: "9px",
-                            borderRadius: "2px",
-                            background: "#ffff00",
-                            border: "1px solid #e1c900",
-                          }}
-                        />
-                        <strong
-                          style={{
-                            color: "#ff3434",
-                            fontSize: "10px",
-                            animation: "viarankVarBlink 1s infinite",
-                          }}
-                        >
-                          VAR
-                        </strong>
-                      </span>
-                    )}
-                  </div>
-
-                  <strong
+                return (
+                  <div
+                    key={athlete.userId}
                     style={{
-                      color: "#fff",
-                      fontSize: "14px",
-                      whiteSpace: "nowrap",
+                      ...card,
+                      border: "1px solid #1c527c",
+                      overflow: "hidden",
                     }}
                   >
-                    {athlete.distanceKm.toFixed(1)} km
-                  </strong>
+                    <button
+                      onClick={() => onOpenAthlete(athlete)}
+                      style={{
+                        width: "100%",
+                        border: 0,
+                        background: "transparent",
+                        padding: "10px 11px",
+                        display: "grid",
+                        gridTemplateColumns: "30px 42px 1fr auto 18px",
+                        gap: "8px",
+                        alignItems: "center",
+                        color: "#fff",
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <strong style={{ textAlign: "center", fontSize: "16px" }}>
+                        {athlete.position}
+                      </strong>
 
-                  <strong style={{ fontSize: "20px" }}>›</strong>
-                </button>
-              ))}
+                      {athlete.profilePicture ? (
+                        <img
+                          src={athlete.profilePicture}
+                          alt=""
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: "2px solid #2878b7",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "50%",
+                            background: "#173d61",
+                            border: "2px solid #2878b7",
+                          }}
+                        />
+                      )}
+
+                      <div style={{ minWidth: 0 }}>
+                        <strong style={{ fontSize: "13px" }}>
+                          {athlete.firstName} {athlete.lastName}
+                        </strong>
+
+                        {athlete.hasOverlap && (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              marginLeft: "7px",
+                            }}
+                          >
+                            <span
+                              title="Posible superposición de actividades"
+                              style={{
+                                display: "inline-block",
+                                width: "15px",
+                                height: "9px",
+                                borderRadius: "2px",
+                                background: "#ffff00",
+                                border: "1px solid #e1c900",
+                              }}
+                            />
+                            <strong
+                              style={{
+                                color: "#ff3434",
+                                fontSize: "10px",
+                                animation: "viarankVarBlink 1s infinite",
+                              }}
+                            >
+                              VAR
+                            </strong>
+                          </span>
+                        )}
+                      </div>
+
+                      <strong
+                        style={{
+                          color: "#fff",
+                          fontSize: "14px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {athlete.distanceKm.toFixed(1)} km
+                      </strong>
+
+                      <strong style={{ fontSize: "20px" }}>
+                        {isOpen ? "⌄" : "›"}
+                      </strong>
+                    </button>
+
+                    {isOpen && (
+                      <div
+                        style={{
+                          borderTop: "1px solid #1c527c",
+                          padding: "4px 12px 10px",
+                          background: "#081f38",
+                        }}
+                      >
+                        {activityHistoryLoading ? (
+                          <div
+                            style={{
+                              padding: "12px 0",
+                              color: "#9db6ce",
+                              fontSize: "12px",
+                            }}
+                          >
+                            Cargando historial...
+                          </div>
+                        ) : activityHistory.length === 0 ? (
+                          <div
+                            style={{
+                              padding: "12px 0",
+                              color: "#9db6ce",
+                              fontSize: "12px",
+                            }}
+                          >
+                            No hay actividades registradas.
+                          </div>
+                        ) : (
+                          activityHistory.map((activity) => (
+                            <div
+                              key={activity.id}
+                              style={{
+                                padding: "10px 0",
+                                borderBottom:
+                                  "1px solid rgba(56, 189, 248, 0.16)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "7px",
+                                }}
+                              >
+                                <strong
+                                  style={{
+                                    color: "#fff",
+                                    fontSize: "13px",
+                                  }}
+                                >
+                                  {activity.name}
+                                </strong>
+
+                                {activity.hasOverlap && (
+                                  <span
+                                    title="Actividad con posible superposición"
+                                    style={{
+                                      display: "inline-block",
+                                      width: "15px",
+                                      height: "9px",
+                                      borderRadius: "2px",
+                                      background: "#ffff00",
+                                      border: "1px solid #e1c900",
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                )}
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: "4px",
+                                  color: "#9db6ce",
+                                  fontSize: "12px",
+                                }}
+                              >
+                                {new Date(activity.startDate).toLocaleString(
+                                  "es-AR"
+                                )}
+                                {" · "}
+                                {activity.distanceKm.toLocaleString("es-AR")} km
+                                {" · "}
+                                {activity.source}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
@@ -884,7 +1032,7 @@ export default function GroupPage({
                           setSavingEvent(true);
                           setEventMessage("");
 
-                          await onCreateEvent(group.id, {
+                          const createdEvent = await onCreateEvent(group.id, {
                             title: eventTitle,
                             eventDate,
                             departureTime,
@@ -894,6 +1042,13 @@ export default function GroupPage({
                             plannedSpeed,
                             rules: eventRules,
                           });
+
+                          if (createdEvent) {
+                            setEvents((currentEvents) => [
+                              ...currentEvents,
+                              createdEvent as GroupEvent,
+                            ]);
+                          }
 
                           setEventMessage("Evento guardado correctamente.");
                           setShowEventForm(false);
