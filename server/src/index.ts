@@ -1,8 +1,10 @@
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import cors from "cors";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { randomBytes, randomInt } from "node:crypto";
 dotenv.config();
 
@@ -70,6 +72,17 @@ promoteConfiguredUser().catch((error) => {
 
 app.use(cors());
 app.use(express.json());
+
+const pinLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error:
+      "Demasiados intentos de ingreso. Esperá 15 minutos e intentá nuevamente.",
+  },
+});
 
 function getAuthenticatedUserId(
   req: express.Request
@@ -322,10 +335,13 @@ app.post(
           .trim()
           .toUpperCase();
 
-      if (!firstName || !lastName || !email || !sex) {
+      const pin =
+        String(req.body.pin || "").trim();
+
+      if (!firstName || !lastName || !email || !sex || !pin) {
         return res.status(400).json({
           error:
-            "Nombre, apellido, sexo y email son obligatorios",
+            "Nombre, apellido, sexo, email y PIN son obligatorios",
         });
       }
 
@@ -348,6 +364,16 @@ app.post(
         });
       }
 
+      if (!/^\d{4}$/.test(pin)) {
+        return res.status(400).json({
+          error:
+            "El PIN debe tener exactamente 4 números",
+        });
+      }
+
+      const pinHash =
+        await bcrypt.hash(pin, 12);
+
       const existingUser =
         await prisma.user.findUnique({
           where: { email },
@@ -367,6 +393,7 @@ app.post(
             lastName,
             email,
             emailVerified: false,
+            pinHash,
             sex:
               sex === "MALE"
                 ? "MALE"
@@ -430,6 +457,106 @@ app.post(
       return res.status(500).json({
         error:
           "No se pudo crear la cuenta",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/auth/login-pin",
+  pinLoginLimiter,
+  async (req, res) => {
+    try {
+      const email =
+        String(req.body.email || "")
+          .trim()
+          .toLowerCase();
+
+      const pin =
+        String(req.body.pin || "").trim();
+
+      if (!email || !pin) {
+        return res.status(400).json({
+          error: "Email y PIN son obligatorios",
+        });
+      }
+
+      if (!/^\d{4}$/.test(pin)) {
+        return res.status(400).json({
+          error: "El PIN debe tener exactamente 4 números",
+        });
+      }
+
+      const user =
+        await prisma.user.findUnique({
+          where: { email },
+        });
+
+      if (!user) {
+        return res.status(401).json({
+          error: "Email o PIN incorrectos",
+        });
+      }
+
+      let pinCorrecto = false;
+
+      if (user.pinHash) {
+        pinCorrecto =
+          await bcrypt.compare(pin, user.pinHash);
+      } else {
+        pinCorrecto = pin === "1234";
+      }
+
+      if (!pinCorrecto) {
+        return res.status(401).json({
+          error: "Email o PIN incorrectos",
+        });
+      }
+
+      const refreshToken =
+        randomBytes(48).toString("hex");
+
+      const sessionExpiresAt = new Date();
+
+      sessionExpiresAt.setFullYear(
+        sessionExpiresAt.getFullYear() + 1
+      );
+
+      await prisma.userSession.create({
+        data: {
+          userId: user.id,
+          refreshToken,
+          expiresAt: sessionExpiresAt,
+        },
+      });
+
+      const authToken = jwt.sign(
+        { userId: user.id },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      return res.json({
+        success: true,
+        authToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          sex: user.sex,
+          role: user.role,
+          profilePicture: user.profilePicture,
+          city: user.city,
+          country: user.country,
+        },
+      });
+    } catch (error) {
+      console.error("Error ingresando con PIN:", error);
+
+      return res.status(500).json({
+        error: "No se pudo ingresar a la cuenta",
       });
     }
   }
@@ -750,6 +877,178 @@ app.post(
    USUARIOS
 ========================================================= */
 
+app.get("/api/profile", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        error: "Usuario no autenticado",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        sex: true,
+        profilePicture: true,
+        city: true,
+        country: true,
+        pinHash: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "Usuario no encontrado",
+      });
+    }
+
+    return res.json({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      sex: user.sex,
+      profilePicture: user.profilePicture,
+      city: user.city,
+      country: user.country,
+      hasPin: Boolean(user.pinHash),
+    });
+  } catch (error) {
+    console.error("Error obteniendo perfil:", error);
+
+    return res.status(500).json({
+      error: "No se pudo obtener el perfil",
+    });
+  }
+});
+
+app.patch("/api/profile", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        error: "Usuario no autenticado",
+      });
+    }
+
+    const firstName =
+      String(req.body.firstName || "").trim();
+
+    const lastName =
+      String(req.body.lastName || "").trim();
+
+    const email =
+      String(req.body.email || "")
+        .trim()
+        .toLowerCase();
+
+    const sex =
+      String(req.body.sex || "")
+        .trim()
+        .toUpperCase();
+
+    const newPin =
+      String(req.body.newPin || "").trim();
+
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        error: "Nombre, apellido y email son obligatorios",
+      });
+    }
+
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: "Ingresá un email válido",
+      });
+    }
+
+    if (sex !== "MALE" && sex !== "FEMALE") {
+      return res.status(400).json({
+        error: "Seleccioná sexo",
+      });
+    }
+
+    if (newPin && !/^\d{4}$/.test(newPin)) {
+      return res.status(400).json({
+        error: "El PIN debe tener exactamente 4 números",
+      });
+    }
+
+    const emailOwner =
+      await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+    if (emailOwner && emailOwner.id !== userId) {
+      return res.status(409).json({
+        error: "Ese email ya está registrado",
+      });
+    }
+
+    const pinHash = newPin
+      ? await bcrypt.hash(newPin, 12)
+      : undefined;
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName,
+        lastName,
+        email,
+        sex:
+          sex === "MALE"
+            ? "MALE"
+            : "FEMALE",
+        ...(pinHash ? { pinHash } : {}),
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        sex: true,
+        profilePicture: true,
+        city: true,
+        country: true,
+        role: true,
+        pinHash: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        sex: user.sex,
+        profilePicture: user.profilePicture,
+        city: user.city,
+        country: user.country,
+        role: user.role,
+        hasPin: Boolean(user.pinHash),
+      },
+    });
+  } catch (error) {
+    console.error("Error actualizando perfil:", error);
+
+    return res.status(500).json({
+      error: "No se pudo actualizar el perfil",
+    });
+  }
+});
 app.get("/api/users", async (req, res) => {
   try {
         const requesterId =

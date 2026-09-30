@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import SportPage from "./pages/SportPage";
 import GroupPage from "./pages/GroupPage";
+import SuperAdminPage from "./pages/SuperAdminPage";
 import viarankHeaderLogo from "./assets/viarank-header-logo-clean.png";
 import heroImage from "./assets/hero-sport.png";
 import sportCiclismo from "./assets/sports/sport-ciclismo.png";
@@ -130,9 +131,12 @@ function App() {
 const [emailLastName, setEmailLastName] = useState("");
 const [emailAddress, setEmailAddress] = useState("");
 const [emailSex, setEmailSex] = useState<"MALE" | "FEMALE" | "">("");
+const [emailPin, setEmailPin] = useState("");
+const [emailPinConfirm, setEmailPinConfirm] = useState("");
 const [emailCode, setEmailCode] = useState("");
 const [emailStep, setEmailStep] = useState<"request" | "verify">("request");
 const [emailMode, setEmailMode] = useState<"register" | "login">("register");
+const [authScreen, setAuthScreen] = useState<"welcome" | "register" | "login">("welcome");
 const [emailLoading, setEmailLoading] = useState(false);
 const [emailMessage, setEmailMessage] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -168,6 +172,7 @@ function canManageGroup(
 
   const [sport, setSport] = useState("");
   const [sportPage, setSportPage] = useState<string | null>(null);
+  const [showSuperAdmin, setShowSuperAdmin] = useState(false);
   const [myActivityBySport, setMyActivityBySport] = useState<Record<string, RankingAthlete>>({});
   const [period, setPeriod] = useState("month");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -194,13 +199,13 @@ const [selectedGroup, setSelectedGroup] =
 
 const [groupRanking, setGroupRanking] =
   useState<RankingAthlete[]>([]);
-const [, setActivityHistory] =
+const [activityHistory, setActivityHistory] =
   useState<ActivityHistoryItem[]>([]);
 
-const [, setActivityHistoryLoading] =
+const [activityHistoryLoading, setActivityHistoryLoading] =
   useState(false);
 
-const [, setActivityHistoryAthlete] =
+const [activityHistoryAthlete, setActivityHistoryAthlete] =
   useState<RankingAthlete | null>(null);
 const [groupRankingLoading, setGroupRankingLoading] =
   useState(false);
@@ -234,6 +239,64 @@ const [adminUsersLoading, setAdminUsersLoading] =
   /* =====================================================
      COMPROBAR CONEXIÓN CON STRAVA
   ===================================================== */
+async function reenviarActividadesViaRunPendientes() {
+  const clavePendientes = "viarank_pending_activities";
+
+  try {
+    const pendientes = JSON.parse(
+      localStorage.getItem(clavePendientes) || "[]"
+    );
+
+    if (!Array.isArray(pendientes) || pendientes.length === 0) return;
+
+    const token = localStorage.getItem("viarank_auth_token");
+    if (!token) return;
+
+    const siguenPendientes = [];
+
+    for (const actividad of pendientes) {
+      try {
+        const respuesta = await fetch(`${API_URL}/api/activities/viarank`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(actividad),
+        });
+
+        if (!respuesta.ok) {
+          siguenPendientes.push(actividad);
+        }
+      } catch {
+        siguenPendientes.push(actividad);
+      }
+    }
+
+    localStorage.setItem(
+      clavePendientes,
+      JSON.stringify(siguenPendientes)
+    );
+  } catch (error) {
+    console.error("Error reenviando actividades ViaRun pendientes:", error);
+  }
+}
+
+  useEffect(() => {
+    reenviarActividadesViaRunPendientes();
+
+    const alRecuperarConexion = () => {
+      reenviarActividadesViaRunPendientes();
+    };
+
+    window.addEventListener("online", alRecuperarConexion);
+
+    return () => {
+      window.removeEventListener("online", alRecuperarConexion);
+    };
+  }, []);
+
+
 async function restoreSession() {
   const refreshToken =
     localStorage.getItem(
@@ -280,7 +343,9 @@ async function restoreSession() {
 
     setUser(data.user);
 
-    await checkStrava();
+    setSessionRestoring(false);
+
+    void checkStrava();
   } catch (error) {
     console.error(
       "Error restaurando sesión:",
@@ -428,8 +493,103 @@ setUser(data.user || null);
   }
  async function requestEmailCode() {
   try {
-   setEmailLoading(true);
-setEmailMessage("");
+    setEmailMessage("");
+
+    if (emailMode === "register") {
+      const firstName = emailFirstName.trim();
+      const lastName = emailLastName.trim();
+      const email = emailAddress.trim().toLowerCase();
+      const pin = emailPin.trim();
+      const pinConfirm = emailPinConfirm.trim();
+
+      if (!firstName || !lastName || !email || !emailSex || !pin || !pinConfirm) {
+        setEmailMessage(
+          "Completá nombre, apellido, email, sexo y PIN."
+        );
+        return;
+      }
+
+      if (!/^\d{4}$/.test(pin)) {
+        setEmailMessage("El PIN debe tener exactamente 4 números.");
+        return;
+      }
+
+      if (pin !== pinConfirm) {
+        setEmailMessage("Los dos PIN no coinciden.");
+        return;
+      }
+
+      const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!emailRegex.test(email)) {
+        setEmailMessage(
+          "Revisá el email ingresado."
+        );
+        return;
+      }
+
+      const confirmado = window.confirm(
+        `Revisá tus datos antes de crear la cuenta:\n\n` +
+        `Nombre: ${firstName}\n` +
+        `Apellido: ${lastName}\n` +
+        `Email: ${email}\n` +
+        `Sexo: ${emailSex === "FEMALE" ? "Femenino" : "Masculino"}\n\n` +
+        `IMPORTANTE: revisá especialmente que tu email esté bien escrito.\n\n` +
+        `¿Los datos son correctos?`
+      );
+
+      if (!confirmado) {
+        return;
+      }
+
+      setEmailLoading(true);
+
+      const response = await fetch(
+        `${API_URL}/api/auth/register`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName,
+            lastName,
+            email,
+            sex: emailSex,
+            pin,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setEmailMessage(
+          data.error ||
+            "No se pudo crear la cuenta"
+        );
+        return;
+      }
+
+      localStorage.setItem(
+        "viarank_auth_token",
+        data.authToken
+      );
+
+      localStorage.setItem(
+        "viarank_refresh_token",
+        data.refreshToken
+      );
+
+      setUser(data.user);
+      setEmailMessage("");
+
+      void checkStrava();
+      return;
+    }
+
+    setEmailLoading(true);
 
     const response = await fetch(
       `${API_URL}/api/auth/request-code`,
@@ -439,10 +599,7 @@ setEmailMessage("");
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-         firstName: emailFirstName,
-lastName: emailLastName,
-email: emailAddress,
-sex: emailSex,
+          email: emailAddress,
         }),
       }
     );
@@ -451,25 +608,89 @@ sex: emailSex,
 
     if (!response.ok) {
       setEmailMessage(
-        data.error || "No se pudo generar el código"
+        data.error ||
+          "No se pudo generar el código"
       );
       return;
     }
 
     setEmailStep("verify");
-setEmailMessage(
+    setEmailMessage(
       "Código generado. Revisá el código de verificación."
     );
   } catch (error) {
     console.error(error);
+
     setEmailMessage(
-  "No se pudo conectar con ViaRank"
-);
-  
+      "No se pudo conectar con ViaRank"
+    );
   } finally {
     setEmailLoading(false);
   }
 }
+  async function loginWithPin() {
+    try {
+      setEmailMessage("");
+
+      const email = emailAddress.trim().toLowerCase();
+      const pin = emailPin.trim();
+
+      if (!email || !pin) {
+        setEmailMessage("Ingresá tu email y PIN.");
+        return;
+      }
+
+      if (!/^\d{4}$/.test(pin)) {
+        setEmailMessage("El PIN debe tener exactamente 4 números.");
+        return;
+      }
+
+      setEmailLoading(true);
+
+      const response = await fetch(
+        `${API_URL}/api/auth/login-pin`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            pin,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setEmailMessage(
+          data.error || "No se pudo ingresar"
+        );
+        return;
+      }
+
+      localStorage.setItem(
+        "viarank_auth_token",
+        data.authToken
+      );
+
+      localStorage.setItem(
+        "viarank_refresh_token",
+        data.refreshToken
+      );
+
+      setUser(data.user);
+      setEmailMessage("");
+      void checkStrava();
+    } catch (error) {
+      console.error(error);
+      setEmailMessage("No se pudo conectar con ViaRank");
+    } finally {
+      setEmailLoading(false);
+    }
+  }
+
   async function verifyEmailCode() {
   try {
     setEmailLoading(true);
@@ -1451,8 +1672,44 @@ localStorage.removeItem(
 
   if (sessionRestoring) {
     return (
-      <div style={{ ...styles.page, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "white", fontSize: "18px" }}>Iniciando ViaRank...</div>
+      <div
+        style={{
+          ...styles.page,
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "22px",
+        }}
+      >
+        <style>{`
+          @keyframes viarankSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+
+        <img
+          src={viarankHeaderLogo}
+          alt="ViaRank"
+          style={{ width: "220px", maxWidth: "72vw", height: "auto" }}
+        />
+
+        <div
+          style={{
+            width: "42px",
+            height: "42px",
+            borderRadius: "50%",
+            border: "4px solid rgba(56,189,248,0.22)",
+            borderTopColor: "#38bdf8",
+            animation: "viarankSpin 0.8s linear infinite",
+          }}
+        />
+
+        <div style={{ color: "#ffffff", fontSize: "16px", fontWeight: 700 }}>
+          Iniciando ViaRank...
+        </div>
       </div>
     );
   }
@@ -1505,17 +1762,121 @@ backgroundRepeat: "no-repeat",
             }}
           />
 
-          <h1
-            style={{
-              margin: "0 0 18px",
-              color: "#ffffff",
-              fontSize: "clamp(30px, 5vw, 44px)",
-              lineHeight: 1.08,
-              fontWeight: 800,
-            }}
-          >
-            Tu actividad. Tu comunidad.
-          </h1>
+          {authScreen === "welcome" ? (
+            <>
+              <h1
+                style={{
+                  margin: "0 0 12px",
+                  color: "#ffffff",
+                  fontSize: "clamp(28px, 5vw, 40px)",
+                  lineHeight: 1.08,
+                  fontWeight: 800,
+                }}
+              >
+                Bienvenido a ViaRank
+              </h1>
+
+              <p
+                style={{
+                  margin: "0 auto 28px",
+                  color: "#d5dbea",
+                  fontSize: "17px",
+                  lineHeight: 1.5,
+                }}
+              >
+                Elegí cómo querés comenzar.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                  maxWidth: "420px",
+                  margin: "0 auto",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailMode("login");
+                    setEmailStep("request");
+                    setEmailMessage("");
+                    setAuthScreen("login");
+                  }}
+                  style={{
+                    padding: "16px 18px",
+                    borderRadius: "12px",
+                    border: "none",
+                    background: "#38bdf8",
+                    color: "#061426",
+                    fontSize: "17px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Ingresar a tu cuenta
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailMode("register");
+                    setEmailStep("request");
+                    setEmailMessage("");
+                    setAuthScreen("register");
+                  }}
+                  style={{
+                    padding: "16px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #38bdf8",
+                    background: "#0f2f57",
+                    color: "#ffffff",
+                    fontSize: "17px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Crear tu cuenta
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthScreen("welcome");
+                  setEmailStep("request");
+                  setEmailMessage("");
+                }}
+                style={{
+                  display: "block",
+                  margin: "0 0 18px",
+                  padding: 0,
+                  border: "none",
+                  background: "transparent",
+                  color: "#93c5fd",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                ← Volver
+              </button>
+
+              <h1
+                style={{
+                  margin: "0 0 18px",
+                  color: "#ffffff",
+                  fontSize: "clamp(28px, 5vw, 40px)",
+                  lineHeight: 1.08,
+                  fontWeight: 800,
+                }}
+              >
+                {authScreen === "register"
+                  ? "Crear tu cuenta"
+                  : "Ingresar a tu cuenta"}
+              </h1>
 
                     {emailStep === "request" ? (
             <div
@@ -1535,7 +1896,7 @@ backgroundRepeat: "no-repeat",
                   lineHeight: 1.5,
                 }}
               >
-                Creá tu cuenta o ingresá a ViaRank con tu email.
+                {emailMode === "register" ? "Completá tus datos para crear tu cuenta." : "Ingresá con tu email y PIN."}
               </p>
               {emailMode === "register" && (
               <>
@@ -1621,9 +1982,109 @@ color: "#ffffff",
   <option value="MALE">Masculino</option>
 </select>
 )}
+{emailMode === "register" && (
+  <>
+    <input
+      type="password"
+      inputMode="numeric"
+      autoComplete="new-password"
+      maxLength={4}
+      placeholder="PIN de 4 dígitos"
+      value={emailPin}
+      onChange={(e) =>
+        setEmailPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+      }
+      style={{
+        padding: "14px 16px",
+        borderRadius: "12px",
+        border: "1px solid #cbd5e1",
+        fontSize: "16px",
+        background: "#ffffff",
+        color: "#111827",
+        caretColor: "#111827",
+      }}
+    />
+
+    <input
+      type="password"
+      inputMode="numeric"
+      autoComplete="new-password"
+      maxLength={4}
+      placeholder="Repetir PIN"
+      value={emailPinConfirm}
+      onChange={(e) =>
+        setEmailPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))
+      }
+      style={{
+        padding: "14px 16px",
+        borderRadius: "12px",
+        border: "1px solid #cbd5e1",
+        fontSize: "16px",
+        background: "#ffffff",
+        color: "#111827",
+        caretColor: "#111827",
+      }}
+    />
+  </>
+)}
+{emailMode === "login" && (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      width: "100%",
+    }}
+  >
+    <input
+      type="password"
+      inputMode="numeric"
+      autoComplete="current-password"
+      maxLength={4}
+      placeholder="PIN de 4 dígitos"
+      value={emailPin}
+      onChange={(e) =>
+        setEmailPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+      }
+      style={{
+        padding: "14px 16px",
+        borderRadius: "12px",
+        border: "1px solid #cbd5e1",
+        fontSize: "16px",
+        background: "#ffffff",
+        color: "#111827",
+        caretColor: "#111827",
+        flex: "1 1 auto",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
+    />
+
+    <button
+      type="button"
+      onClick={requestEmailCode}
+      disabled={emailLoading}
+      style={{
+        flex: "0 0 145px",
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        color: "#38bdf8",
+        fontSize: "13px",
+        fontWeight: 700,
+        lineHeight: 1.25,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ display: "block" }}>¿Todavía no tenés PIN?</span>
+      <span style={{ display: "block" }}>Ingresá solo con tu email</span>
+    </button>
+  </div>
+)}
               <button
                 
-                onClick={requestEmailCode}
+                onClick={emailMode === "register" ? requestEmailCode : loginWithPin}
 disabled={emailLoading}
                 style={{
                   padding: "14px 18px",
@@ -1638,28 +2099,13 @@ disabled={emailLoading}
                 }}
               >
                {emailLoading
-  ? "Enviando..."
-  : "Enviar código"}
+  ? emailMode === "register"
+    ? "Creando cuenta..."
+    : "Ingresando..."
+  : emailMode === "register"
+    ? "Crear cuenta"
+    : "Ingresar"}
               </button>
-     <button
-  type="button"
-  onClick={() => {
-    setEmailMode(emailMode === "register" ? "login" : "register");
-    setEmailMessage("");
-  }}
-  style={{
-    border: "none",
-    background: "transparent",
-    color: "#ffffff",
-    fontSize: "15px",
-    cursor: "pointer",
-    textDecoration: "underline",
-  }}
->
-  {emailMode === "register"
-    ? "¿Ya tenés una cuenta? Ingresar"
-    : "¿No tenés una cuenta? Crear cuenta"}
-</button>
             </div>
           ) : (
             <div
@@ -1735,6 +2181,8 @@ disabled={emailLoading}
               {emailMessage}
             </p>
           )}
+            </>
+          )}
 
                </div>
       </div>
@@ -1773,6 +2221,13 @@ disabled={emailLoading}
 
     return data.event;
   }
+  if (showSuperAdmin && isSuperAdmin) {
+    return (
+      <SuperAdminPage
+        onBack={() => setShowSuperAdmin(false)}
+      />
+    );
+  }
   if (selectedGroup) {
     return (
       <GroupPage
@@ -1782,6 +2237,9 @@ disabled={emailLoading}
         period={period}
         sexFilter={groupSexFilter}
         profilePicture={user?.profilePicture}
+        activityHistory={activityHistory}
+        activityHistoryLoading={activityHistoryLoading}
+        activityHistoryAthlete={activityHistoryAthlete}
         onCreateEvent={createGroupEvent}
         onPeriodChange={setPeriod}
         onSexFilterChange={setGroupSexFilter}
@@ -1790,7 +2248,12 @@ disabled={emailLoading}
           setGroupRanking([]);
         }}
         onOpenAthlete={(athlete) => {
-          loadActivityHistory(athlete);
+          if (activityHistoryAthlete?.userId === athlete.userId) {
+            setActivityHistoryAthlete(null);
+            setActivityHistory([]);
+          } else {
+            loadActivityHistory(athlete);
+          }
         }}
       />
     );
@@ -1824,6 +2287,22 @@ disabled={emailLoading}
           groupsLoading={groupsLoading}
           period={period}
           profilePicture={user?.profilePicture}
+          canAccessGroupAdmin={
+            isSuperAdmin ||
+            groups.some((group) => group.administrator.id === user?.id)
+          }
+          isSuperAdmin={isSuperAdmin}
+          onCreateGroup={() => {
+            setSportPage(null);
+            setSport("");
+            setShowCreateGroup(true);
+          }}
+          onOpenAdmin={() => {
+            if (isSuperAdmin) {
+              setShowSuperAdmin(true);
+            }
+          }}
+          onLogout={logout}
           joinCode={joinCode}
           onPeriodChange={setPeriod}
           onJoinCodeChange={setJoinCode}
@@ -1831,6 +2310,11 @@ disabled={emailLoading}
           onBack={() => {
             setSportPage(null);
             setSport("");
+          }}
+          onOpenSport={(nextSport) => {
+            setSport(nextSport);
+            setSportPage(nextSport);
+            loadGroups(nextSport);
           }}
           onOpenGroup={(groupId) => {
             loadGroupRanking(groupId);
@@ -1855,11 +2339,11 @@ disabled={emailLoading}
             justifyContent: "space-between",
             gap: "18px",
             padding: isMobile ? "12px 14px" : "14px 22px",
-            marginBottom: "22px",
+             marginBottom: isMobile ? "12px" : "22px",
             background: "#111827",
             borderRadius: "18px",
             boxShadow: "0 8px 24px rgba(15, 23, 42, 0.16)",
-            flexWrap: isMobile ? "wrap" : "nowrap",
+            flexWrap: "nowrap",
           }}
         >
           {/* LOGO */}
@@ -1890,117 +2374,50 @@ disabled={emailLoading}
               justifyContent: "flex-end",
               gap: isMobile ? "8px" : "12px",
               marginLeft: "auto",
-              flex: isMobile ? "1 1 100%" : "0 1 auto",
+              flex: "0 1 auto",
               minWidth: 0,
             }}
           >
             {/* ATLETA */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                minWidth: isMobile ? "0" : "235px",
-                padding: "7px 14px 7px 8px",
-                borderRadius: "14px",
-                background: "rgba(255,255,255,0.08)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "white",
-                flex: isMobile ? "1 1 auto" : "0 0 auto",
-              }}
-            >
+            <div style={{ position: "relative", width: "48px", height: "48px", marginLeft: "auto", flexShrink: 0 }}>
               {user?.profilePicture ? (
                 <img
                   src={user.profilePicture}
                   alt="Perfil"
                   style={{
-                    width: "42px",
-                    height: "42px",
+                    width: "48px",
+                    height: "48px",
                     borderRadius: "50%",
                     objectFit: "cover",
-                    flexShrink: 0,
+                    border: "2px solid #1594ff",
+                    boxSizing: "border-box",
                   }}
                 />
               ) : (
-                <div
-                  style={{
-                    width: "42px",
-                    height: "42px",
-                    borderRadius: "50%",
-                    background: "#374151",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
+                <div style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "50%",
+                  background: "#374151",
+                  border: "2px solid #1594ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
                   👤
                 </div>
               )}
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  minWidth: 0,
-                  lineHeight: 1.2,
-                }}
-              >
-                <strong
-                  style={{
-                    fontSize: isMobile ? "14px" : "16px",
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {user?.firstName} {user?.lastName}
-                </strong>
-
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#cbd5e1",
-                    marginTop: "3px",
-                  }}
-                >
-                  Atleta conectado
-                </span>
-              </div>
+              <span style={{
+                position: "absolute",
+                right: "-1px",
+                bottom: "1px",
+                width: "11px",
+                height: "11px",
+                borderRadius: "50%",
+                background: "#19df66",
+                border: "2px solid #111827",
+              }} />
             </div>
-                       {/* ACTUALIZAR ACTIVIDADES */}
-            <button
-              onClick={refreshActivities}
-              disabled={refreshing}
-              title="Actualizar actividades"
-              style={{
-                width: isMobile ? "48px" : "auto",
-                height: "48px",
-                borderRadius: "14px",
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "white",
-                color: "#0f172a",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: isMobile ? "0" : "8px",
-                cursor: refreshing ? "default" : "pointer",
-                padding: isMobile ? "0" : "0 14px",
-                flexShrink: 0,
-                opacity: refreshing ? 0.6 : 1,
-                fontSize: "14px",
-                fontWeight: 700,
-              }}
-            >
-              <span style={{ fontSize: "20px", lineHeight: 1 }}>↻</span>
-              {!isMobile && (
-                <span>
-                  {refreshing ? "Actualizando..." : "Actualizar actividades"}
-                </span>
-              )}
-            </button>
-
             {/* MENU */}
             <div
               style={{
@@ -2149,6 +2566,35 @@ disabled={emailLoading}
                     <button
                       onClick={() => {
                         setMenuOpen(false);
+                        window.location.href = "/mi-perfil";
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: "9px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "#f8fafc",
+                      }}
+                    >
+                      Mi perfil
+                    </button>
+
+                    <div
+                      style={{
+                        height: "1px",
+                        background: "rgba(20,140,255,0.35)",
+                        margin: "4px 8px",
+                      }}
+                    />
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
                         window.location.href = "/support";
                       }}
                       style={{
@@ -2208,8 +2654,8 @@ disabled={emailLoading}
         <section
           style={{
             position: "relative",
-            minHeight: isMobile ? "520px" : "500px",
-            marginBottom: "26px",
+             minHeight: isMobile ? "450px" : "500px",
+             marginBottom: isMobile ? "14px" : "26px",
             borderRadius: "22px",
             overflow: "hidden",
             backgroundImage: `linear-gradient(
@@ -2230,7 +2676,7 @@ disabled={emailLoading}
               position: "relative",
               zIndex: 2,
               padding: isMobile
-                ? "42px 24px 190px"
+                 ? "30px 24px 120px"
                 : "72px 40px 165px",
               maxWidth: isMobile ? "100%" : "610px",
               color: "#ffffff",
@@ -2366,19 +2812,6 @@ disabled={emailLoading}
                 <div
                   style={{
                     position: "absolute",
-                    left: "8px",
-                    bottom: "27px",
-                    fontSize: isMobile ? "22px" : "26px",
-                    lineHeight: 1,
-                    filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.9))",
-                  }}
-                >
-                  {icon}
-                </div>
-
-                <div
-                  style={{
-                    position: "absolute",
                     left: 0,
                     right: 0,
                     bottom: 0,
@@ -2398,6 +2831,155 @@ disabled={emailLoading}
               </button>
             ))}
           </div>
+        {showCreateGroup && (
+          <div
+            onClick={() => setShowCreateGroup(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1000,
+              background: "rgba(0,0,0,0.72)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: "480px",
+                background: "#071d38",
+                border: "1px solid #148cff",
+                borderRadius: "18px",
+                padding: "22px",
+                boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "20px",
+                }}
+              >
+                <h2
+                  style={{
+                    margin: 0,
+                    color: "#ffffff",
+                    fontSize: "22px",
+                    fontWeight: 900,
+                  }}
+                >
+                  Crear grupo
+                </h2>
+
+                <button
+                  onClick={() => setShowCreateGroup(false)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#ffffff",
+                    fontSize: "26px",
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="Nombre del grupo"
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "13px",
+                    borderRadius: "10px",
+                    border: "1px solid #148cff",
+                    background: "#0d3158",
+                    color: "#ffffff",
+                    fontSize: "15px",
+                  }}
+                />
+
+                <select
+                  value={newGroupSport}
+                  onChange={(e) => setNewGroupSport(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "13px",
+                    borderRadius: "10px",
+                    border: "1px solid #148cff",
+                    background: "#0d3158",
+                    color: "#ffffff",
+                    fontSize: "15px",
+                  }}
+                >
+                  <option value="RIDE">Ciclismo</option>
+                  <option value="RUN">Carrera</option>
+                  <option value="SWIM">Natación</option>
+                  <option value="HIKE">Senderismo</option>
+                  <option value="WALK">Caminata</option>
+                  <option value="WHEELCHAIR">Silla de ruedas</option>
+                  <option value="KAYAK">Kayak</option>
+                  <option value="ROW">Remo</option>
+                  <option value="SAIL">Vela</option>
+                  <option value="WINDSURF">Windsurf</option>
+                </select>
+
+                <select
+                  value={newGroupVisibility}
+                  onChange={(e) => setNewGroupVisibility(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "13px",
+                    borderRadius: "10px",
+                    border: "1px solid #148cff",
+                    background: "#0d3158",
+                    color: "#ffffff",
+                    fontSize: "15px",
+                  }}
+                >
+                  <option value="PUBLIC">Público</option>
+                  <option value="PRIVATE">Privado</option>
+                </select>
+
+                <button
+                  onClick={createGroup}
+                  disabled={creatingGroup}
+                  style={{
+                    width: "100%",
+                    padding: "14px",
+                    marginTop: "4px",
+                    border: "1px solid rgba(92,180,255,0.75)",
+                    borderRadius: "11px",
+                    background:
+                      "linear-gradient(135deg,#087cff 0%,#1597ff 55%,#087cff 100%)",
+                    color: "#ffffff",
+                    fontSize: "16px",
+                    fontWeight: 800,
+                    cursor: creatingGroup ? "not-allowed" : "pointer",
+                    opacity: creatingGroup ? 0.7 : 1,
+                  }}
+                >
+                  {creatingGroup ? "Creando..." : "Crear grupo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </section>
       </div>
     </div>
@@ -2754,6 +3336,7 @@ const styles: {
 };
 
 export default App;
+
 
 
 

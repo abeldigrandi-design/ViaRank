@@ -1,4 +1,5 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
+import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 
 export type SportPageAthlete = {
   position: number;
@@ -42,11 +43,17 @@ type Props = {
   groupsLoading: boolean;
   period: string;
   profilePicture?: string | null;
+  canAccessGroupAdmin: boolean;
+  isSuperAdmin: boolean;
+  onCreateGroup: () => void;
+  onOpenAdmin: () => void;
+  onLogout: () => void;
   joinCode: string;
   onPeriodChange: (period: string) => void;
   onJoinCodeChange: (code: string) => void;
   onJoin: () => void;
   onBack: () => void;
+  onOpenSport: (sport: string) => void;
   onOpenGroup: (groupId: string) => void;
 };
 
@@ -63,6 +70,20 @@ const sportIcons: Record<string, string> = {
   WINDSURF: "🏄",
 };
 
+const menuItemStyle: CSSProperties = {
+  width: "100%",
+  border: 0,
+  borderBottom: "1px solid rgba(20,140,255,.18)",
+  background: "transparent",
+  color: "#eaf4ff",
+  textAlign: "left",
+  padding: "11px 10px",
+  borderRadius: "8px",
+  fontSize: "14px",
+  fontWeight: 750,
+  cursor: "pointer",
+};
+
 export default function SportPage({
   sport,
   sportName,
@@ -72,13 +93,20 @@ export default function SportPage({
   groupsLoading,
   period,
   profilePicture,
+  canAccessGroupAdmin,
+  isSuperAdmin,
+  onCreateGroup,
+  onOpenAdmin,
+  onLogout,
   joinCode,
   onPeriodChange,
   onJoinCodeChange,
   onJoin,
   onBack,
+  onOpenSport,
   onOpenGroup,
 }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const myGroups = groups.filter((group) => group.isMember);
   const publicGroups = groups.filter(
     (group) => group.visibility === "PUBLIC" && !group.isMember
@@ -143,65 +171,238 @@ export default function SportPage({
             ‹ Atrás
           </button>
 
-          <div
+          <img
+            src={viarankHeaderLogo}
+            alt="ViaRank"
             style={{
-              fontSize: "23px",
-              lineHeight: 1,
-              fontWeight: 950,
-              fontStyle: "italic",
-              letterSpacing: "-1px",
+              width: "120px",
+              height: "38px",
+              objectFit: "contain",
+              display: "block",
             }}
-          >
-            Via<span style={{ color: "#ff7900" }}>Rank</span>
-          </div>
+          />
 
           <div
             style={{
               justifySelf: "end",
               position: "relative",
-              width: "43px",
-              height: "43px",
+              display: "flex",
+              alignItems: "center",
+              gap: "7px",
             }}
           >
             <div
               style={{
+                position: "relative",
                 width: "43px",
                 height: "43px",
-                borderRadius: "50%",
-                overflow: "hidden",
-                border: "2px solid #1594ff",
-                background: "#153d60",
-                boxSizing: "border-box",
               }}
             >
-              {profilePicture && (
-                <img
-                  src={profilePicture}
-                  alt=""
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
-              )}
+              <div
+                style={{
+                  width: "43px",
+                  height: "43px",
+                  borderRadius: "50%",
+                  overflow: "hidden",
+                  border: "2px solid #1594ff",
+                  background: "#153d60",
+                  boxSizing: "border-box",
+                }}
+              >
+                {profilePicture && (
+                  <img
+                    src={profilePicture}
+                    alt=""
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                )}
+              </div>
+
+              <span
+                style={{
+                  position: "absolute",
+                  right: "-1px",
+                  bottom: "1px",
+                  width: "11px",
+                  height: "11px",
+                  borderRadius: "50%",
+                  background: "#19df66",
+                  border: "2px solid #061a30",
+                }}
+              />
             </div>
 
-            <span
+            <button
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Abrir menú"
               style={{
-                position: "absolute",
-                right: "-1px",
-                bottom: "1px",
-                width: "11px",
-                height: "11px",
-                borderRadius: "50%",
-                background: "#19df66",
-                border: "2px solid #061a30",
+                width: "40px",
+                height: "40px",
+                borderRadius: "11px",
+                border: "1px solid rgba(20,140,255,.7)",
+                background: "#071d38",
+                color: "#ffffff",
+                fontSize: "22px",
+                fontWeight: 900,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
               }}
-            />
+            >
+              ☰
+            </button>
+
+            {menuOpen && (
+              <>
+                <div
+                  onClick={() => setMenuOpen(false)}
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 99,
+                  }}
+                />
+
+              <div
+                style={{
+                  position: "absolute",
+                  top: "49px",
+                  right: 0,
+                  width: "205px",
+                  padding: "7px",
+                  borderRadius: "13px",
+                  border: "1px solid rgba(20,140,255,.65)",
+                  background: "#071d38",
+                  boxShadow: "0 12px 30px rgba(0,0,0,.45)",
+                  zIndex: 100,
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onCreateGroup();
+                  }}
+                  style={menuItemStyle}
+                >
+                  Crear grupo
+                </button>
+
+                {canAccessGroupAdmin && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenAdmin();
+                    }}
+                    style={menuItemStyle}
+                  >
+                    Admin. de grupos
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    window.location.href = "/registrar-actividad";
+                  }}
+                  style={menuItemStyle}
+                >
+                  Registrar actividad
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    window.location.href = "/validar-actividad";
+                  }}
+                  style={menuItemStyle}
+                >
+                  Validar actividad
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    window.location.href = "/mi-perfil";
+                  }}
+                  style={menuItemStyle}
+                >
+                  Mi perfil
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    window.location.href = "/support";
+                  }}
+                  style={menuItemStyle}
+                >
+                  Soporte y privacidad
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onLogout();
+                  }}
+                  style={{
+                    ...menuItemStyle,
+                    color: "#ff8b8b",
+                  }}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+              </>
+            )}
           </div>
         </header>
 
+        <div
+          style={{
+            display: "flex",
+            gap: "7px",
+            overflowX: "auto",
+            padding: "3px 1px 10px",
+            marginBottom: "5px",
+            scrollbarWidth: "none",
+          }}
+        >
+          {Object.entries(sportIcons).map(([sportCode, icon]) => (
+            <button
+              key={sportCode}
+              onClick={() => onOpenSport(sportCode)}
+              title={sportCode}
+              style={{
+                width: "42px",
+                minWidth: "42px",
+                height: "42px",
+                borderRadius: "11px",
+                border:
+                  sportCode === sport
+                    ? "2px solid #ff7900"
+                    : "1px solid rgba(20,140,255,.55)",
+                background:
+                  sportCode === sport
+                    ? "rgba(255,121,0,.15)"
+                    : "#071d38",
+                cursor: "pointer",
+                fontSize: "21px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+              }}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
         <section
           style={{
             position: "relative",
@@ -403,7 +604,7 @@ export default function SportPage({
               <strong
                 style={{
                   color: "#25b7ff",
-                  fontSize: "24px",
+                  fontSize: "18px",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -513,13 +714,27 @@ export default function SportPage({
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "5px",
-                      background: "#1976c9",
+                      background: "#06111d",
                       border: "2px solid #ff8a00",
                       color: "#fff",
                       fontWeight: 900,
                     }}
                   >
-                    <span aria-hidden="true" style={{ color: "#38bdf8", fontSize: "18px" }}>♟♟</span>
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      fill="#38bdf8"
+                      style={{ display: "block", flexShrink: 0 }}
+                    >
+                      <circle cx="12" cy="7" r="3" />
+                      <circle cx="5.5" cy="9" r="2.4" />
+                      <circle cx="18.5" cy="9" r="2.4" />
+                      <path d="M7 18c0-3.3 2.2-5.5 5-5.5s5 2.2 5 5.5v1H7v-1Z" />
+                      <path d="M1.5 18c0-2.7 1.7-4.6 4-4.6 1 0 1.9.4 2.6 1-1.1 1.2-1.7 2.8-1.7 4.6H1.5v-1Z" />
+                      <path d="M22.5 18c0-2.7-1.7-4.6-4-4.6-1 0-1.9.4-2.6 1 1.1 1.2 1.7 2.8 1.7 4.6h4.9v-1Z" />
+                    </svg>
                     <span>{group._count?.members ?? 0}</span>
                   </span>
 

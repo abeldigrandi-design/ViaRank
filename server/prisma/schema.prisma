@@ -52,6 +52,7 @@ model User {
   sex           Sex?
   email         String? @unique
   emailVerified Boolean @default(false)
+  pinHash       String?
 
   profilePicture String?
   city           String?
