@@ -4,7 +4,9 @@ import {
   BrowserRouter,
   Routes,
   Route,
+  useLocation,
 } from "react-router-dom";
+import { useEffect } from "react";
 
 import "./index.css";
 import App from "./App";
@@ -29,8 +31,19 @@ CapacitorApp.addListener("appUrlOpen", ({ url }) => {
     console.error("Error procesando regreso de Strava:", error);
   }
 });
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
+    <ScrollToTop />
     <Routes>
       <Route path="/" element={<App />} />
       <Route path="/support" element={<SupportPrivacy />} />

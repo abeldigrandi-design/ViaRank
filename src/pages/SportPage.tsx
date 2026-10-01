@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 
 export type SportPageAthlete = {
@@ -106,6 +107,7 @@ export default function SportPage({
   onOpenSport,
   onOpenGroup,
 }: Props) {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const myGroups = groups.filter((group) => group.isMember);
   const publicGroups = groups.filter(
@@ -308,7 +310,7 @@ export default function SportPage({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    window.location.href = "/registrar-actividad";
+                    navigate("/registrar-actividad");
                   }}
                   style={menuItemStyle}
                 >
@@ -328,7 +330,7 @@ export default function SportPage({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    window.location.href = "/mi-perfil";
+                    navigate("/mi-perfil");
                   }}
                   style={menuItemStyle}
                 >

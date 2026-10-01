@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Geolocation } from "@capacitor/geolocation";
 import { registerPlugin } from "@capacitor/core";
 const API_URL = import.meta.env.VITE_API_URL;
@@ -7,6 +8,7 @@ const ActivityTracking = registerPlugin<{
 getTrackingStatus(): Promise<{
   distance: number;
   startTime: number;
+  movingTime: number;
 }>;
   stopTracking(): Promise<{
   stopped: boolean;
@@ -14,6 +16,7 @@ getTrackingStatus(): Promise<{
   startTime: number;
   endTime: number;
   duration: number;
+  movingTime: number;
 }>;
 }>("ActivityTracking");
 type PuntoGPS = {
@@ -39,10 +42,46 @@ function distanciaMetros(a: PuntoGPS, b: PuntoGPS) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+function formatearTiempo(segundos: number) {
+  const horas = Math.floor(segundos / 3600);
+  const minutos = Math.floor((segundos % 3600) / 60);
+  const segundosRestantes = segundos % 60;
+
+  return [horas, minutos, segundosRestantes]
+    .map((valor) => String(valor).padStart(2, "0"))
+    .join(":");
+}
+type ActividadPendiente = {
+  externalId: string;
+  type: "RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM" | "WHEELCHAIR" | "KAYAK" | "ROW" | "SAIL" | "WINDSURF";
+  distance: number;
+  movingTime: number;
+  startDate: string;
+};
+function nombreDeporte(type: string) {
+  const nombres: Record<string, string> = {
+    RIDE: "ciclismo",
+    RUN: "carrera",
+    WALK: "caminata",
+    HIKE: "senderismo",
+    SWIM: "natación",
+    WHEELCHAIR: "silla de ruedas",
+    KAYAK: "kayak",
+    ROW: "remo",
+    SAIL: "vela",
+    WINDSURF: "windsurf",
+  };
+
+  return nombres[type] || "actividad";
+}
+
 export default function RecordActivity() {
-const [deporte, setDeporte] = useState<"WALK" | "RIDE">("WALK");
+  const navigate = useNavigate();
+const [deporte, setDeporte] = useState<"RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM" | "WHEELCHAIR" | "KAYAK" | "ROW" | "SAIL" | "WINDSURF">("RIDE");
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [distancia, setDistancia] = useState(0);
+  const [tiempo, setTiempo] = useState(0);
   const [mensaje, setMensaje] = useState(
   "Preparado para registrar una actividad."
 );
@@ -55,6 +94,7 @@ useEffect(() => {
   const intervalo = window.setInterval(async () => {
     const estado = await ActivityTracking.getTrackingStatus();
     setDistancia(estado.distance);
+    setTiempo(estado.movingTime);
   }, 1000);
 
   return () => window.clearInterval(intervalo);
@@ -71,11 +111,7 @@ useEffect(() => {
       setDistancia(0);
       ultimoPunto.current = null;
       setRegistrando(true);
-      setMensaje(
-  deporte === "RIDE"
-    ? "Registrando ciclismo..."
-    : "Registrando caminata..."
-);
+      setMensaje(`Registrando ${nombreDeporte(deporte)}...`);
 
 await ActivityTracking.startTracking();
       watchId.current = await Geolocation.watchPosition(
@@ -106,11 +142,9 @@ await ActivityTracking.startTracking();
           }
 
           ultimoPunto.current = nuevoPunto;
-setMensaje(
-  deporte === "RIDE"
-    ? `Registrando ciclismo. Precisión GPS: ${Math.round(posicion.coords.accuracy)} m`
-    : `Registrando caminata. Precisión GPS: ${Math.round(posicion.coords.accuracy)} m`
-);
+        setMensaje(
+          `Registrando ${nombreDeporte(deporte)}. Precisión GPS: ${Math.round(posicion.coords.accuracy)} m`
+        );
       }
     );
                  
@@ -121,7 +155,7 @@ setMensaje(
     }
   };
 
-  const finalizar = async () => {
+   const finalizar = async () => {
     let resultado;
 
     try {
@@ -135,26 +169,57 @@ setMensaje(
       ultimoPunto.current = null;
       setRegistrando(false);
 
+      const actividad: ActividadPendiente = {
+        externalId: `viarank-${resultado.startTime}`,
+        type: deporte,
+        distance: resultado.distance,
+        movingTime: resultado.movingTime,
+        startDate: new Date(resultado.startTime).toISOString(),
+      };
+
+      const clavePendientes = "viarank_pending_activities";
+
+      const pendientesActuales: ActividadPendiente[] = JSON.parse(
+        localStorage.getItem(clavePendientes) || "[]"
+      );
+
+      const pendientesSinDuplicar = pendientesActuales.filter(
+        (item) => item.externalId !== actividad.externalId
+      );
+
+      localStorage.setItem(
+        clavePendientes,
+        JSON.stringify([...pendientesSinDuplicar, actividad])
+      );
+
       const respuesta = await fetch(`${API_URL}/api/activities/viarank`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
         },
-        body: JSON.stringify({
-          externalId: `viarank-${resultado.startTime}`,
-          type: deporte,
-          distance: resultado.distance,
-          movingTime: resultado.duration,
-          startDate: new Date(resultado.startTime).toISOString(),
-        }),
+        body: JSON.stringify(actividad),
       });
 
       if (!respuesta.ok) {
         throw new Error(`Error del servidor: ${respuesta.status}`);
       }
 
+      const pendientesGuardados: ActividadPendiente[] = JSON.parse(
+        localStorage.getItem(clavePendientes) || "[]"
+      );
+
+      localStorage.setItem(
+        clavePendientes,
+        JSON.stringify(
+          pendientesGuardados.filter(
+            (item) => item.externalId !== actividad.externalId
+          )
+        )
+      );
+
       setDistancia(resultado.distance);
+      setTiempo(resultado.movingTime);
       setMensaje("Actividad guardada correctamente.");
     } catch (error) {
       console.error("Error al finalizar actividad ViaRank:", error);
@@ -168,9 +233,13 @@ setMensaje(
 
       ultimoPunto.current = null;
       setRegistrando(false);
-      setMensaje("La actividad finalizó, pero no se pudo guardar.");
+      setMensaje(
+        "La actividad quedó guardada en el teléfono y se enviará cuando haya conexión."
+      );
     }
   };
+
+  const velocidadPromedio = tiempo > 0 ? (distancia / tiempo) * 3.6 : 0;
 
   return (
     <div
@@ -184,7 +253,7 @@ setMensaje(
     >
       <div style={{ maxWidth: "520px", margin: "0 auto" }}>
         <button
-          onClick={() => (window.location.href = "/")}
+          onClick={() => navigate("/")}
           disabled={registrando}
           style={{
             border: "none",
@@ -201,55 +270,151 @@ setMensaje(
 
         <h1 style={{ marginTop: "24px" }}>Registrar actividad</h1>
 
-       <div style={{ display: "flex", gap: "12px", marginTop: "32px" }}>
-  <button
-    onClick={() => setDeporte("WALK")}
-    disabled={registrando}
-    style={{
-      flex: 1,
-      padding: "14px",
-      border: `1px solid ${deporte === "WALK" ? "#148cff" : "#475569"}`,
-      borderRadius: "12px",
-      background: deporte === "WALK" ? "#148cff" : "transparent",
-      color: "white",
-      fontSize: "18px",
-      cursor: registrando ? "default" : "pointer",
-    }}
-  >
-    🚶 Caminata
-  </button>
+        <div style={{ marginTop: "32px", position: "relative" }}>
+          {(() => {
+            const deportes = [
+              { type: "RIDE", nombre: "Ciclismo" },
+              { type: "RUN", nombre: "Carrera" },
+              { type: "WALK", nombre: "Caminata" },
+              { type: "HIKE", nombre: "Senderismo" },
+              { type: "SWIM", nombre: "Natación" },
+              { type: "WHEELCHAIR", nombre: "Silla de ruedas" },
+              { type: "KAYAK", nombre: "Kayak" },
+              { type: "ROW", nombre: "Remo" },
+              { type: "SAIL", nombre: "Vela" },
+              { type: "WINDSURF", nombre: "Windsurf" },
+            ] as const;
 
-  <button
-    onClick={() => setDeporte("RIDE")}
-    disabled={registrando}
-    style={{
-      flex: 1,
-      padding: "14px",
-      border: `1px solid ${deporte === "RIDE" ? "#148cff" : "#475569"}`,
-      borderRadius: "12px",
-      background: deporte === "RIDE" ? "#148cff" : "transparent",
-      color: "white",
-      fontSize: "18px",
-      cursor: registrando ? "default" : "pointer",
-    }}
-  >
-    🚴 Ciclismo
-  </button>
-</div>
+            const deporteActual =
+              deportes.find((item) => item.type === deporte) ?? deportes[0];
+
+            return (
+              <>
+                <button
+                  type="button"
+                  disabled={registrando}
+                  onClick={() => setSelectorAbierto((abierto) => !abierto)}
+                  style={{
+                    width: "100%",
+                    padding: "15px 18px",
+                    border: "1px solid #148cff",
+                    borderRadius: "12px",
+                    background: "#0c2945",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontSize: "17px",
+                    fontWeight: 800,
+                    cursor: registrando ? "default" : "pointer",
+                    opacity: registrando ? 0.7 : 1,
+                  }}
+                >
+                  <span>{deporteActual.nombre}</span>
+                  <span style={{ color: "#38bdf8", fontSize: "18px" }}>
+                    {selectorAbierto ? "▲" : "▼"}
+                  </span>
+                </button>
+
+                {selectorAbierto && !registrando && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 6px)",
+                      left: 0,
+                      right: 0,
+                      zIndex: 20,
+                      maxHeight: "360px",
+                      overflowY: "auto",
+                      border: "1px solid #148cff",
+                      borderRadius: "12px",
+                      background: "#071b30",
+                      boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
+                    }}
+                  >
+                    {deportes.map((item) => (
+                      <button
+                        key={item.type}
+                        type="button"
+                        onClick={() => {
+                          setDeporte(item.type);
+                          setSelectorAbierto(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "13px 18px",
+                          border: "none",
+                          borderBottom: "1px solid #173b59",
+                          background:
+                            deporte === item.type ? "#148cff" : "transparent",
+                          color: "#ffffff",
+                          textAlign: "left",
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {item.nombre}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
 
         <div
           style={{
             marginTop: "28px",
-            padding: "24px",
-            border: "1px solid #148cff",
-            borderRadius: "16px",
-            textAlign: "center",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "12px",
           }}
         >
-          <div style={{ fontSize: "48px", fontWeight: 700 }}>
-            {(distancia / 1000).toFixed(2)}
+          <div
+            style={{
+              padding: "20px 10px",
+              border: "1px solid #148cff",
+              borderRadius: "16px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ color: "#94a3b8", fontSize: "14px" }}>Tiempo</div>
+            <div style={{ marginTop: "8px", fontSize: "26px", fontWeight: 800 }}>
+              {formatearTiempo(tiempo)}
+            </div>
           </div>
-          <div style={{ color: "#94a3b8", fontSize: "20px" }}>km</div>
+
+          <div
+            style={{
+              padding: "20px 10px",
+              border: "1px solid #148cff",
+              borderRadius: "16px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ color: "#94a3b8", fontSize: "14px" }}>Distancia</div>
+            <div style={{ marginTop: "8px", fontSize: "26px", fontWeight: 800 }}>
+              {(distancia / 1000).toFixed(2)}
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "14px" }}>km</div>
+          </div>
+
+          <div
+            style={{
+              padding: "20px 10px",
+              border: "1px solid #148cff",
+              borderRadius: "16px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ color: "#94a3b8", fontSize: "14px" }}>Velocidad promedio</div>
+            <div style={{ marginTop: "8px", fontSize: "26px", fontWeight: 800 }}>
+              {velocidadPromedio.toFixed(1)}
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "14px" }}>km/h</div>
+          </div>
         </div>
 
         <p

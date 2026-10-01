@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SportPage from "./pages/SportPage";
 import GroupPage from "./pages/GroupPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
@@ -124,6 +125,7 @@ type GroupMembersResponse = {
   members: GroupMemberItem[];
 };
 function App() {
+  const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [sessionRestoring, setSessionRestoring] = useState(true);
@@ -2317,6 +2319,7 @@ disabled={emailLoading}
             loadGroups(nextSport);
           }}
           onOpenGroup={(groupId) => {
+            window.scrollTo(0, 0);
             loadGroupRanking(groupId);
           }}
         />
@@ -2516,7 +2519,7 @@ disabled={emailLoading}
                  <button
   onClick={() => {
     setMenuOpen(false);
-    window.location.href = "/registrar-actividad";
+    navigate("/registrar-actividad");
   }}
   style={{
     width: "100%",
@@ -2566,7 +2569,7 @@ disabled={emailLoading}
                     <button
                       onClick={() => {
                         setMenuOpen(false);
-                        window.location.href = "/mi-perfil";
+                        navigate("/mi-perfil");
                       }}
                       style={{
                         width: "100%",
@@ -2995,7 +2998,7 @@ const styles: {
 } = {
  page: {
   minHeight: "100vh",
-  background: "#ffffff",
+  background: "#071d38",
   fontFamily:
     "Arial, Helvetica, sans-serif",
   color: "#f8fafc",
