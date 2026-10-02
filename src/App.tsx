@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import SportPage from "./pages/SportPage";
 import GroupPage from "./pages/GroupPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
@@ -126,9 +126,11 @@ type GroupMembersResponse = {
 };
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const internalReturn = Boolean(location.state?.internalReturn && location.state?.user);
   const [connected, setConnected] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [sessionRestoring, setSessionRestoring] = useState(true);
+  const [user, setUser] = useState<any>(() => internalReturn ? location.state.user : null);
+  const [sessionRestoring, setSessionRestoring] = useState(() => !internalReturn);
  const [emailFirstName, setEmailFirstName] = useState("");
 const [emailLastName, setEmailLastName] = useState("");
 const [emailAddress, setEmailAddress] = useState("");
@@ -2519,7 +2521,7 @@ disabled={emailLoading}
                  <button
   onClick={() => {
     setMenuOpen(false);
-    navigate("/registrar-actividad");
+    navigate("/registrar-actividad", { state: { user } });
   }}
   style={{
     width: "100%",
@@ -2541,7 +2543,7 @@ disabled={emailLoading}
                  <button
   onClick={() => {
     setMenuOpen(false);
-    window.location.href = "/validar-actividad";
+    navigate("/validar-actividad", { state: { user } });
   }}
   style={{
     width: "100%",
@@ -2569,7 +2571,7 @@ disabled={emailLoading}
                     <button
                       onClick={() => {
                         setMenuOpen(false);
-                        navigate("/mi-perfil");
+                        navigate("/mi-perfil", { state: { user } });
                       }}
                       style={{
                         width: "100%",
@@ -2598,7 +2600,7 @@ disabled={emailLoading}
                     <button
                       onClick={() => {
                         setMenuOpen(false);
-                        window.location.href = "/support";
+                        navigate("/support", { state: { user } });
                       }}
                       style={{
                         width: "100%",

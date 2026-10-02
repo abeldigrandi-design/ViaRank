@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { registerPlugin } from "@capacitor/core";
 import { loginWithStrava } from "../services/strava";
 import stravaConnectOfficial from "../assets/strava-connect-official.svg";
@@ -13,6 +13,7 @@ interface HealthConnectPlugin {
 const HealthConnect = registerPlugin<HealthConnectPlugin>("HealthConnect");
 export default function ValidateActivity() {
   const navigate = useNavigate();
+  const location = useLocation();
 async function requestHealthConnectPermissions() {
   try {
     await HealthConnect.requestHealthPermissions();
@@ -87,7 +88,7 @@ padding: "24px 18px 40px",
         }}
       >
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user } })}
           style={{
             padding: "11px 18px",
             borderRadius: "11px",

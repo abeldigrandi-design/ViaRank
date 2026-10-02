@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Geolocation } from "@capacitor/geolocation";
 import { registerPlugin } from "@capacitor/core";
 const API_URL = import.meta.env.VITE_API_URL;
@@ -77,6 +77,7 @@ function nombreDeporte(type: string) {
 
 export default function RecordActivity() {
   const navigate = useNavigate();
+  const location = useLocation();
 const [deporte, setDeporte] = useState<"RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM" | "WHEELCHAIR" | "KAYAK" | "ROW" | "SAIL" | "WINDSURF">("RIDE");
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const [registrando, setRegistrando] = useState(false);
@@ -253,7 +254,7 @@ await ActivityTracking.startTracking();
     >
       <div style={{ maxWidth: "520px", margin: "0 auto" }}>
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user } })}
           disabled={registrando}
           style={{
             border: "none",

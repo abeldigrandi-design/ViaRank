@@ -1,6 +1,9 @@
 import viarankLogo from "../assets/viarank-logo.png";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function SupportPrivacy() {
+  const navigate = useNavigate();
+  const location = useLocation();
   return (
     <div
       style={{
@@ -51,7 +54,7 @@ export default function SupportPrivacy() {
           <button
             type="button"
             onClick={() => {
-              window.location.href = "/";
+              navigate("/", { state: { internalReturn: true, user: location.state?.user } });
             }}
             style={{
               border: "none",
@@ -252,7 +255,7 @@ export default function SupportPrivacy() {
           "Tu cuenta y tus datos fueron eliminados permanentemente."
         );
 
-        window.location.href = "/";
+        navigate("/");
       } catch (error) {
         console.error(
           "Error eliminando cuenta:",

@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -36,6 +36,7 @@ const labelStyle: CSSProperties = {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -218,7 +219,7 @@ export default function ProfilePage() {
           }}
         >
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user } })}
             style={{
               justifySelf: "start",
               border: 0,
