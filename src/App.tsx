@@ -108,6 +108,7 @@ type GroupRankingResponse = {
 type GroupMemberItem = {
   membershipId: string;
   joinedAt: string;
+  canCreateEvents: boolean;
 
   user: {
     id: string;

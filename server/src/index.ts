@@ -4513,11 +4513,26 @@ app.post(
         });
       }
 
-      const canManage =
-        user.role === "SUPER_ADMIN" ||
-        group.administratorId === userId;
+      const membership =
+        group.administratorId === userId
+          ? null
+          : await prisma.groupMember.findUnique({
+              where: {
+                userId_groupId: {
+                  userId,
+                  groupId,
+                },
+              },
+              select: {
+                canCreateEvents: true,
+              },
+            });
 
-      if (!canManage) {
+      const canCreateEvent =
+        group.administratorId === userId ||
+        membership?.canCreateEvents === true;
+
+      if (!canCreateEvent) {
         return res.status(403).json({
           error: "No tenés permiso para crear eventos en este grupo",
         });
@@ -4829,6 +4844,7 @@ const { groupId } = req.params;
               select: {
                 id: true,
                 joinedAt: true,
+                canCreateEvents: true,
 
                 user: {
                   select: {
@@ -4887,6 +4903,7 @@ const { groupId } = req.params;
           (membership: {
            id: string;
 joinedAt: Date;
+canCreateEvents: boolean;
 user: {
   id: string;
   firstName: string;
@@ -4900,6 +4917,9 @@ user: {
 
             joinedAt:
               membership.joinedAt,
+
+            canCreateEvents:
+              membership.canCreateEvents,
 
             user: {
               ...membership.user,
@@ -5082,6 +5102,108 @@ if (!requesterId) {
     }
   }
 );
+/* ---------------------------------------------------------
+   AUTORIZAR CREACION DE EVENTOS
+--------------------------------------------------------- */
+
+app.patch(
+  "/api/groups/:groupId/members/:userId/event-permission",
+  async (req, res) => {
+    try {
+      const { groupId, userId } = req.params;
+      const requesterId = getAuthenticatedUserId(req);
+      const { canCreateEvents } = req.body;
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      if (typeof canCreateEvents !== "boolean") {
+        return res.status(400).json({
+          error: "Permiso de eventos inválido",
+        });
+      }
+
+      const group = await prisma.sportGroup.findUnique({
+        where: { id: groupId },
+        select: {
+          id: true,
+          administratorId: true,
+        },
+      });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      if (group.administratorId !== requesterId) {
+        return res.status(403).json({
+          error:
+            "Solo el administrador del grupo puede autorizar la creación de eventos",
+        });
+      }
+
+      if (userId === group.administratorId) {
+        return res.status(400).json({
+          error:
+            "El administrador del grupo ya tiene permiso para crear eventos",
+        });
+      }
+
+      const membership = await prisma.groupMember.findUnique({
+        where: {
+          userId_groupId: {
+            userId,
+            groupId,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!membership) {
+        return res.status(404).json({
+          error: "El atleta no pertenece a este grupo",
+        });
+      }
+
+      const updatedMembership = await prisma.groupMember.update({
+        where: {
+          userId_groupId: {
+            userId,
+            groupId,
+          },
+        },
+        data: {
+          canCreateEvents,
+        },
+        select: {
+          id: true,
+          userId: true,
+          groupId: true,
+          canCreateEvents: true,
+        },
+      });
+
+      return res.json({
+        success: true,
+        membership: updatedMembership,
+      });
+    } catch (error) {
+      console.error("Error actualizando permiso para crear eventos:", error);
+
+      return res.status(500).json({
+        error: "No se pudo actualizar el permiso para crear eventos",
+      });
+    }
+  }
+);
+
 /* =========================================================
    WEBHOOK STRAVA - VERIFICACION
 ========================================================= */

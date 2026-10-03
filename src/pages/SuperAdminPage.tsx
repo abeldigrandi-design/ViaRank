@@ -32,6 +32,7 @@ type AdminGroup = {
 type GroupMember = {
   membershipId: string;
   joinedAt: string;
+  canCreateEvents: boolean;
   user: {
     id: string;
     firstName: string;
@@ -334,6 +335,67 @@ export default function SuperAdminPage({
     );
   }
 
+  async function updateSelectedEventPermission(canCreateEvents: boolean) {
+    if (!selectedGroup || !user?.id || selectedGroupMembers.length === 0) {
+      return;
+    }
+
+    if (selectedGroup.administrator.id !== user.id) {
+      alert("Solo el administrador del grupo puede cambiar esta autorización.");
+      return;
+    }
+
+    const selectedMembers = groupMembers.filter(
+      (member) =>
+        selectedGroupMembers.includes(member.user.id) &&
+        !member.user.isGroupAdministrator
+    );
+
+    if (selectedMembers.length === 0) {
+      alert("Seleccioná al menos un atleta del grupo.");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("viarank_auth_token");
+
+      for (const member of selectedMembers) {
+        const response = await fetch(
+          `${API_URL}/api/groups/${selectedGroup.id}/members/${member.user.id}/event-permission`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ canCreateEvents }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || "No se pudo actualizar la autorización de eventos"
+          );
+        }
+      }
+
+      setSelectedGroupMembers([]);
+      await onOpenGroup(selectedGroup);
+
+      alert(
+        canCreateEvents
+          ? "Autorización para crear eventos otorgada."
+          : "Autorización para crear eventos quitada."
+      );
+    } catch (error) {
+      console.error("Error actualizando autorización de eventos:", error);
+      alert("No se pudo actualizar la autorización de eventos.");
+    }
+  }
+
+
   return (
     <div
       style={{
@@ -495,6 +557,53 @@ export default function SuperAdminPage({
                   {selectedGroupMembers.length} seleccionados
                 </span>
               </div>
+
+              {selectedGroupMembers.length > 0 &&
+                selectedGroup?.administrator.id === user?.id && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "6px",
+                      marginBottom: "10px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void updateSelectedEventPermission(true)}
+                      style={{
+                        border: "1px solid #148cff",
+                        borderRadius: "7px",
+                        background: "#0b65b7",
+                        color: "#ffffff",
+                        padding: "6px 9px",
+                        fontSize: "10px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Autorizar eventos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void updateSelectedEventPermission(false)}
+                      style={{
+                        border: "1px solid rgba(255,180,92,0.65)",
+                        borderRadius: "7px",
+                        background: "#082845",
+                        color: "#ffb45c",
+                        padding: "6px 9px",
+                        fontSize: "10px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Quitar autorización
+                    </button>
+                  </div>
+                )}
+
 
               <div
                 style={{
@@ -887,6 +996,18 @@ export default function SuperAdminPage({
                                 {" · Administrador"}
                               </span>
                             )}
+
+                            {!member.user.isGroupAdministrator &&
+                              member.canCreateEvents && (
+                                <span
+                                  style={{
+                                    color: "#57d68d",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {" · Puede crear eventos"}
+                                </span>
+                              )}
                           </span>
                         </label>
                       );

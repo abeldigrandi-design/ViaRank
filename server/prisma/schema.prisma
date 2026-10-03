@@ -154,6 +154,7 @@ model GroupMember {
   group SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   joinedAt DateTime @default(now())
+  canCreateEvents Boolean @default(false)
 
   @@unique([userId, groupId])
   @@index([groupId])
