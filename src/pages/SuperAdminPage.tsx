@@ -42,6 +42,29 @@ type GroupMember = {
   };
 };
 
+type ActivityReview = {
+  id: string;
+  referenceSpeed: number;
+  maximumMinutes: number;
+  maxContinuousSeconds: number;
+  needsReview: boolean;
+  createdAt: string;
+  activity: {
+    id: string;
+    source: string;
+    type: string;
+    name: string;
+    distance: number;
+    movingTime: number;
+    startDate: string;
+    user: {
+      id: string;
+      firstName: string;
+      lastName: string;
+    };
+  };
+};
+
 type Props = {
   onBack: () => void;
   user: AdminUser | null;
@@ -86,6 +109,9 @@ export default function SuperAdminPage({
   const [activityControlMinutes, setActivityControlMinutes] = useState("");
   const [savingActivityControl, setSavingActivityControl] = useState(false);
   const [activityControlMessage, setActivityControlMessage] = useState("");
+  const [activityReviews, setActivityReviews] = useState<ActivityReview[]>([]);
+  const [activityReviewsLoading, setActivityReviewsLoading] = useState(false);
+  const [activityReviewsMessage, setActivityReviewsMessage] = useState("");
 
   const administeredGroups = groups
     .filter(
@@ -131,6 +157,53 @@ export default function SuperAdminPage({
       .map((group) => group.name);
   }
 
+  async function loadActivityReviews(groupId: string) {
+    setActivityReviewsLoading(true);
+    setActivityReviewsMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/groups/${groupId}/activity-reviews`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem(
+              "viarank_auth_token"
+            )}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setActivityReviews([]);
+        setActivityReviewsMessage(
+          data.error || "No se pudieron cargar las actividades para revisar."
+        );
+        return;
+      }
+
+      setActivityReviews(
+        Array.isArray(data.reviews)
+          ? data.reviews.filter(
+              (review: ActivityReview) => review.needsReview
+            )
+          : []
+      );
+    } catch (error) {
+      console.error(
+        "Error cargando actividades para revisar:",
+        error
+      );
+      setActivityReviews([]);
+      setActivityReviewsMessage(
+        "No se pudieron cargar las actividades para revisar."
+      );
+    } finally {
+      setActivityReviewsLoading(false);
+    }
+  }
+
   async function openGroup(group: AdminGroup) {
     setSelectedGroup(group);
     setSelectedGroupMembers([]);
@@ -145,7 +218,10 @@ export default function SuperAdminPage({
         : ""
     );
     setActivityControlMessage("");
-    await onOpenGroup(group);
+    await Promise.all([
+      onOpenGroup(group),
+      loadActivityReviews(group.id),
+    ]);
   }
 
   function closeGroup() {
@@ -154,6 +230,8 @@ export default function SuperAdminPage({
     setActivityControlSpeed("");
     setActivityControlMinutes("");
     setActivityControlMessage("");
+    setActivityReviews([]);
+    setActivityReviewsMessage("");
   }
 
   async function saveActivityControl() {
@@ -609,6 +687,110 @@ export default function SuperAdminPage({
                     </span>
                   )}
                 </div>
+              </div>
+
+              <div
+                style={{
+                  marginBottom: "12px",
+                  padding: "10px",
+                  borderRadius: "9px",
+                  border: "1px solid rgba(255,180,92,0.45)",
+                  background: "#071f39",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    color: "#ffffff",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Actividades para revisar
+                </div>
+
+                {activityReviewsLoading ? (
+                  <div
+                    style={{
+                      color: "#9fb5cc",
+                      fontSize: "10px",
+                    }}
+                  >
+                    Cargando...
+                  </div>
+                ) : activityReviewsMessage ? (
+                  <div
+                    style={{
+                      color: "#ffb45c",
+                      fontSize: "10px",
+                    }}
+                  >
+                    {activityReviewsMessage}
+                  </div>
+                ) : activityReviews.length === 0 ? (
+                  <div
+                    style={{
+                      color: "#7892ad",
+                      fontSize: "10px",
+                    }}
+                  >
+                    No hay actividades para revisar.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    {activityReviews.map((review) => (
+                      <div
+                        key={review.id}
+                        style={{
+                          padding: "8px",
+                          borderRadius: "7px",
+                          background: "#082845",
+                          border: "1px solid rgba(255,180,92,0.35)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            color: "#ffffff",
+                            fontSize: "11px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {review.activity.user.firstName}{" "}
+                          {review.activity.user.lastName}
+                        </div>
+
+                        <div
+                          style={{
+                            color: "#9fb5cc",
+                            fontSize: "10px",
+                            marginTop: "3px",
+                          }}
+                        >
+                          {review.activity.name} ·{" "}
+                          {(review.activity.distance / 1000).toFixed(2)} km
+                        </div>
+
+                        <div
+                          style={{
+                            color: "#ffb45c",
+                            fontSize: "10px",
+                            marginTop: "3px",
+                          }}
+                        >
+                          Superó {review.referenceSpeed} km/h durante{" "}
+                          {review.maxContinuousSeconds} s · máximo configurado{" "}
+                          {review.maximumMinutes} min
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {groupMembersLoading ? (
