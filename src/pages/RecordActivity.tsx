@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Geolocation } from "@capacitor/geolocation";
-import { registerPlugin } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 const API_URL = import.meta.env.VITE_API_URL;
 const ActivityTracking = registerPlugin<{
   startTracking(): Promise<{ started: boolean }>;
@@ -92,33 +92,51 @@ const [deporte, setDeporte] = useState<"RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM"
   const watchId = useRef<string | null>(null);
   const ultimoPunto = useRef<PuntoGPS | null>(null);
   const puntosGPS = useRef<PuntoGPS[]>([]);
+  const inicioWeb = useRef<number | null>(null);
+  const distanciaWeb = useRef(0);
+  const esNativo = Capacitor.isNativePlatform();
+
 useEffect(() => {
   if (!registrando) return;
 
   const intervalo = window.setInterval(async () => {
-    const estado = await ActivityTracking.getTrackingStatus();
-    setDistancia(estado.distance);
-    setTiempo(estado.movingTime);
+    if (esNativo) {
+      const estado = await ActivityTracking.getTrackingStatus();
+      setDistancia(estado.distance);
+      setTiempo(estado.movingTime);
+    } else if (inicioWeb.current !== null) {
+      setDistancia(distanciaWeb.current);
+      setTiempo(
+        Math.max(0, Math.floor((Date.now() - inicioWeb.current) / 1000))
+      );
+    }
   }, 1000);
 
   return () => window.clearInterval(intervalo);
-}, [registrando]);
+}, [registrando, esNativo]);
   const iniciar = async () => {
     try {
+      if (esNativo) {
       const permisos = await Geolocation.requestPermissions();
 
       if (permisos.location !== "granted") {
         setMensaje("ViaRank necesita permiso de ubicación.");
         return;
       }
+      }
 
       setDistancia(0);
+      setTiempo(0);
+      distanciaWeb.current = 0;
+      inicioWeb.current = Date.now();
       ultimoPunto.current = null;
       puntosGPS.current = [];
       setRegistrando(true);
       setMensaje(`Registrando ${nombreDeporte(deporte)}...`);
 
-await ActivityTracking.startTracking();
+      if (esNativo) {
+        await ActivityTracking.startTracking();
+      }
       watchId.current = await Geolocation.watchPosition(
         {
           enableHighAccuracy: true,
@@ -142,8 +160,9 @@ await ActivityTracking.startTracking();
               nuevoPunto
             );
 
-            if (metros >= 2 && metros <= 100) {
-              // setDistancia((actual) => actual + metros);
+            if (metros >= 2 && metros <= 100 && !esNativo) {
+              distanciaWeb.current += metros;
+              setDistancia(distanciaWeb.current);
             }
           }
 
@@ -166,7 +185,25 @@ await ActivityTracking.startTracking();
     let resultado;
 
     try {
-      resultado = await ActivityTracking.stopTracking();
+      if (esNativo) {
+        resultado = await ActivityTracking.stopTracking();
+      } else {
+        const startTime = inicioWeb.current ?? Date.now();
+        const endTime = Date.now();
+        const movingTime = Math.max(
+          0,
+          Math.floor((endTime - startTime) / 1000)
+        );
+
+        resultado = {
+          stopped: true,
+          distance: distanciaWeb.current,
+          startTime,
+          endTime,
+          duration: movingTime,
+          movingTime,
+        };
+      }
 
       if (watchId.current !== null) {
         await Geolocation.clearWatch({ id: watchId.current });
