@@ -4664,6 +4664,119 @@ if (!administratorId) {
     }
   }
 );
+/* ---------------------------------------------------------
+   CONTROL DE ACTIVIDAD - CONSULTAR REVISIONES
+--------------------------------------------------------- */
+
+app.get(
+  "/api/groups/:groupId/activity-reviews",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const { groupId } = req.params;
+
+      const group = await prisma.sportGroup.findUnique({
+        where: { id: groupId },
+        select: {
+          id: true,
+          name: true,
+          administratorId: true,
+        },
+      });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      const requester = await prisma.user.findUnique({
+        where: { id: requesterId },
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!requester) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      const canManage =
+        requester.role === "SUPER_ADMIN" ||
+        group.administratorId === requesterId;
+
+      if (!canManage) {
+        return res.status(403).json({
+          error: "No tienes permiso para revisar actividades de este grupo",
+        });
+      }
+
+      const reviews = await prisma.groupActivityReview.findMany({
+        where: {
+          groupId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          id: true,
+          referenceSpeed: true,
+          maximumMinutes: true,
+          maxContinuousSeconds: true,
+          needsReview: true,
+          createdAt: true,
+          activity: {
+            select: {
+              id: true,
+              source: true,
+              type: true,
+              name: true,
+              distance: true,
+              movingTime: true,
+              startDate: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return res.json({
+        success: true,
+        group: {
+          id: group.id,
+          name: group.name,
+        },
+        count: reviews.length,
+        reviews,
+      });
+    } catch (error) {
+      console.error(
+        "Error consultando control de actividad:",
+        error
+      );
+
+      return res.status(500).json({
+        error: "No se pudo consultar el control de actividad",
+      });
+    }
+  }
+);
 /* =========================================================
    MIEMBROS DE GRUPO
 ========================================================= */
