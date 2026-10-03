@@ -116,6 +116,8 @@ model Activity {
   startDate     DateTime
   createdAt     DateTime       @default(now())
 
+  groupActivityReviews GroupActivityReview[]
+
   @@unique([source, externalId])
 }
 
@@ -126,11 +128,15 @@ model SportGroup {
   joinCode   String          @unique
   visibility GroupVisibility @default(PUBLIC)
 
+  activityControlSpeed   Float?
+  activityControlMinutes Int?
+
   administratorId String
   administrator   User   @relation("GroupAdministrator", fields: [administratorId], references: [id])
 
   members GroupMember[]
   events  GroupEvent[]
+  activityReviews GroupActivityReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -173,4 +179,25 @@ model GroupEvent {
 
   @@index([groupId])
   @@index([eventDate])
+}
+
+model GroupActivityReview {
+  id         String @id @default(cuid())
+  groupId    String
+  activityId String
+
+  group    SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  activity Activity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  referenceSpeed       Float
+  maximumMinutes       Int
+  maxContinuousSeconds Int
+  needsReview          Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, activityId])
+  @@index([groupId])
+  @@index([activityId])
 }

@@ -22,6 +22,7 @@ getTrackingStatus(): Promise<{
 type PuntoGPS = {
   latitude: number;
   longitude: number;
+  timestamp: number;
 };
 
 function distanciaMetros(a: PuntoGPS, b: PuntoGPS) {
@@ -57,6 +58,7 @@ type ActividadPendiente = {
   distance: number;
   movingTime: number;
   startDate: string;
+  gpsPoints: PuntoGPS[];
 };
 function nombreDeporte(type: string) {
   const nombres: Record<string, string> = {
@@ -89,6 +91,7 @@ const [deporte, setDeporte] = useState<"RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM"
 
   const watchId = useRef<string | null>(null);
   const ultimoPunto = useRef<PuntoGPS | null>(null);
+  const puntosGPS = useRef<PuntoGPS[]>([]);
 useEffect(() => {
   if (!registrando) return;
 
@@ -111,6 +114,7 @@ useEffect(() => {
 
       setDistancia(0);
       ultimoPunto.current = null;
+      puntosGPS.current = [];
       setRegistrando(true);
       setMensaje(`Registrando ${nombreDeporte(deporte)}...`);
 
@@ -129,6 +133,7 @@ await ActivityTracking.startTracking();
           const nuevoPunto = {
             latitude: posicion.coords.latitude,
             longitude: posicion.coords.longitude,
+            timestamp: posicion.timestamp,
           };
 
           if (ultimoPunto.current) {
@@ -142,6 +147,7 @@ await ActivityTracking.startTracking();
             }
           }
 
+          puntosGPS.current.push(nuevoPunto);
           ultimoPunto.current = nuevoPunto;
         setMensaje(
           `Registrando ${nombreDeporte(deporte)}. Precisión GPS: ${Math.round(posicion.coords.accuracy)} m`
@@ -176,6 +182,7 @@ await ActivityTracking.startTracking();
         distance: resultado.distance,
         movingTime: resultado.movingTime,
         startDate: new Date(resultado.startTime).toISOString(),
+        gpsPoints: puntosGPS.current,
       };
 
       const clavePendientes = "viarank_pending_activities";

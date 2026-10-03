@@ -303,7 +303,7 @@ export default function SportPage({
                     }}
                     style={menuItemStyle}
                   >
-                    Admin. de grupos
+                    Administración
                   </button>
                 )}
 

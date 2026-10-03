@@ -238,6 +238,9 @@ const [groupMembersLoading, setGroupMembersLoading] =
   useState(false);
 const [adminUsers, setAdminUsers] = useState<any[]>([]);
 
+const [adminGroups, setAdminGroups] = useState<SportGroup[]>([]);
+const [adminGroupsLoading, setAdminGroupsLoading] = useState(false);
+
 const [adminUsersLoading, setAdminUsersLoading] =
   useState(false);
   /* =====================================================
@@ -924,6 +927,38 @@ params.set(
 /* =====================================================
    CARGAR USUARIOS - SUPER_ADMIN
 ===================================================== */
+
+async function loadAdminGroups() {
+  try {
+    setAdminGroupsLoading(true);
+
+    const response = await fetch(
+      `${API_URL}/api/groups`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+        },
+      }
+    );
+
+    const data: GroupsResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data && "error" in data
+          ? String((data as any).error)
+          : "No se pudieron cargar los grupos de administración"
+      );
+    }
+
+    setAdminGroups(data.groups || []);
+  } catch (err) {
+    console.error("Error cargando grupos de administración:", err);
+    setAdminGroups([]);
+  } finally {
+    setAdminGroupsLoading(false);
+  }
+}
 
 async function loadAdminUsers() {
   if (!isSuperAdmin) {
@@ -2225,10 +2260,18 @@ disabled={emailLoading}
 
     return data.event;
   }
-  if (showSuperAdmin && isSuperAdmin) {
+  if (showSuperAdmin && (isSuperAdmin || groups.some((group) => group.administrator.id === user?.id))) {
     return (
       <SuperAdminPage
         onBack={() => setShowSuperAdmin(false)}
+        user={user}
+        groups={adminGroups}
+        groupsLoading={adminGroupsLoading}
+        adminUsers={adminUsers}
+        adminUsersLoading={adminUsersLoading}
+        groupMembers={groupMembers}
+        groupMembersLoading={groupMembersLoading}
+        onOpenGroup={loadGroupMembers}
       />
     );
   }
@@ -2302,9 +2345,8 @@ disabled={emailLoading}
             setShowCreateGroup(true);
           }}
           onOpenAdmin={() => {
-            if (isSuperAdmin) {
-              setShowSuperAdmin(true);
-            }
+            void loadAdminGroups();
+            setShowSuperAdmin(true);
           }}
           onLogout={logout}
           joinCode={joinCode}

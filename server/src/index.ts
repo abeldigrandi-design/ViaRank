@@ -2150,6 +2150,178 @@ async function getValidStravaAccessToken(
 }
 
 /* =========================================================
+   CONTROL DE ACTIVIDAD - STREAMS DE STRAVA
+========================================================= */
+
+type StravaSpeedPoint = {
+  time: number;
+  speedKmh: number | null;
+};
+
+async function getStravaSpeedStream(
+  activityId: string,
+  accessToken: string
+): Promise<StravaSpeedPoint[] | null> {
+  try {
+    const response = await fetch(
+      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,velocity_smooth&key_by_type=true`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error(
+        `No se pudieron obtener streams de Strava para ${activityId}:`,
+        response.status
+      );
+      return null;
+    }
+
+    const streams: any = await response.json();
+
+    const times = streams?.time?.data;
+    const velocities = streams?.velocity_smooth?.data;
+
+    if (
+      !Array.isArray(times) ||
+      !Array.isArray(velocities) ||
+      times.length < 2 ||
+      velocities.length < 2
+    ) {
+      return null;
+    }
+
+    const length = Math.min(
+      times.length,
+      velocities.length
+    );
+
+    const points: StravaSpeedPoint[] = [];
+
+    for (let index = 0; index < length; index++) {
+      const time = Number(times[index]);
+      const speedKmh =
+        Number(velocities[index]) * 3.6;
+
+      if (!Number.isFinite(time)) {
+        continue;
+      }
+
+      points.push({
+        time,
+        speedKmh: Number.isFinite(speedKmh) ? speedKmh : null,
+      });
+    }
+
+    return points.length >= 2
+      ? points
+      : null;
+  } catch (error) {
+    console.error(
+      `Error obteniendo streams de Strava para ${activityId}:`,
+      error
+    );
+    return null;
+  }
+}
+
+function getMaxContinuousSecondsAboveSpeed(
+  points: StravaSpeedPoint[],
+  referenceSpeedKmh: number
+): number {
+  let currentSeconds = 0;
+  let maxContinuousSeconds = 0;
+
+  for (let index = 1; index < points.length; index++) {
+    const previous = points[index - 1];
+    const current = points[index];
+
+    const intervalSeconds =
+      current.time - previous.time;
+
+    if (intervalSeconds <= 0) {
+      currentSeconds = 0;
+      continue;
+    }
+
+    if (
+      current.speedKmh !== null &&
+      previous.speedKmh !== null &&
+      current.speedKmh > referenceSpeedKmh
+    ) {
+      currentSeconds += intervalSeconds;
+
+      if (currentSeconds > maxContinuousSeconds) {
+        maxContinuousSeconds =
+          currentSeconds;
+      }
+    } else {
+      currentSeconds = 0;
+    }
+  }
+
+  return maxContinuousSeconds;
+}
+
+type ViaRankGpsPoint = {
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+};
+
+function getViaRankMaxContinuousSecondsAboveSpeed(
+  points: ViaRankGpsPoint[],
+  referenceSpeedKmh: number
+): number {
+  let currentSeconds = 0;
+  let maxContinuousSeconds = 0;
+
+  for (let index = 1; index < points.length; index++) {
+    const previous = points[index - 1];
+    const current = points[index];
+
+    const intervalSeconds =
+      (current.timestamp - previous.timestamp) / 1000;
+
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
+      currentSeconds = 0;
+      continue;
+    }
+
+    const lat1 = previous.latitude * Math.PI / 180;
+    const lat2 = current.latitude * Math.PI / 180;
+    const dLat = (current.latitude - previous.latitude) * Math.PI / 180;
+    const dLon = (current.longitude - previous.longitude) * Math.PI / 180;
+
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) *
+        Math.cos(lat2) *
+        Math.sin(dLon / 2) ** 2;
+
+    const distanceMeters =
+      2 * 6371000 * Math.asin(Math.sqrt(h));
+
+    const speedKmh =
+      (distanceMeters / intervalSeconds) * 3.6;
+
+    if (Number.isFinite(speedKmh) && speedKmh > referenceSpeedKmh) {
+      currentSeconds += intervalSeconds;
+      maxContinuousSeconds = Math.max(
+        maxContinuousSeconds,
+        currentSeconds
+      );
+    } else {
+      currentSeconds = 0;
+    }
+  }
+
+  return Math.floor(maxContinuousSeconds);
+}
+/* =========================================================
    IMPORTAR TODAS LAS ACTIVIDADES DESDE STRAVA
    PAGINACIÃ“N AUTOMÃTICA
 ========================================================= */
@@ -2378,7 +2550,8 @@ case "Wheelchair":
           continue;
         }
 
-        await prisma.activity.upsert({
+        const savedActivity =
+          await prisma.activity.upsert({
           where: {
             stravaId:
               String(
@@ -2476,6 +2649,97 @@ case "Wheelchair":
           },
         });
 
+        if (latestActivity) {
+          try {
+            const memberships =
+              await prisma.groupMember.findMany({
+                where: {
+                  userId: user.id,
+                  group: {
+                    sport: type,
+                    activityControlSpeed: {
+                      not: null,
+                    },
+                    activityControlMinutes: {
+                      not: null,
+                    },
+                  },
+                },
+                select: {
+                  group: {
+                    select: {
+                      id: true,
+                      activityControlSpeed: true,
+                      activityControlMinutes: true,
+                    },
+                  },
+                },
+              });
+
+            if (memberships.length > 0) {
+              const points =
+                await getStravaSpeedStream(
+                  String(activity.id),
+                  accessToken
+                );
+
+              if (points) {
+                for (const membership of memberships) {
+                  const referenceSpeed =
+                    membership.group.activityControlSpeed;
+                  const maximumMinutes =
+                    membership.group.activityControlMinutes;
+
+                  if (
+                    referenceSpeed === null ||
+                    maximumMinutes === null
+                  ) {
+                    continue;
+                  }
+
+                  const maxContinuousSeconds =
+                    getMaxContinuousSecondsAboveSpeed(
+                      points,
+                      referenceSpeed
+                    );
+
+                  await prisma.groupActivityReview.upsert({
+                    where: {
+                      groupId_activityId: {
+                        groupId: membership.group.id,
+                        activityId: savedActivity.id,
+                      },
+                    },
+                    update: {
+                      referenceSpeed,
+                      maximumMinutes,
+                      maxContinuousSeconds,
+                      needsReview:
+                        maxContinuousSeconds >
+                        maximumMinutes * 60,
+                    },
+                    create: {
+                      groupId: membership.group.id,
+                      activityId: savedActivity.id,
+                      referenceSpeed,
+                      maximumMinutes,
+                      maxContinuousSeconds,
+                      needsReview:
+                        maxContinuousSeconds >
+                        maximumMinutes * 60,
+                    },
+                  });
+                }
+              }
+            }
+          } catch (controlError) {
+            console.error(
+              `Error en Control de actividad para Strava ${activity.id}:`,
+              controlError
+            );
+          }
+        }
+
         imported++;
       }
 
@@ -2536,6 +2800,7 @@ app.post(
         distance,
         movingTime,
         startDate,
+        gpsPoints,
       } = req.body;
 
       if (
@@ -2609,6 +2874,98 @@ app.post(
               new Date(startDate),
           },
         });
+
+      const validGpsPoints: ViaRankGpsPoint[] =
+        Array.isArray(gpsPoints)
+          ? gpsPoints.filter(
+              (point: any) =>
+                point &&
+                Number.isFinite(point.latitude) &&
+                Number.isFinite(point.longitude) &&
+                Number.isFinite(point.timestamp)
+            )
+          : [];
+
+      if (validGpsPoints.length >= 2) {
+        try {
+          const memberships =
+            await prisma.groupMember.findMany({
+              where: {
+                userId,
+                group: {
+                  sport: type,
+                  activityControlSpeed: {
+                    not: null,
+                  },
+                  activityControlMinutes: {
+                    not: null,
+                  },
+                },
+              },
+              select: {
+                group: {
+                  select: {
+                    id: true,
+                    activityControlSpeed: true,
+                    activityControlMinutes: true,
+                  },
+                },
+              },
+            });
+
+          for (const membership of memberships) {
+            const referenceSpeed =
+              membership.group.activityControlSpeed;
+            const maximumMinutes =
+              membership.group.activityControlMinutes;
+
+            if (
+              referenceSpeed === null ||
+              maximumMinutes === null
+            ) {
+              continue;
+            }
+
+            const maxContinuousSeconds =
+              getViaRankMaxContinuousSecondsAboveSpeed(
+                validGpsPoints,
+                referenceSpeed
+              );
+
+            await prisma.groupActivityReview.upsert({
+              where: {
+                groupId_activityId: {
+                  groupId: membership.group.id,
+                  activityId: activity.id,
+                },
+              },
+              update: {
+                referenceSpeed,
+                maximumMinutes,
+                maxContinuousSeconds,
+                needsReview:
+                  maxContinuousSeconds >
+                  maximumMinutes * 60,
+              },
+              create: {
+                groupId: membership.group.id,
+                activityId: activity.id,
+                referenceSpeed,
+                maximumMinutes,
+                maxContinuousSeconds,
+                needsReview:
+                  maxContinuousSeconds >
+                  maximumMinutes * 60,
+              },
+            });
+          }
+        } catch (controlError) {
+          console.error(
+            "Error en Control de actividad ViaRank:",
+            controlError
+          );
+        }
+      }
 
       return res.json({
         success: true,
@@ -3918,7 +4275,11 @@ app.patch(
   async (req, res) => {
     try {
       const { groupId } = req.params;
-      const { visibility } = req.body;
+      const {
+        visibility,
+        activityControlSpeed,
+        activityControlMinutes,
+      } = req.body;
 
       const userId =
         getAuthenticatedUserId(req);
@@ -3970,23 +4331,77 @@ app.patch(
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenÃ©s permiso para administrar este grupo",
+            "No tenés permiso para administrar este grupo",
         });
       }
 
-      const normalizedVisibility =
-        visibility === "PRIVATE"
-          ? "PRIVATE"
-          : "PUBLIC";
+      const updateData: {
+        visibility?: "PUBLIC" | "PRIVATE";
+        activityControlSpeed?: number | null;
+        activityControlMinutes?: number | null;
+      } = {};
+
+      if (visibility !== undefined) {
+        if (
+          visibility !== "PUBLIC" &&
+          visibility !== "PRIVATE"
+        ) {
+          return res.status(400).json({
+            error: "Visibilidad inválida",
+          });
+        }
+
+        updateData.visibility = visibility;
+      }
+
+      if (activityControlSpeed !== undefined) {
+        if (
+          activityControlSpeed !== null &&
+          (
+            typeof activityControlSpeed !== "number" ||
+            !Number.isFinite(activityControlSpeed) ||
+            activityControlSpeed < 0
+          )
+        ) {
+          return res.status(400).json({
+            error:
+              "Velocidad de referencia inválida",
+          });
+        }
+
+        updateData.activityControlSpeed =
+          activityControlSpeed;
+      }
+
+      if (activityControlMinutes !== undefined) {
+        if (
+          activityControlMinutes !== null &&
+          (
+            !Number.isInteger(activityControlMinutes) ||
+            activityControlMinutes < 0
+          )
+        ) {
+          return res.status(400).json({
+            error: "Tiempo máximo inválido",
+          });
+        }
+
+        updateData.activityControlMinutes =
+          activityControlMinutes;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({
+          error: "No hay cambios para guardar",
+        });
+      }
 
       const updatedGroup =
         await prisma.sportGroup.update({
           where: {
             id: groupId,
           },
-          data: {
-            visibility: normalizedVisibility,
-          },
+          data: updateData,
         });
 
       return res.json({
