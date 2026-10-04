@@ -474,7 +474,45 @@ useEffect(() => {
         </p>
 
         {!registrando ? (
-          <button
+          <>
+            {!esNativo && (
+              <div
+                style={{
+                  marginBottom: "16px",
+                  padding: "14px 16px",
+                  border: "1px solid #f59e0b",
+                  borderRadius: "12px",
+                  background: "rgba(245, 158, 11, 0.10)",
+                  color: "#f8fafc",
+                  fontSize: "14px",
+                  lineHeight: 1.55,
+                }}
+              >
+                <div
+                  style={{
+                    color: "#fbbf24",
+                    fontWeight: 800,
+                    marginBottom: "6px",
+                  }}
+                >
+                  Registro desde la web
+                </div>
+                Momentáneamente, mientras completamos la habilitación de
+                ViaRank para su distribución en Google Play, el registro
+                desde la web requiere mantener la pantalla activa para
+                registrar correctamente la distancia.
+                <div style={{ marginTop: "8px", fontWeight: 700 }}>
+                  Recomendamos no utilizar esta opción para actividades
+                  prolongadas.
+                </div>
+                <div style={{ marginTop: "8px", color: "#cbd5e1" }}>
+                  Próximamente, desde la app ViaRank para Android, podrás
+                  registrar tu actividad con la pantalla apagada y reducir
+                  el consumo de batería.
+                </div>
+              </div>
+            )}
+            <button
             onClick={iniciar}
             style={{
               width: "100%",
@@ -489,7 +527,8 @@ useEffect(() => {
             }}
           >
             INICIAR
-          </button>
+            </button>
+          </>
         ) : (
           <button
             onClick={finalizar}
