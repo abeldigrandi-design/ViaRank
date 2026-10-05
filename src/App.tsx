@@ -176,7 +176,7 @@ function canManageGroup(
   >([]);
 
   const [sport, setSport] = useState("");
-  const [sportPage, setSportPage] = useState<string | null>(null);
+  const [sportPage, setSportPage] = useState<string | null>(() => internalReturn ? location.state?.returnSport ?? null : null);
   const [showSuperAdmin, setShowSuperAdmin] = useState(false);
   const [myActivityBySport, setMyActivityBySport] = useState<Record<string, RankingAthlete>>({});
   const [period, setPeriod] = useState("month");
@@ -2335,6 +2335,7 @@ disabled={emailLoading}
           groupsLoading={groupsLoading}
           period={period}
           profilePicture={user?.profilePicture}
+          user={user}
           canAccessGroupAdmin={
             isSuperAdmin ||
             groups.some((group) => group.administrator.id === user?.id)

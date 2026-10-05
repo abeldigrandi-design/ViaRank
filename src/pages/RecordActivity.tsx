@@ -298,7 +298,7 @@ useEffect(() => {
     >
       <div style={{ maxWidth: "520px", margin: "0 auto" }}>
         <button
-          onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user } })}
+          onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user, returnSport: location.state?.returnSport } })}
           disabled={registrando}
           style={{
             border: "none",

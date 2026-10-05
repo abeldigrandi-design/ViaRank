@@ -44,6 +44,7 @@ type Props = {
   groupsLoading: boolean;
   period: string;
   profilePicture?: string | null;
+  user?: any;
   canAccessGroupAdmin: boolean;
   isSuperAdmin: boolean;
   onCreateGroup: () => void;
@@ -94,6 +95,7 @@ export default function SportPage({
   groupsLoading,
   period,
   profilePicture,
+  user,
   canAccessGroupAdmin,
   isSuperAdmin,
   onCreateGroup,
@@ -310,7 +312,7 @@ export default function SportPage({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    navigate("/registrar-actividad");
+                    navigate("/registrar-actividad", { state: { user, returnSport: sport } });
                   }}
                   style={menuItemStyle}
                 >
