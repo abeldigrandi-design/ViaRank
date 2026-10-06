@@ -70,6 +70,7 @@ model User {
   groupMemberships   GroupMember[]
   administeredGroups SportGroup[]  @relation("GroupAdministrator")
   sessions           UserSession[]
+  travelCompanyAdministrations TravelCompanyAdministrator[]
 }
 
 model UserSession {
@@ -201,4 +202,138 @@ model GroupActivityReview {
   @@unique([groupId, activityId])
   @@index([groupId])
   @@index([activityId])
+}
+
+enum TravelCompanyAccessStatus {
+  PENDING
+  TRIAL
+  ACTIVE
+  EXEMPT
+  SUSPENDED
+  EXPIRED
+}
+
+enum TravelCompanyApplicationStatus {
+  PENDING
+  CONTACTED
+  APPROVED
+  REJECTED
+}
+
+model TravelCompany {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  logoUrl     String?
+  whatsapp    String?
+  email       String?
+
+  accessStatus     TravelCompanyAccessStatus @default(PENDING)
+  activationCode   String?                   @unique
+  activationUsedAt DateTime?
+  accessStartsAt   DateTime?
+  accessExpiresAt  DateTime?
+  planName         String?
+
+  administrators TravelCompanyAdministrator[]
+  trips          TravelTrip[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model TravelCompanyAdministrator {
+  id        String @id @default(cuid())
+  companyId String
+  userId    String
+  isPrimary Boolean @default(false)
+
+  company TravelCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, userId])
+  @@index([companyId])
+  @@index([userId])
+}
+
+enum TravelTripStatus {
+  DRAFT
+  PUBLISHED
+  FINISHED
+  CANCELLED
+}
+
+model TravelTrip {
+  id        String @id @default(cuid())
+  companyId String
+
+  company TravelCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  title       String
+  destination String
+  description String?
+
+  status       TravelTripStatus @default(DRAFT)
+  isFeatured   Boolean          @default(false)
+  displayOrder Int              @default(0)
+
+  startDate DateTime?
+  endDate   DateTime?
+  days      Int?
+  nights    Int?
+
+  totalDistanceKm Float?
+  elevationGain   Float?
+  difficulty      String?
+
+  price                  Float?
+  totalCapacity          Int?
+  externalReservedPlaces Int @default(0)
+
+  showDates      Boolean @default(true)
+  showDistance   Boolean @default(true)
+  showElevation  Boolean @default(true)
+  showDifficulty Boolean @default(true)
+  showPrice      Boolean @default(true)
+  showCapacity   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([displayOrder])
+}
+
+model TravelCompanyApplication {
+  id String @id @default(cuid())
+
+  companyName String
+  contactName String
+  email       String
+  phone       String?
+  whatsapp    String?
+
+  city        String?
+  country     String?
+  website     String?
+  description String?
+
+  status TravelCompanyApplicationStatus @default(PENDING)
+
+  adminNotes  String?
+  contactedAt DateTime?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
 }
