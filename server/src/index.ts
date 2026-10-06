@@ -5607,6 +5607,207 @@ app.get(
     }
   }
 );
+/*
+  Aprobar una solicitud de empresa.
+  Crea la empresa, genera un codigo unico de activacion
+  y vincula la solicitud con la empresa creada.
+  Acceso exclusivo para SUPER_ADMIN.
+*/
+app.post(
+  "/api/admin/travel/company-applications/:applicationId/approve",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const requester =
+        await prisma.user.findUnique({
+          where: {
+            id: requesterId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (
+        !requester ||
+        requester.role !== "SUPER_ADMIN"
+      ) {
+        return res.status(403).json({
+          error:
+            "Acceso exclusivo para SUPER_ADMIN",
+        });
+      }
+
+      const applicationId =
+        req.params.applicationId;
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            const application =
+              await tx.travelCompanyApplication.findUnique({
+                where: {
+                  id: applicationId,
+                },
+              });
+
+            if (!application) {
+              throw new Error(
+                "TRAVEL_APPLICATION_NOT_FOUND"
+              );
+            }
+
+            if (
+              application.status === "APPROVED" ||
+              application.companyId
+            ) {
+              throw new Error(
+                "TRAVEL_APPLICATION_ALREADY_APPROVED"
+              );
+            }
+
+            if (
+              application.status !== "PENDING" &&
+              application.status !== "CONTACTED"
+            ) {
+              throw new Error(
+                "TRAVEL_APPLICATION_NOT_APPROVABLE"
+              );
+            }
+
+            let activationCode = "";
+            let codeExists = true;
+
+            while (codeExists) {
+              activationCode =
+                `VRV-${randomBytes(6)
+                  .toString("hex")
+                  .toUpperCase()}`;
+
+              const existingCompany =
+                await tx.travelCompany.findUnique({
+                  where: {
+                    activationCode,
+                  },
+                  select: {
+                    id: true,
+                  },
+                });
+
+              codeExists = Boolean(
+                existingCompany
+              );
+            }
+
+            const company =
+              await tx.travelCompany.create({
+                data: {
+                  name: application.companyName,
+                  description:
+                    application.description,
+                  whatsapp:
+                    application.whatsapp,
+                  email:
+                    application.email,
+                  accessStatus: "PENDING",
+                  activationCode,
+                },
+              });
+
+            const updatedApplication =
+              await tx.travelCompanyApplication.update({
+                where: {
+                  id: application.id,
+                },
+                data: {
+                  status: "APPROVED",
+                  companyId: company.id,
+                  decidedAt: new Date(),
+                },
+              });
+
+            return {
+              company,
+              application:
+                updatedApplication,
+            };
+          }
+        );
+
+      return res.json({
+        success: true,
+        message:
+          "Solicitud aprobada. Empresa creada con codigo de activacion.",
+        company: {
+          id: result.company.id,
+          name: result.company.name,
+          accessStatus:
+            result.company.accessStatus,
+          activationCode:
+            result.company.activationCode,
+        },
+        application: {
+          id: result.application.id,
+          status:
+            result.application.status,
+          decidedAt:
+            result.application.decidedAt,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_APPLICATION_NOT_FOUND"
+      ) {
+        return res.status(404).json({
+          error: "Solicitud no encontrada",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_APPLICATION_ALREADY_APPROVED"
+      ) {
+        return res.status(409).json({
+          error:
+            "La solicitud ya fue aprobada",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_APPLICATION_NOT_APPROVABLE"
+      ) {
+        return res.status(409).json({
+          error:
+            "La solicitud no se encuentra en un estado aprobable",
+        });
+      }
+
+      console.error(
+        "Error aprobando solicitud de ViaRank Viajes:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo aprobar la solicitud",
+      });
+    }
+  }
+);
 app.listen(
   PORT,
   () => {

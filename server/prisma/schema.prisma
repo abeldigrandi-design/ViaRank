@@ -237,6 +237,7 @@ model TravelCompany {
 
   administrators TravelCompanyAdministrator[]
   trips          TravelTrip[]
+  application    TravelCompanyApplication?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -325,6 +326,9 @@ model TravelCompanyApplication {
   description String?
 
   status TravelCompanyApplicationStatus @default(PENDING)
+
+  companyId String?        @unique
+  company   TravelCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   adminNotes  String?
   contactedAt DateTime?
