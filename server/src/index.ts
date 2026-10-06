@@ -5432,6 +5432,181 @@ if (
    INICIAR SERVIDOR
 ========================================================= */
 
+/* =========================================================
+   VIARANK VIAJES - SOLICITUDES DE EMPRESAS
+========================================================= */
+
+/*
+  Solicitud publica para empresas interesadas en utilizar
+  ViaRank Viajes. Enviar una solicitud NO habilita a la
+  empresa automaticamente.
+*/
+app.post(
+  "/api/travel/company-applications",
+  async (req, res) => {
+    try {
+      const {
+        companyName,
+        contactName,
+        email,
+        phone,
+        whatsapp,
+        city,
+        country,
+        website,
+        description,
+      } = req.body ?? {};
+
+      const normalizedCompanyName =
+        typeof companyName === "string"
+          ? companyName.trim()
+          : "";
+
+      const normalizedContactName =
+        typeof contactName === "string"
+          ? contactName.trim()
+          : "";
+
+      const normalizedEmail =
+        typeof email === "string"
+          ? email.trim().toLowerCase()
+          : "";
+
+      if (
+        !normalizedCompanyName ||
+        !normalizedContactName ||
+        !normalizedEmail
+      ) {
+        return res.status(400).json({
+          error:
+            "Empresa, persona de contacto y email son obligatorios",
+        });
+      }
+
+      const application =
+        await prisma.travelCompanyApplication.create({
+          data: {
+            companyName: normalizedCompanyName,
+            contactName: normalizedContactName,
+            email: normalizedEmail,
+            phone:
+              typeof phone === "string" && phone.trim()
+                ? phone.trim()
+                : null,
+            whatsapp:
+              typeof whatsapp === "string" &&
+              whatsapp.trim()
+                ? whatsapp.trim()
+                : null,
+            city:
+              typeof city === "string" && city.trim()
+                ? city.trim()
+                : null,
+            country:
+              typeof country === "string" &&
+              country.trim()
+                ? country.trim()
+                : null,
+            website:
+              typeof website === "string" &&
+              website.trim()
+                ? website.trim()
+                : null,
+            description:
+              typeof description === "string" &&
+              description.trim()
+                ? description.trim()
+                : null,
+          },
+        });
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Solicitud recibida. ViaRank evaluara la solicitud antes de habilitar el acceso.",
+        application: {
+          id: application.id,
+          companyName: application.companyName,
+          status: application.status,
+          createdAt: application.createdAt,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Error creando solicitud de empresa ViaRank Viajes:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo registrar la solicitud de la empresa",
+      });
+    }
+  }
+);
+
+/*
+  Listado de solicitudes.
+  Acceso exclusivo para SUPER_ADMIN.
+*/
+app.get(
+  "/api/admin/travel/company-applications",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const requester = await prisma.user.findUnique({
+        where: {
+          id: requesterId,
+        },
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (
+        !requester ||
+        requester.role !== "SUPER_ADMIN"
+      ) {
+        return res.status(403).json({
+          error:
+            "Acceso exclusivo para SUPER_ADMIN",
+        });
+      }
+
+      const applications =
+        await prisma.travelCompanyApplication.findMany({
+          orderBy: {
+            createdAt: "desc",
+          },
+        });
+
+      return res.json({
+        success: true,
+        count: applications.length,
+        applications,
+      });
+    } catch (error) {
+      console.error(
+        "Error consultando solicitudes de ViaRank Viajes:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron consultar las solicitudes",
+      });
+    }
+  }
+);
 app.listen(
   PORT,
   () => {
