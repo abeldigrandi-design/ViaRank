@@ -5808,6 +5808,192 @@ app.post(
     }
   }
 );
+/*
+  Activar una empresa de ViaRank Viajes mediante su codigo.
+  El usuario autenticado que utiliza el codigo queda como
+  administrador principal de la empresa.
+*/
+app.post(
+  "/api/travel/companies/activate",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const rawCode =
+        typeof req.body?.activationCode === "string"
+          ? req.body.activationCode
+          : "";
+
+      const activationCode =
+        rawCode.trim().toUpperCase();
+
+      if (!activationCode) {
+        return res.status(400).json({
+          error:
+            "El codigo de activacion es obligatorio",
+        });
+      }
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            const company =
+              await tx.travelCompany.findUnique({
+                where: {
+                  activationCode,
+                },
+              });
+
+            if (!company) {
+              throw new Error(
+                "TRAVEL_ACTIVATION_CODE_INVALID"
+              );
+            }
+
+            if (company.activationUsedAt) {
+              throw new Error(
+                "TRAVEL_ACTIVATION_CODE_USED"
+              );
+            }
+
+            if (
+              company.accessStatus !== "PENDING"
+            ) {
+              throw new Error(
+                "TRAVEL_COMPANY_NOT_ACTIVATABLE"
+              );
+            }
+
+            const user =
+              await tx.user.findUnique({
+                where: {
+                  id: requesterId,
+                },
+                select: {
+                  id: true,
+                },
+              });
+
+            if (!user) {
+              throw new Error(
+                "TRAVEL_ACTIVATION_USER_NOT_FOUND"
+              );
+            }
+
+            const activatedAt = new Date();
+
+            const updatedCompany =
+              await tx.travelCompany.update({
+                where: {
+                  id: company.id,
+                },
+                data: {
+                  accessStatus: "ACTIVE",
+                  activationUsedAt:
+                    activatedAt,
+                  accessStartsAt:
+                    activatedAt,
+                },
+              });
+
+            const administrator =
+              await tx.travelCompanyAdministrator.create({
+                data: {
+                  companyId: company.id,
+                  userId: requesterId,
+                  isPrimary: true,
+                },
+              });
+
+            return {
+              company: updatedCompany,
+              administrator,
+            };
+          }
+        );
+
+      return res.json({
+        success: true,
+        message:
+          "Empresa activada correctamente",
+        company: {
+          id: result.company.id,
+          name: result.company.name,
+          accessStatus:
+            result.company.accessStatus,
+          accessStartsAt:
+            result.company.accessStartsAt,
+        },
+        administrator: {
+          userId:
+            result.administrator.userId,
+          isPrimary:
+            result.administrator.isPrimary,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_ACTIVATION_CODE_INVALID"
+      ) {
+        return res.status(404).json({
+          error:
+            "Codigo de activacion invalido",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_ACTIVATION_CODE_USED"
+      ) {
+        return res.status(409).json({
+          error:
+            "El codigo de activacion ya fue utilizado",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_COMPANY_NOT_ACTIVATABLE"
+      ) {
+        return res.status(409).json({
+          error:
+            "La empresa no se encuentra pendiente de activacion",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "TRAVEL_ACTIVATION_USER_NOT_FOUND"
+      ) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      console.error(
+        "Error activando empresa de ViaRank Viajes:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo activar la empresa",
+      });
+    }
+  }
+);
 app.listen(
   PORT,
   () => {
