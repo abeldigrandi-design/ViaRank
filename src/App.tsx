@@ -2703,7 +2703,7 @@ disabled={emailLoading}
         <section
           style={{
             position: "relative",
-             minHeight: isMobile ? "calc(100dvh - 110px)" : "500px",
+             minHeight: isMobile ? "calc(100dvh - 190px)" : "500px",
              marginBottom: isMobile ? "14px" : "26px",
             borderRadius: "22px",
             overflow: "hidden",
