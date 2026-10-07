@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -66,6 +66,23 @@ type ActivityReview = {
   };
 };
 
+type TravelCompanyApplication = {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  whatsapp?: string | null;
+  city?: string | null;
+  country?: string | null;
+  website?: string | null;
+  description?: string | null;
+  status: "PENDING" | "CONTACTED" | "APPROVED" | "REJECTED";
+  companyId?: string | null;
+  createdAt: string;
+  decidedAt?: string | null;
+};
+
 type Props = {
   onBack: () => void;
   user: AdminUser | null;
@@ -113,6 +130,20 @@ export default function SuperAdminPage({
   const [activityReviews, setActivityReviews] = useState<ActivityReview[]>([]);
   const [activityReviewsLoading, setActivityReviewsLoading] = useState(false);
   const [activityReviewsMessage, setActivityReviewsMessage] = useState("");
+  const [travelApplications, setTravelApplications] = useState<TravelCompanyApplication[]>([]);
+  const [travelApplicationsLoading, setTravelApplicationsLoading] = useState(false);
+  const [travelApplicationsMessage, setTravelApplicationsMessage] = useState("");
+  const [approvingTravelApplicationId, setApprovingTravelApplicationId] =
+    useState<string | null>(null);
+  const [travelActivationCode, setTravelActivationCode] = useState("");
+  const [travelActivatedCompanyName, setTravelActivatedCompanyName] =
+    useState("");
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      void loadTravelCompanyApplications();
+    }
+  }, [isSuperAdmin]);
 
   const administeredGroups = groups
     .filter(
@@ -395,6 +426,113 @@ export default function SuperAdminPage({
     }
   }
 
+
+  async function loadTravelCompanyApplications() {
+    if (!isSuperAdmin) {
+      return;
+    }
+
+    setTravelApplicationsLoading(true);
+    setTravelApplicationsMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/admin/travel/company-applications`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem(
+              "viarank_auth_token"
+            )}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setTravelApplications([]);
+        setTravelApplicationsMessage(
+          data.error ||
+            "No se pudieron cargar las solicitudes de empresas."
+        );
+        return;
+      }
+
+      setTravelApplications(
+        Array.isArray(data.applications)
+          ? data.applications
+          : []
+      );
+    } catch (error) {
+      console.error(
+        "Error cargando solicitudes de empresas:",
+        error
+      );
+      setTravelApplications([]);
+      setTravelApplicationsMessage(
+        "No se pudieron cargar las solicitudes de empresas."
+      );
+    } finally {
+      setTravelApplicationsLoading(false);
+    }
+  }
+
+  async function approveTravelCompanyApplication(
+    applicationId: string
+  ) {
+    if (!isSuperAdmin) {
+      return;
+    }
+
+    setApprovingTravelApplicationId(applicationId);
+    setTravelApplicationsMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/admin/travel/company-applications/${applicationId}/approve`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem(
+              "viarank_auth_token"
+            )}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setTravelApplicationsMessage(
+          data.error ||
+            "No se pudo aprobar la solicitud."
+        );
+        return;
+      }
+
+      setTravelActivationCode(
+        data.company?.activationCode ?? ""
+      );
+      setTravelActivatedCompanyName(
+        data.company?.name ?? ""
+      );
+      await loadTravelCompanyApplications();
+
+      setTravelApplicationsMessage(
+        `Empresa ${data.company?.name ?? ""} aprobada correctamente.`
+      );
+    } catch (error) {
+      console.error(
+        "Error aprobando solicitud de empresa:",
+        error
+      );
+      setTravelApplicationsMessage(
+        "No se pudo aprobar la solicitud."
+      );
+    } finally {
+      setApprovingTravelApplicationId(null);
+    }
+  }
 
   return (
     <div
@@ -1103,6 +1241,346 @@ export default function SuperAdminPage({
             </>
           )}
         </section>
+
+        {isSuperAdmin && !selectedGroup && (
+          <section
+            style={{
+              background: "#061a30",
+              border: "1px solid rgba(20,140,255,0.55)",
+              borderRadius: "16px",
+              padding: "16px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "12px",
+                marginBottom: "14px",
+              }}
+            >
+              <div>
+                <h2
+                  style={{
+                    margin: "0 0 4px",
+                    fontSize: "19px",
+                  }}
+                >
+                  ViaRank Viajes
+                </h2>
+
+                <div
+                  style={{
+                    color: "#9fb5cc",
+                    fontSize: "12px",
+                  }}
+                >
+                  Solicitudes de empresas organizadoras
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void loadTravelCompanyApplications()}
+                disabled={travelApplicationsLoading}
+                style={{
+                  border: "1px solid rgba(56,189,248,0.55)",
+                  borderRadius: "8px",
+                  background: "#082845",
+                  color: "#38bdf8",
+                  padding: "6px 10px",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  cursor: travelApplicationsLoading
+                    ? "default"
+                    : "pointer",
+                  opacity: travelApplicationsLoading ? 0.65 : 1,
+                }}
+              >
+                {travelApplicationsLoading ? "Cargando..." : "Actualizar"}
+              </button>
+            </div>
+
+            {travelActivationCode && (
+              <div
+                style={{
+                  marginBottom: "14px",
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(87,214,141,0.65)",
+                  background: "rgba(87,214,141,0.08)",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#57d68d",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    marginBottom: "5px",
+                  }}
+                >
+                  Empresa aprobada
+                </div>
+
+                <div
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {travelActivatedCompanyName}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
+                  <code
+                    style={{
+                      background: "#041426",
+                      border: "1px solid rgba(87,214,141,0.45)",
+                      borderRadius: "7px",
+                      padding: "7px 9px",
+                      color: "#ffffff",
+                      fontSize: "13px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {travelActivationCode}
+                  </code>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void navigator.clipboard.writeText(
+                        travelActivationCode
+                      )
+                    }
+                    style={{
+                      border: "1px solid rgba(87,214,141,0.6)",
+                      borderRadius: "7px",
+                      background: "#0b3a2b",
+                      color: "#8ff0b5",
+                      padding: "7px 10px",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Copiar código
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    color: "#9fb5cc",
+                    fontSize: "11px",
+                    marginTop: "7px",
+                  }}
+                >
+                  Entregá este código al administrador de la empresa para
+                  activar su acceso a ViaRank Viajes.
+                </div>
+              </div>
+            )}
+
+            {travelApplicationsMessage && (
+              <div
+                style={{
+                  marginBottom: "12px",
+                  color: "#9fb5cc",
+                  fontSize: "12px",
+                }}
+              >
+                {travelApplicationsMessage}
+              </div>
+            )}
+
+            {travelApplicationsLoading &&
+            travelApplications.length === 0 ? (
+              <p style={{ color: "#9fb5cc", margin: 0, fontSize: "12px" }}>
+                Cargando solicitudes...
+              </p>
+            ) : travelApplications.length === 0 ? (
+              <p style={{ color: "#9fb5cc", margin: 0, fontSize: "12px" }}>
+                No hay solicitudes de empresas.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                {travelApplications.map((application) => (
+                  <div
+                    key={application.id}
+                    style={{
+                      padding: "11px",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(20,140,255,0.38)",
+                      background: "#082845",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            color: "#ffffff",
+                            fontSize: "13px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {application.companyName}
+                        </div>
+
+                        <div
+                          style={{
+                            color: "#9fb5cc",
+                            fontSize: "11px",
+                            marginTop: "3px",
+                          }}
+                        >
+                          {application.contactName}
+                          {" · "}
+                          {application.email}
+                        </div>
+
+                        {(application.whatsapp || application.phone) && (
+                          <div
+                            style={{
+                              color: "#9fb5cc",
+                              fontSize: "11px",
+                              marginTop: "2px",
+                            }}
+                          >
+                            Contacto:{" "}
+                            {application.whatsapp || application.phone}
+                          </div>
+                        )}
+
+                        {(application.city || application.country) && (
+                          <div
+                            style={{
+                              color: "#9fb5cc",
+                              fontSize: "11px",
+                              marginTop: "2px",
+                            }}
+                          >
+                            {[application.city, application.country]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </div>
+                        )}
+
+                        {application.description && (
+                          <div
+                            style={{
+                              color: "#c8d7e6",
+                              fontSize: "11px",
+                              marginTop: "6px",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {application.description}
+                          </div>
+                        )}
+                      </div>
+
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          borderRadius: "999px",
+                          padding: "4px 7px",
+                          fontSize: "10px",
+                          fontWeight: 800,
+                          color:
+                            application.status === "APPROVED"
+                              ? "#8ff0b5"
+                              : application.status === "REJECTED"
+                                ? "#fda4af"
+                                : "#fbbf24",
+                          border:
+                            application.status === "APPROVED"
+                              ? "1px solid rgba(87,214,141,0.55)"
+                              : application.status === "REJECTED"
+                                ? "1px solid rgba(251,113,133,0.55)"
+                                : "1px solid rgba(251,191,36,0.55)",
+                        }}
+                      >
+                        {application.status === "PENDING"
+                          ? "PENDIENTE"
+                          : application.status === "CONTACTED"
+                            ? "CONTACTADA"
+                            : application.status === "APPROVED"
+                              ? "APROBADA"
+                              : "RECHAZADA"}
+                      </span>
+                    </div>
+
+                    {(application.status === "PENDING" ||
+                      application.status === "CONTACTED") && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          marginTop: "10px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void approveTravelCompanyApplication(
+                              application.id
+                            )
+                          }
+                          disabled={
+                            approvingTravelApplicationId === application.id
+                          }
+                          style={{
+                            border: "1px solid rgba(87,214,141,0.65)",
+                            borderRadius: "8px",
+                            background: "#0b3a2b",
+                            color: "#8ff0b5",
+                            padding: "7px 11px",
+                            fontSize: "11px",
+                            fontWeight: 900,
+                            cursor:
+                              approvingTravelApplicationId === application.id
+                                ? "default"
+                                : "pointer",
+                            opacity:
+                              approvingTravelApplicationId === application.id
+                                ? 0.65
+                                : 1,
+                          }}
+                        >
+                          {approvingTravelApplicationId === application.id
+                            ? "Aprobando..."
+                            : "APROBAR"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {isSuperAdmin && !selectedGroup && (
           <section
