@@ -6061,6 +6061,348 @@ app.get(
     }
   }
 );
+/*
+  Viajes administrados por una empresa de ViaRank Viajes.
+  Solo los administradores de esa empresa pueden acceder.
+*/
+app.get(
+  "/api/travel/companies/:companyId/trips",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const companyId =
+        String(req.params.companyId || "").trim();
+
+      const administration =
+        await prisma.travelCompanyAdministrator.findUnique({
+          where: {
+            companyId_userId: {
+              companyId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+                accessStatus: true,
+              },
+            },
+          },
+        });
+
+      if (!administration) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar esta empresa",
+        });
+      }
+
+      const trips =
+        await prisma.travelTrip.findMany({
+          where: {
+            companyId,
+          },
+          orderBy: [
+            {
+              displayOrder: "asc",
+            },
+            {
+              createdAt: "desc",
+            },
+          ],
+        });
+
+      return res.json({
+        success: true,
+        company: administration.company,
+        trips,
+      });
+    } catch (error) {
+      console.error(
+        "Error cargando viajes de empresa:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron cargar los viajes de la empresa",
+      });
+    }
+  }
+);
+
+/*
+  Crear un viaje general de ViaRank Viajes.
+  El tipo de viaje se comunica mediante su titulo,
+  descripcion y contenido, sin limitarlo a un deporte.
+*/
+app.post(
+  "/api/travel/companies/:companyId/trips",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const companyId =
+        String(req.params.companyId || "").trim();
+
+      const administration =
+        await prisma.travelCompanyAdministrator.findUnique({
+          where: {
+            companyId_userId: {
+              companyId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+                accessStatus: true,
+              },
+            },
+          },
+        });
+
+      if (!administration) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar esta empresa",
+        });
+      }
+
+      if (
+        administration.company.accessStatus !== "ACTIVE" &&
+        administration.company.accessStatus !== "TRIAL" &&
+        administration.company.accessStatus !== "EXEMPT"
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para crear viajes",
+        });
+      }
+
+      const {
+        title,
+        destination,
+        description,
+      } = req.body ?? {};
+
+      const normalizedTitle =
+        typeof title === "string"
+          ? title.trim()
+          : "";
+
+      const normalizedDestination =
+        typeof destination === "string"
+          ? destination.trim()
+          : "";
+
+      const normalizedDescription =
+        typeof description === "string" &&
+        description.trim()
+          ? description.trim()
+          : null;
+
+      if (!normalizedTitle) {
+        return res.status(400).json({
+          error:
+            "El título del viaje es obligatorio",
+        });
+      }
+
+      if (!normalizedDestination) {
+        return res.status(400).json({
+          error:
+            "El destino del viaje es obligatorio",
+        });
+      }
+
+      const trip =
+        await prisma.travelTrip.create({
+          data: {
+            companyId,
+            title: normalizedTitle,
+            destination: normalizedDestination,
+            description: normalizedDescription,
+            status: "DRAFT",
+          },
+        });
+
+      return res.status(201).json({
+        success: true,
+        trip,
+      });
+    } catch (error) {
+      console.error(
+        "Error creando viaje de empresa:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo crear el viaje",
+      });
+    }
+  }
+);
+
+/*
+  Editar un viaje general de ViaRank Viajes.
+  Solo los administradores de la empresa pueden modificarlo.
+*/
+app.patch(
+  "/api/travel/trips/:tripId",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          select: {
+            id: true,
+            companyId: true,
+            company: {
+              select: {
+                accessStatus: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const administration =
+        await prisma.travelCompanyAdministrator.findUnique({
+          where: {
+            companyId_userId: {
+              companyId: existingTrip.companyId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+      if (!administration) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar este viaje",
+        });
+      }
+
+      if (
+        existingTrip.company.accessStatus !== "ACTIVE" &&
+        existingTrip.company.accessStatus !== "TRIAL" &&
+        existingTrip.company.accessStatus !== "EXEMPT"
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const {
+        title,
+        destination,
+        description,
+      } = req.body ?? {};
+
+      const normalizedTitle =
+        typeof title === "string"
+          ? title.trim()
+          : "";
+
+      const normalizedDestination =
+        typeof destination === "string"
+          ? destination.trim()
+          : "";
+
+      const normalizedDescription =
+        typeof description === "string" &&
+        description.trim()
+          ? description.trim()
+          : null;
+
+      if (!normalizedTitle) {
+        return res.status(400).json({
+          error:
+            "El título del viaje es obligatorio",
+        });
+      }
+
+      if (!normalizedDestination) {
+        return res.status(400).json({
+          error:
+            "El destino del viaje es obligatorio",
+        });
+      }
+
+      const trip =
+        await prisma.travelTrip.update({
+          where: {
+            id: tripId,
+          },
+          data: {
+            title: normalizedTitle,
+            destination: normalizedDestination,
+            description: normalizedDescription,
+          },
+        });
+
+      return res.json({
+        success: true,
+        trip,
+      });
+    } catch (error) {
+      console.error(
+        "Error editando viaje de empresa:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo editar el viaje",
+      });
+    }
+  }
+);
+
 app.listen(
   PORT,
   () => {

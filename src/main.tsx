@@ -16,6 +16,7 @@ import ValidateActivity from "./pages/ValidateActivity";
 import RecordActivity from "./pages/RecordActivity";
 import ProfilePage from "./pages/ProfilePage";
 import TravelCompanyPage from "./pages/TravelCompanyPage";
+import TravelTripsPage from "./pages/TravelTripsPage";
 CapacitorApp.addListener("appUrlOpen", ({ url }) => {
   try {
     const incomingUrl = new URL(url);
@@ -51,6 +52,10 @@ createRoot(document.getElementById("root")!).render(
       <Route path="/registrar-actividad" element={<RecordActivity />} />
       <Route path="/mi-perfil" element={<ProfilePage />} />
       <Route path="/viajes/empresa" element={<TravelCompanyPage />} />
+      <Route
+        path="/viajes/empresa/:companyId/viajes"
+        element={<TravelTripsPage />}
+      />
 <Route
   path="/validar-actividad"
   element={<ValidateActivity />}

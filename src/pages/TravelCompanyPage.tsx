@@ -277,8 +277,7 @@ export default function TravelCompanyPage() {
               lineHeight: 1.5,
             }}
           >
-            Administrá los viajes deportivos de tu empresa
-            desde ViaRank.
+            Administrá los viajes de tu empresa desde ViaRank.
           </p>
 
           {loading ? (
@@ -396,6 +395,39 @@ export default function TravelCompanyPage() {
                       Empresa habilitada para administrar ViaRank
                       Viajes.
                     </div>
+                  )}
+
+                  {(company.accessStatus === "ACTIVE" ||
+                    company.accessStatus === "TRIAL" ||
+                    company.accessStatus === "EXEMPT") && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/viajes/empresa/${company.id}/viajes`,
+                          {
+                            state: {
+                              companyName: company.name,
+                            },
+                          }
+                        )
+                      }
+                      style={{
+                        width: "100%",
+                        marginTop: "12px",
+                        padding: "12px",
+                        borderRadius: "10px",
+                        border: "1px solid rgba(20,140,255,.65)",
+                        background:
+                          "linear-gradient(90deg, #087dff, #148cff)",
+                        color: "#ffffff",
+                        fontSize: "14px",
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ADMINISTRAR VIAJES
+                    </button>
                   )}
                 </div>
               ))}
