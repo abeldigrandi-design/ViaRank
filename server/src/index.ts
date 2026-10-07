@@ -3112,6 +3112,37 @@ const canView =
             startDate: true,
           },
         });
+const activePenalties =
+  groupId
+    ? await prisma.groupActivityPenalty.findMany({
+        where: {
+          groupId,
+          revertedAt: null,
+          activityId: {
+            in: activities.map(
+              (activity) => activity.id
+            ),
+          },
+        },
+        select: {
+          activityId: true,
+          reason: true,
+          rankingDistanceMeters: true,
+          appliedAt: true,
+        },
+      })
+    : [];
+
+const penaltyByActivityId =
+  new Map(
+    activePenalties.map(
+      (penalty) => [
+        penalty.activityId,
+        penalty,
+      ]
+    )
+  );
+
 const overlappingActivityIds =
   new Set<string>();
 
@@ -3150,6 +3181,27 @@ for (let i = 0; i < activities.length; i++) {
           (activity) => ({
             ...activity,
 hasOverlap: overlappingActivityIds.has(activity.id),
+            hasPendingVar:
+              overlappingActivityIds.has(activity.id) &&
+              !penaltyByActivityId.has(activity.id),
+            isPenalized:
+              penaltyByActivityId.has(activity.id),
+            penalty:
+              penaltyByActivityId.has(activity.id)
+                ? {
+                    reason:
+                      penaltyByActivityId.get(activity.id)!.reason,
+                    rankingDistanceKm:
+                      Number(
+                        (
+                          penaltyByActivityId.get(activity.id)!
+                            .rankingDistanceMeters / 1000
+                        ).toFixed(2)
+                      ),
+                    appliedAt:
+                      penaltyByActivityId.get(activity.id)!.appliedAt,
+                  }
+                : null,
             distanceKm: Number(
               (activity.distance / 1000).toFixed(2)
             ),
@@ -4061,6 +4113,34 @@ if (period === "year") {
       // DETECTAR ACTIVIDADES SUPERPUESTAS POR ATLETA
       // ---------------------------------------------------------
 
+      const activeGroupPenalties =
+        await prisma.groupActivityPenalty.findMany({
+          where: {
+            groupId,
+            revertedAt: null,
+            activityId: {
+              in: activities.map(
+                (activity) => activity.id
+              ),
+            },
+          },
+          select: {
+            activityId: true,
+            rankingDistanceMeters: true,
+            appliedAt: true,
+          },
+        });
+
+      const rankingPenaltyByActivityId =
+        new Map(
+          activeGroupPenalties.map(
+            (penalty) => [
+              penalty.activityId,
+              penalty.rankingDistanceMeters,
+            ]
+          )
+        );
+
       const overlappingActivityIds = new Set<string>();
       const activitiesByUser = new Map<string, typeof activities>();
 
@@ -4167,6 +4247,7 @@ if (period === "year") {
               activities: 1,
 
               distance:
+                rankingPenaltyByActivityId.get(activity.id) ??
                 activity.distance,
 
               movingTime:
@@ -4180,6 +4261,7 @@ if (period === "year") {
           existing.activities++;
 
           existing.distance +=
+            rankingPenaltyByActivityId.get(activity.id) ??
             activity.distance;
 
           existing.movingTime +=
@@ -4229,6 +4311,43 @@ hasOverlap: activities.some(
     activity.userId === athlete.userId &&
     overlappingActivityIds.has(activity.id)
 ),
+hasPendingVar: activities.some(
+  (activity) =>
+    activity.userId === athlete.userId &&
+    overlappingActivityIds.has(activity.id) &&
+    !rankingPenaltyByActivityId.has(activity.id)
+),
+hasPenalty: activities.some(
+  (activity) =>
+    activity.userId === athlete.userId &&
+    rankingPenaltyByActivityId.has(activity.id)
+),
+penalty: (() => {
+  const penalizedActivity = activities.find(
+    (activity) =>
+      activity.userId === athlete.userId &&
+      rankingPenaltyByActivityId.has(activity.id)
+  );
+
+  if (!penalizedActivity) {
+    return null;
+  }
+
+  const penalty = activeGroupPenalties.find(
+    (item) => item.activityId === penalizedActivity.id
+  );
+
+  if (!penalty) {
+    return null;
+  }
+
+  return {
+    rankingDistanceKm: Number(
+      (penalty.rankingDistanceMeters / 1000).toFixed(2)
+    ),
+    appliedAt: penalty.appliedAt,
+  };
+})(),
             })
           );
 
@@ -4421,6 +4540,321 @@ app.patch(
     }
   }
 );
+/* =========================================================
+   PENALIZACION VAR POR ACTIVIDADES SUPERPUESTAS
+========================================================= */
+
+app.post(
+  "/api/groups/:groupId/activity-penalties",
+  async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { activityIds } = req.body;
+
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      if (
+        !Array.isArray(activityIds) ||
+        activityIds.length < 2 ||
+        activityIds.some(
+          (id) => typeof id !== "string"
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Debés indicar al menos dos actividades",
+        });
+      }
+
+      const uniqueActivityIds =
+        Array.from(
+          new Set<string>(activityIds)
+        );
+
+      if (uniqueActivityIds.length < 2) {
+        return res.status(400).json({
+          error:
+            "Debés indicar al menos dos actividades diferentes",
+        });
+      }
+
+      const group =
+        await prisma.sportGroup.findUnique({
+          where: {
+            id: groupId,
+          },
+          select: {
+            id: true,
+            sport: true,
+            administratorId: true,
+            members: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      const requester =
+        await prisma.user.findUnique({
+          where: {
+            id: requesterId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (!requester) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
+        });
+      }
+
+      const canManage =
+        requester.role === "SUPER_ADMIN" ||
+        group.administratorId === requesterId;
+
+      if (!canManage) {
+        return res.status(403).json({
+          error:
+            "No tenés permiso para administrar este grupo",
+        });
+      }
+
+      const activities =
+        await prisma.activity.findMany({
+          where: {
+            id: {
+              in: uniqueActivityIds,
+            },
+          },
+          select: {
+            id: true,
+            userId: true,
+            type: true,
+            distance: true,
+            movingTime: true,
+            startDate: true,
+          },
+        });
+
+      if (
+        activities.length !==
+        uniqueActivityIds.length
+      ) {
+        return res.status(404).json({
+          error:
+            "Una o más actividades no fueron encontradas",
+        });
+      }
+
+      const athleteId =
+        activities[0].userId;
+
+      const sameAthlete =
+        activities.every(
+          (activity) =>
+            activity.userId === athleteId
+        );
+
+      if (!sameAthlete) {
+        return res.status(400).json({
+          error:
+            "Las actividades deben pertenecer al mismo atleta",
+        });
+      }
+
+      const athleteIsMember =
+        group.members.some(
+          (member) =>
+            member.userId === athleteId
+        );
+
+      if (!athleteIsMember) {
+        return res.status(400).json({
+          error:
+            "El atleta no pertenece a este grupo",
+        });
+      }
+
+      const correctSport =
+        activities.every(
+          (activity) =>
+            activity.type === group.sport
+        );
+
+      if (!correctSport) {
+        return res.status(400).json({
+          error:
+            "Las actividades no corresponden al deporte del grupo",
+        });
+      }
+
+      const overlappingIds =
+        new Set<string>();
+
+      for (
+        let i = 0;
+        i < activities.length;
+        i++
+      ) {
+        const a = activities[i];
+        const aStart =
+          new Date(a.startDate);
+        const aEnd =
+          new Date(
+            aStart.getTime() +
+              a.movingTime * 1000
+          );
+
+        for (
+          let j = i + 1;
+          j < activities.length;
+          j++
+        ) {
+          const b = activities[j];
+          const bStart =
+            new Date(b.startDate);
+          const bEnd =
+            new Date(
+              bStart.getTime() +
+                b.movingTime * 1000
+            );
+
+          const sameDay =
+            aStart.getFullYear() ===
+              bStart.getFullYear() &&
+            aStart.getMonth() ===
+              bStart.getMonth() &&
+            aStart.getDate() ===
+              bStart.getDate();
+
+          if (!sameDay) continue;
+
+          const overlaps =
+            aStart < bEnd &&
+            bStart < aEnd;
+
+          if (overlaps) {
+            overlappingIds.add(a.id);
+            overlappingIds.add(b.id);
+          }
+        }
+      }
+
+      const allOverlap =
+        activities.every(
+          (activity) =>
+            overlappingIds.has(activity.id)
+        );
+
+      if (!allOverlap) {
+        return res.status(400).json({
+          error:
+            "Las actividades seleccionadas no están superpuestas",
+        });
+      }
+
+      const existingActivePenalties =
+        await prisma.groupActivityPenalty.findMany({
+          where: {
+            groupId,
+            activityId: {
+              in: uniqueActivityIds,
+            },
+            revertedAt: null,
+          },
+          select: {
+            activityId: true,
+          },
+        });
+
+      if (existingActivePenalties.length > 0) {
+        return res.status(409).json({
+          error:
+            "La penalización ya fue aplicada",
+        });
+      }
+
+      const appliedAt = new Date();
+
+      const penalties =
+        await prisma.$transaction(
+          activities.map(
+            (activity) =>
+              prisma.groupActivityPenalty.upsert({
+                where: {
+                  groupId_activityId: {
+                    groupId,
+                    activityId: activity.id,
+                  },
+                },
+                create: {
+                  groupId,
+                  activityId: activity.id,
+                  appliedBy: requesterId,
+                  reason:
+                    "Actividades superpuestas",
+                  originalDistanceMeters:
+                    activity.distance,
+                  rankingDistanceMeters: 10,
+                  appliedAt,
+                },
+                update: {
+                  appliedBy: requesterId,
+                  reason:
+                    "Actividades superpuestas",
+                  originalDistanceMeters:
+                    activity.distance,
+                  rankingDistanceMeters: 10,
+                  appliedAt,
+                  revertedAt: null,
+                },
+              })
+          )
+        );
+
+      return res.json({
+        success: true,
+        message:
+          "Penalización aplicada",
+        rankingDistanceKm: 0.01,
+        appliedAt,
+        activityIds:
+          penalties.map(
+            (penalty) =>
+              penalty.activityId
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "Error aplicando penalización VAR:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo aplicar la penalización",
+      });
+    }
+  }
+);
+
 /* =========================================================
    EVENTOS DEL GRUPO
 ========================================================= */

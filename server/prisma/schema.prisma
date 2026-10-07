@@ -71,6 +71,7 @@ model User {
   administeredGroups SportGroup[]  @relation("GroupAdministrator")
   sessions           UserSession[]
   travelCompanyAdministrations TravelCompanyAdministrator[]
+  rankingPenaltiesApplied GroupActivityPenalty[] @relation("PenaltyAppliedBy")
 }
 
 model UserSession {
@@ -118,6 +119,7 @@ model Activity {
   createdAt     DateTime       @default(now())
 
   groupActivityReviews GroupActivityReview[]
+  groupActivityPenalties GroupActivityPenalty[]
 
   @@unique([source, externalId])
 }
@@ -138,6 +140,7 @@ model SportGroup {
   members GroupMember[]
   events  GroupEvent[]
   activityReviews GroupActivityReview[]
+  activityPenalties GroupActivityPenalty[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -183,6 +186,29 @@ model GroupEvent {
   @@index([eventDate])
 }
 
+model GroupActivityPenalty {
+  id String @id @default(cuid())
+
+  groupId    String
+  activityId String
+  appliedBy  String
+
+  group    SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  activity Activity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  reviewer User       @relation("PenaltyAppliedBy", fields: [appliedBy], references: [id])
+
+  reason                 String
+  originalDistanceMeters Float
+  rankingDistanceMeters  Float @default(10)
+
+  appliedAt  DateTime  @default(now())
+  revertedAt DateTime?
+
+  @@unique([groupId, activityId])
+  @@index([groupId])
+  @@index([activityId])
+  @@index([appliedBy])
+}
 model GroupActivityReview {
   id         String @id @default(cuid())
   groupId    String

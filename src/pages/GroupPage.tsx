@@ -13,6 +13,12 @@ type RankingAthlete = {
   distanceKm: number;
   hours: number;
   hasOverlap?: boolean;
+  hasPendingVar?: boolean;
+  hasPenalty?: boolean;
+  penalty?: {
+    rankingDistanceKm: number;
+    appliedAt: string;
+  } | null;
 };
 
 type ActivityHistoryItem = {
@@ -30,6 +36,13 @@ type ActivityHistoryItem = {
   distanceKm: number;
   endDate: string;
   hasOverlap?: boolean;
+  hasPendingVar?: boolean;
+  isPenalized?: boolean;
+  penalty?: {
+    reason: string;
+    rankingDistanceKm: number;
+    appliedAt: string;
+  } | null;
 };
 
 type Group = {
@@ -72,6 +85,8 @@ type Props = {
   onSexFilterChange: (sex: string) => void;
   onBack: () => void;
   onOpenAthlete: (athlete: RankingAthlete) => void;
+  canApplyPenalty: boolean;
+  onApplyPenalty: (activityIds: string[]) => Promise<unknown>;
   onCreateEvent: (
     groupId: string,
     eventData: {
@@ -103,8 +118,14 @@ export default function GroupPage({
   onSexFilterChange,
   onBack,
   onOpenAthlete,
+  canApplyPenalty,
+  onApplyPenalty,
   onCreateEvent,
 }: Props) {
+  const [selectedPenaltyActivities, setSelectedPenaltyActivities] = useState<string[]>([]);
+  const [applyingPenalty, setApplyingPenalty] = useState(false);
+  const [penaltyMessage, setPenaltyMessage] = useState("");
+
   const [activeTab, setActiveTab] = useState<"ranking" | "events">("ranking");
   const [showEventForm, setShowEventForm] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
@@ -120,6 +141,46 @@ export default function GroupPage({
   const [estimatedReturn, setEstimatedReturn] = useState("");
   const [plannedSpeed, setPlannedSpeed] = useState("");
   const [eventRules, setEventRules] = useState("");
+
+  function togglePenaltyActivity(activityId: string) {
+    setSelectedPenaltyActivities((current) =>
+      current.includes(activityId)
+        ? current.filter((id) => id !== activityId)
+        : [...current, activityId]
+    );
+    setPenaltyMessage("");
+  }
+
+  async function handleApplyPenalty() {
+    if (selectedPenaltyActivities.length < 2) {
+      setPenaltyMessage("Seleccioná al menos dos actividades superpuestas.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Confirmás aplicar la penalización VAR? Las actividades seleccionadas computarán 0,01 km cada una únicamente en el ranking de este grupo."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setApplyingPenalty(true);
+      setPenaltyMessage("");
+
+      await onApplyPenalty(selectedPenaltyActivities);
+
+      setSelectedPenaltyActivities([]);
+      setPenaltyMessage("Penalización aplicada correctamente.");
+    } catch (error) {
+      setPenaltyMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo aplicar la penalización."
+      );
+    } finally {
+      setApplyingPenalty(false);
+    }
+  }
 
   async function loadEvents() {
     try {
@@ -652,26 +713,65 @@ export default function GroupPage({
                               marginLeft: "7px",
                             }}
                           >
-                            <span
-                              title="Posible superposición de actividades"
+                            <button
+                              type="button"
+                              title={
+                                athlete.hasPenalty
+                                  ? "Ver penalización aplicada"
+                                  : "Posible superposición de actividades"
+                              }
+                              onClick={(event) => {
+                                event.stopPropagation();
+
+                                if (!athlete.hasPenalty || !athlete.penalty) {
+                                  return;
+                                }
+
+                                window.alert(
+                                  "Regulación ViaRank · Rankings Deportivos\n\n" +
+                                    "Penalización aplicada\n\n" +
+                                    "Motivo: actividades superpuestas\n" +
+                                    "Actividad computada: 0,01 km\n" +
+                                    "Aplicación: " +
+                                    new Date(
+                                      athlete.penalty.appliedAt
+                                    ).toLocaleString("es-AR")
+                                );
+                              }}
                               style={{
-                                display: "inline-block",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
                                 width: "15px",
                                 height: "9px",
+                                padding: 0,
                                 borderRadius: "2px",
                                 background: "#ffff00",
                                 border: "1px solid #e1c900",
-                              }}
-                            />
-                            <strong
-                              style={{
-                                color: "#ff3434",
-                                fontSize: "10px",
-                                animation: "viarankVarBlink 1s infinite",
+                                color: "#282000",
+                                fontSize: "8px",
+                                lineHeight: 1,
+                                fontWeight: 900,
+                                cursor:
+                                  athlete.hasPenalty && athlete.penalty
+                                    ? "pointer"
+                                    : "default",
                               }}
                             >
-                              VAR
-                            </strong>
+                              {athlete.hasPenalty ? "?" : ""}
+                            </button>
+
+                            {athlete.hasPendingVar && (
+                              <strong
+                                style={{
+                                  color: "#ff3434",
+                                  fontSize: "10px",
+                                  animation: "viarankVarBlink 1s infinite",
+                                }}
+                              >
+                                VAR
+                              </strong>
+                            )}
                           </span>
                         )}
                       </div>
@@ -736,6 +836,24 @@ export default function GroupPage({
                                   gap: "7px",
                                 }}
                               >
+                                {canApplyPenalty && activity.hasPendingVar && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPenaltyActivities.includes(activity.id)}
+                                    onChange={() => togglePenaltyActivity(activity.id)}
+                                    onClick={(event) => event.stopPropagation()}
+                                    aria-label={"Seleccionar " + activity.name + " para penalización"}
+                                    style={{
+                                      width: "17px",
+                                      height: "17px",
+                                      margin: 0,
+                                      cursor: "pointer",
+                                      accentColor: "#ffcc00",
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                )}
+
                                 <strong
                                   style={{
                                     color: "#fff",
@@ -746,18 +864,54 @@ export default function GroupPage({
                                 </strong>
 
                                 {activity.hasOverlap && (
-                                  <span
-                                    title="Actividad con posible superposición"
+                                  <button
+                                    type="button"
+                                    title={
+                                      activity.isPenalized
+                                        ? "Ver penalización aplicada"
+                                        : "Actividad con posible superposición"
+                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+
+                                      if (!activity.isPenalized || !activity.penalty) {
+                                        return;
+                                      }
+
+                                      window.alert(
+                                        "Regulación ViaRank · Rankings Deportivos\n\n" +
+                                          "Penalización aplicada\n\n" +
+                                          "Motivo: actividades superpuestas\n" +
+                                          "Actividad computada: 0,01 km\n" +
+                                          "Aplicación: " +
+                                          new Date(
+                                            activity.penalty.appliedAt
+                                          ).toLocaleString("es-AR")
+                                      );
+                                    }}
                                     style={{
-                                      display: "inline-block",
-                                      width: "15px",
-                                      height: "9px",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      width: "17px",
+                                      height: "11px",
+                                      padding: 0,
                                       borderRadius: "2px",
                                       background: "#ffff00",
                                       border: "1px solid #e1c900",
+                                      color: "#282000",
+                                      fontSize: "9px",
+                                      lineHeight: 1,
+                                      fontWeight: 900,
                                       flexShrink: 0,
+                                      cursor:
+                                        activity.isPenalized && activity.penalty
+                                          ? "pointer"
+                                          : "default",
                                     }}
-                                  />
+                                  >
+                                    {activity.isPenalized ? "?" : ""}
+                                  </button>
                                 )}
                               </div>
 
@@ -779,6 +933,78 @@ export default function GroupPage({
                             </div>
                           ))
                         )}
+
+                        {canApplyPenalty &&
+                          activityHistory.some(
+                            (activity) => activity.hasPendingVar
+                          ) && (
+                            <div
+                              style={{
+                                marginTop: "12px",
+                                paddingTop: "12px",
+                                borderTop: "1px solid rgba(56, 189, 248, 0.20)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  color: "#9db6ce",
+                                  fontSize: "11px",
+                                  marginBottom: "8px",
+                                }}
+                              >
+                                Seleccionadas: {selectedPenaltyActivities.length}
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={
+                                  applyingPenalty ||
+                                  selectedPenaltyActivities.length < 2
+                                }
+                                onClick={handleApplyPenalty}
+                                style={{
+                                  width: "100%",
+                                  padding: "10px 12px",
+                                  borderRadius: "9px",
+                                  border: "1px solid #ff4d4d",
+                                  background:
+                                    selectedPenaltyActivities.length >= 2 &&
+                                    !applyingPenalty
+                                      ? "#a51f2b"
+                                      : "#493039",
+                                  color: "#fff",
+                                  fontSize: "12px",
+                                  fontWeight: 900,
+                                  cursor:
+                                    selectedPenaltyActivities.length >= 2 &&
+                                    !applyingPenalty
+                                      ? "pointer"
+                                      : "not-allowed",
+                                  opacity:
+                                    selectedPenaltyActivities.length >= 2
+                                      ? 1
+                                      : 0.65,
+                                }}
+                              >
+                                {applyingPenalty
+                                  ? "APLICANDO PENALIZACIÓN..."
+                                  : "APLICAR PENALIZACIÓN"}
+                              </button>
+
+                              {penaltyMessage && (
+                                <div
+                                  style={{
+                                    marginTop: "8px",
+                                    color: "#d7e7f5",
+                                    fontSize: "11px",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {penaltyMessage}
+                                </div>
+                              )}
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>

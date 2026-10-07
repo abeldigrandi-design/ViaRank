@@ -29,6 +29,12 @@ type RankingAthlete = {
   distanceKm: number;
   hours: number;
 hasOverlap?: boolean;
+hasPendingVar?: boolean;
+hasPenalty?: boolean;
+  penalty?: {
+    rankingDistanceKm: number;
+    appliedAt: string;
+  } | null;
 };
 type ActivityHistoryItem = {
   id: string;
@@ -45,6 +51,13 @@ type ActivityHistoryItem = {
   distanceKm: number;
   endDate: string;
 hasOverlap?: boolean;
+hasPendingVar?: boolean;
+isPenalized?: boolean;
+penalty?: {
+  reason: string;
+  rankingDistanceKm: number;
+  appliedAt: string;
+} | null;
 };
 
 type ActivityHistoryResponse = {
@@ -1182,6 +1195,50 @@ async function loadActivityHistory(
     setActivityHistoryLoading(false);
   }
 }
+async function applyActivityPenalty(
+  activityIds: string[]
+) {
+  if (!selectedGroup) {
+    throw new Error("No hay un grupo seleccionado.");
+  }
+
+  const response = await fetch(
+    `${API_URL}/api/groups/${selectedGroup.id}/activity-penalties`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization:
+          "Bearer " + localStorage.getItem(
+            "viarank_auth_token"
+          ),
+      },
+      body: JSON.stringify({
+        activityIds,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+        "No se pudo aplicar la penalización."
+    );
+  }
+
+  await loadGroupRanking(selectedGroup.id);
+
+  if (activityHistoryAthlete) {
+    await loadActivityHistory(
+      activityHistoryAthlete
+    );
+  }
+
+  return data;
+}
+
 /* =====================================================
    CARGAR RANKING DEL GRUPO
 ===================================================== */
@@ -2288,6 +2345,8 @@ disabled={emailLoading}
         activityHistory={activityHistory}
         activityHistoryLoading={activityHistoryLoading}
         activityHistoryAthlete={activityHistoryAthlete}
+        canApplyPenalty={user?.role === "SUPER_ADMIN" || selectedGroup.administrator.id === user?.id}
+        onApplyPenalty={applyActivityPenalty}
         onCreateEvent={createGroupEvent}
         onPeriodChange={setPeriod}
         onSexFilterChange={setGroupSexFilter}
