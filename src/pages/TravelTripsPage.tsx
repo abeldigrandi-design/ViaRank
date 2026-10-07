@@ -84,6 +84,16 @@ export default function TravelTripsPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editDestination, setEditDestination] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editDays, setEditDays] = useState("");
+  const [editNights, setEditNights] = useState("");
+  const [editDistance, setEditDistance] = useState("");
+  const [editElevation, setEditElevation] = useState("");
+  const [editDifficulty, setEditDifficulty] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editCapacity, setEditCapacity] = useState("");
+  const [editExternalReserved, setEditExternalReserved] = useState("0");
   const [savingEdit, setSavingEdit] = useState(false);
 
   async function loadTrips() {
@@ -216,6 +226,22 @@ export default function TravelTripsPage() {
     setEditTitle(trip.title);
     setEditDestination(trip.destination);
     setEditDescription(trip.description ?? "");
+    setEditStartDate(trip.startDate ? trip.startDate.slice(0, 10) : "");
+    setEditEndDate(trip.endDate ? trip.endDate.slice(0, 10) : "");
+    setEditDays(trip.days !== null ? String(trip.days) : "");
+    setEditNights(trip.nights !== null ? String(trip.nights) : "");
+    setEditDistance(
+      trip.totalDistanceKm !== null ? String(trip.totalDistanceKm) : ""
+    );
+    setEditElevation(
+      trip.elevationGain !== null ? String(trip.elevationGain) : ""
+    );
+    setEditDifficulty(trip.difficulty ?? "");
+    setEditPrice(trip.price !== null ? String(trip.price) : "");
+    setEditCapacity(
+      trip.totalCapacity !== null ? String(trip.totalCapacity) : ""
+    );
+    setEditExternalReserved(String(trip.externalReservedPlaces ?? 0));
     setShowCreateForm(false);
     setMessage("");
   }
@@ -225,6 +251,16 @@ export default function TravelTripsPage() {
     setEditTitle("");
     setEditDestination("");
     setEditDescription("");
+    setEditStartDate("");
+    setEditEndDate("");
+    setEditDays("");
+    setEditNights("");
+    setEditDistance("");
+    setEditElevation("");
+    setEditDifficulty("");
+    setEditPrice("");
+    setEditCapacity("");
+    setEditExternalReserved("0");
     setMessage("");
   }
 
@@ -266,6 +302,16 @@ export default function TravelTripsPage() {
             title: normalizedTitle,
             destination: normalizedDestination,
             description: normalizedDescription || null,
+            startDate: editStartDate || null,
+            endDate: editEndDate || null,
+            days: editDays || null,
+            nights: editNights || null,
+            totalDistanceKm: editDistance || null,
+            elevationGain: editElevation || null,
+            difficulty: editDifficulty.trim() || null,
+            price: editPrice || null,
+            totalCapacity: editCapacity || null,
+            externalReservedPlaces: editExternalReserved || "0",
           }),
         }
       );
@@ -672,6 +718,116 @@ export default function TravelTripsPage() {
                           marginBottom: "10px",
                         }}
                       />
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "8px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <div>
+                          <div style={{ color: "#9fb8cf", fontSize: "11px", marginBottom: "4px" }}>
+                            FECHA DE INICIO
+                          </div>
+                          <input
+                            type="date"
+                            value={editStartDate}
+                            onChange={(event) => setEditStartDate(event.target.value)}
+                            style={fieldStyle}
+                          />
+                        </div>
+
+                        <div>
+                          <div style={{ color: "#9fb8cf", fontSize: "11px", marginBottom: "4px" }}>
+                            FECHA DE FIN
+                          </div>
+                          <input
+                            type="date"
+                            value={editEndDate}
+                            onChange={(event) => setEditEndDate(event.target.value)}
+                            style={fieldStyle}
+                          />
+                        </div>
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editDays}
+                          onChange={(event) => setEditDays(event.target.value)}
+                          placeholder="Días"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editNights}
+                          onChange={(event) => setEditNights(event.target.value)}
+                          placeholder="Noches"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={editDistance}
+                          onChange={(event) => setEditDistance(event.target.value)}
+                          placeholder="Distancia total estimada (km)"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={editElevation}
+                          onChange={(event) => setEditElevation(event.target.value)}
+                          placeholder="Desnivel (m)"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          value={editDifficulty}
+                          onChange={(event) => setEditDifficulty(event.target.value)}
+                          placeholder="Dificultad"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editPrice}
+                          onChange={(event) => setEditPrice(event.target.value)}
+                          placeholder="Precio"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editCapacity}
+                          onChange={(event) => setEditCapacity(event.target.value)}
+                          placeholder="Cupo interno (solo empresa)"
+                          style={fieldStyle}
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={editExternalReserved}
+                          onChange={(event) => setEditExternalReserved(event.target.value)}
+                          placeholder="Reservados fuera de ViaRank"
+                          style={fieldStyle}
+                        />
+                      </div>
 
                       <div
                         style={{

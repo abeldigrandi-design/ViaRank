@@ -6341,6 +6341,16 @@ app.patch(
         title,
         destination,
         description,
+        startDate,
+        endDate,
+        days,
+        nights,
+        totalDistanceKm,
+        elevationGain,
+        difficulty,
+        price,
+        totalCapacity,
+        externalReservedPlaces,
       } = req.body ?? {};
 
       const normalizedTitle =
@@ -6359,6 +6369,41 @@ app.patch(
           ? description.trim()
           : null;
 
+      const normalizedDifficulty =
+        typeof difficulty === "string" &&
+        difficulty.trim()
+          ? difficulty.trim()
+          : null;
+
+      const parseOptionalNumber = (
+        value: unknown
+      ): number | null => {
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      };
+
+      const normalizedDays = parseOptionalNumber(days);
+      const normalizedNights = parseOptionalNumber(nights);
+      const normalizedDistance = parseOptionalNumber(totalDistanceKm);
+      const normalizedElevation = parseOptionalNumber(elevationGain);
+      const normalizedPrice = parseOptionalNumber(price);
+      const normalizedCapacity = parseOptionalNumber(totalCapacity);
+
+      const normalizedExternalReserved =
+        externalReservedPlaces === null ||
+        externalReservedPlaces === undefined ||
+        externalReservedPlaces === ""
+          ? 0
+          : Number(externalReservedPlaces);
+
       if (!normalizedTitle) {
         return res.status(400).json({
           error:
@@ -6373,6 +6418,103 @@ app.patch(
         });
       }
 
+      const numericValues = [
+        normalizedDays,
+        normalizedNights,
+        normalizedDistance,
+        normalizedElevation,
+        normalizedPrice,
+        normalizedCapacity,
+        normalizedExternalReserved,
+      ];
+
+      if (
+        numericValues.some(
+          (value) =>
+            value !== null &&
+            (!Number.isFinite(value) || value < 0)
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Los valores numéricos deben ser válidos y no negativos",
+        });
+      }
+
+      if (normalizedDays !== null && !Number.isInteger(normalizedDays)) {
+        return res.status(400).json({
+          error: "Los días deben ser un número entero",
+        });
+      }
+
+      if (normalizedNights !== null && !Number.isInteger(normalizedNights)) {
+        return res.status(400).json({
+          error: "Las noches deben ser un número entero",
+        });
+      }
+
+      if (normalizedCapacity !== null && !Number.isInteger(normalizedCapacity)) {
+        return res.status(400).json({
+          error: "La capacidad debe ser un número entero",
+        });
+      }
+
+      if (!Number.isInteger(normalizedExternalReserved)) {
+        return res.status(400).json({
+          error:
+            "Las reservas externas deben ser un número entero",
+        });
+      }
+
+      if (
+        normalizedCapacity !== null &&
+        normalizedExternalReserved > normalizedCapacity
+      ) {
+        return res.status(400).json({
+          error:
+            "Las reservas externas no pueden superar la capacidad total",
+        });
+      }
+
+      const normalizedStartDate =
+        typeof startDate === "string" && startDate.trim()
+          ? new Date(startDate)
+          : null;
+
+      const normalizedEndDate =
+        typeof endDate === "string" && endDate.trim()
+          ? new Date(endDate)
+          : null;
+
+      if (
+        normalizedStartDate &&
+        Number.isNaN(normalizedStartDate.getTime())
+      ) {
+        return res.status(400).json({
+          error: "La fecha de inicio no es válida",
+        });
+      }
+
+      if (
+        normalizedEndDate &&
+        Number.isNaN(normalizedEndDate.getTime())
+      ) {
+        return res.status(400).json({
+          error: "La fecha de finalización no es válida",
+        });
+      }
+
+      if (
+        normalizedStartDate &&
+        normalizedEndDate &&
+        normalizedEndDate < normalizedStartDate
+      ) {
+        return res.status(400).json({
+          error:
+            "La fecha de finalización no puede ser anterior a la fecha de inicio",
+        });
+      }
+
       const trip =
         await prisma.travelTrip.update({
           where: {
@@ -6382,6 +6524,16 @@ app.patch(
             title: normalizedTitle,
             destination: normalizedDestination,
             description: normalizedDescription,
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate,
+            days: normalizedDays,
+            nights: normalizedNights,
+            totalDistanceKm: normalizedDistance,
+            elevationGain: normalizedElevation,
+            difficulty: normalizedDifficulty,
+            price: normalizedPrice,
+            totalCapacity: normalizedCapacity,
+            externalReservedPlaces: normalizedExternalReserved,
           },
         });
 
