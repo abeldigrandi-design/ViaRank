@@ -5994,6 +5994,73 @@ app.post(
     }
   }
 );
+/*
+  Empresas de ViaRank Viajes administradas por el usuario autenticado.
+  Permite volver a ingresar sin reutilizar el codigo de activacion.
+*/
+app.get(
+  "/api/travel/companies/mine",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const administrations =
+        await prisma.travelCompanyAdministrator.findMany({
+          where: {
+            userId: requesterId,
+          },
+          select: {
+            isPrimary: true,
+            company: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                logoUrl: true,
+                whatsapp: true,
+                email: true,
+                accessStatus: true,
+                accessStartsAt: true,
+                accessExpiresAt: true,
+                planName: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        });
+
+      return res.json({
+        success: true,
+        companies: administrations.map(
+          (administration) => ({
+            ...administration.company,
+            isPrimaryAdministrator:
+              administration.isPrimary,
+          })
+        ),
+      });
+    } catch (error) {
+      console.error(
+        "Error cargando empresas administradas de ViaRank Viajes:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron cargar las empresas de ViaRank Viajes",
+      });
+    }
+  }
+);
 app.listen(
   PORT,
   () => {

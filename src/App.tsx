@@ -2562,6 +2562,29 @@ disabled={emailLoading}
                         margin: "4px 8px",
                       }}
                     />
+                  <button
+  onClick={() => {
+    setMenuOpen(false);
+    navigate("/viajes/empresa", { state: { user } });
+  }}
+  style={{
+    width: "100%",
+    padding: "10px 12px",
+    border: "none",
+    background: "transparent",
+    borderRadius: "9px",
+    textAlign: "left",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#f8fafc",
+  }}
+>
+  ViaRank Viajes
+</button>
+
+<div style={{ height: "1px", background: "rgba(20,140,255,0.35)", margin: "4px 8px" }} />
+
                  <button
   onClick={() => {
     setMenuOpen(false);
