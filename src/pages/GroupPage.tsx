@@ -152,8 +152,8 @@ export default function GroupPage({
   }
 
   async function handleApplyPenalty() {
-    if (selectedPenaltyActivities.length < 2) {
-      setPenaltyMessage("Seleccioná al menos dos actividades superpuestas.");
+    if (selectedPenaltyActivities.length < 1) {
+      setPenaltyMessage("Seleccioná al menos una actividad superpuesta.");
       return;
     }
 
@@ -959,7 +959,7 @@ export default function GroupPage({
                                 type="button"
                                 disabled={
                                   applyingPenalty ||
-                                  selectedPenaltyActivities.length < 2
+                                  selectedPenaltyActivities.length < 1
                                 }
                                 onClick={handleApplyPenalty}
                                 style={{
@@ -968,7 +968,7 @@ export default function GroupPage({
                                   borderRadius: "9px",
                                   border: "1px solid #ff4d4d",
                                   background:
-                                    selectedPenaltyActivities.length >= 2 &&
+                                    selectedPenaltyActivities.length >= 1 &&
                                     !applyingPenalty
                                       ? "#a51f2b"
                                       : "#493039",
@@ -976,12 +976,12 @@ export default function GroupPage({
                                   fontSize: "12px",
                                   fontWeight: 900,
                                   cursor:
-                                    selectedPenaltyActivities.length >= 2 &&
+                                    selectedPenaltyActivities.length >= 1 &&
                                     !applyingPenalty
                                       ? "pointer"
                                       : "not-allowed",
                                   opacity:
-                                    selectedPenaltyActivities.length >= 2
+                                    selectedPenaltyActivities.length >= 1
                                       ? 1
                                       : 0.65,
                                 }}

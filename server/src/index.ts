@@ -4562,14 +4562,14 @@ app.post(
 
       if (
         !Array.isArray(activityIds) ||
-        activityIds.length < 2 ||
+        activityIds.length < 1 ||
         activityIds.some(
           (id) => typeof id !== "string"
         )
       ) {
         return res.status(400).json({
           error:
-            "Debés indicar al menos dos actividades",
+            "Debés indicar al menos una actividad",
         });
       }
 
@@ -4578,10 +4578,10 @@ app.post(
           new Set<string>(activityIds)
         );
 
-      if (uniqueActivityIds.length < 2) {
+      if (uniqueActivityIds.length < 1) {
         return res.status(400).json({
           error:
-            "Debés indicar al menos dos actividades diferentes",
+            "Debés indicar al menos una actividad",
         });
       }
 
@@ -4705,68 +4705,64 @@ app.post(
         });
       }
 
-      const overlappingIds =
-        new Set<string>();
+      const comparisonActivities =
+        await prisma.activity.findMany({
+          where: {
+            userId: athleteId,
+            type: group.sport,
+          },
+          select: {
+            id: true,
+            movingTime: true,
+            startDate: true,
+          },
+        });
 
-      for (
-        let i = 0;
-        i < activities.length;
-        i++
-      ) {
-        const a = activities[i];
-        const aStart =
-          new Date(a.startDate);
-        const aEnd =
-          new Date(
-            aStart.getTime() +
-              a.movingTime * 1000
-          );
-
-        for (
-          let j = i + 1;
-          j < activities.length;
-          j++
-        ) {
-          const b = activities[j];
-          const bStart =
-            new Date(b.startDate);
-          const bEnd =
+      const selectedActivitiesOverlap =
+        activities.every((selectedActivity) => {
+          const selectedStart =
+            new Date(selectedActivity.startDate);
+          const selectedEnd =
             new Date(
-              bStart.getTime() +
-                b.movingTime * 1000
+              selectedStart.getTime() +
+                selectedActivity.movingTime * 1000
             );
 
-          const sameDay =
-            aStart.getFullYear() ===
-              bStart.getFullYear() &&
-            aStart.getMonth() ===
-              bStart.getMonth() &&
-            aStart.getDate() ===
-              bStart.getDate();
+          return comparisonActivities.some(
+            (otherActivity) => {
+              if (otherActivity.id === selectedActivity.id) {
+                return false;
+              }
 
-          if (!sameDay) continue;
+              const otherStart =
+                new Date(otherActivity.startDate);
+              const otherEnd =
+                new Date(
+                  otherStart.getTime() +
+                    otherActivity.movingTime * 1000
+                );
 
-          const overlaps =
-            aStart < bEnd &&
-            bStart < aEnd;
+              const sameDay =
+                selectedStart.getFullYear() ===
+                  otherStart.getFullYear() &&
+                selectedStart.getMonth() ===
+                  otherStart.getMonth() &&
+                selectedStart.getDate() ===
+                  otherStart.getDate();
 
-          if (overlaps) {
-            overlappingIds.add(a.id);
-            overlappingIds.add(b.id);
-          }
-        }
-      }
+              return (
+                sameDay &&
+                selectedStart < otherEnd &&
+                otherStart < selectedEnd
+              );
+            }
+          );
+        });
 
-      const allOverlap =
-        activities.every(
-          (activity) =>
-            overlappingIds.has(activity.id)
-        );
-
-      if (!allOverlap) {
+      if (!selectedActivitiesOverlap) {
         return res.status(400).json({
           error:
-            "Las actividades seleccionadas no están superpuestas",
+            "Cada actividad seleccionada debe estar superpuesta con otra actividad del atleta",
         });
       }
 
