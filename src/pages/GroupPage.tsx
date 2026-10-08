@@ -713,53 +713,18 @@ export default function GroupPage({
                               marginLeft: "7px",
                             }}
                           >
-                            <button
-                              type="button"
-                              title={
-                                athlete.hasPenalty
-                                  ? "Ver penalización aplicada"
-                                  : "Posible superposición de actividades"
-                              }
-                              onClick={(event) => {
-                                event.stopPropagation();
-
-                                if (!athlete.hasPenalty || !athlete.penalty) {
-                                  return;
-                                }
-
-                                window.alert(
-                                  "Regulación ViaRank · Rankings Deportivos\n\n" +
-                                    "Penalización aplicada\n\n" +
-                                    "Motivo: actividades superpuestas\n" +
-                                    "Actividad computada: 0,01 km\n" +
-                                    "Aplicación: " +
-                                    new Date(
-                                      athlete.penalty.appliedAt
-                                    ).toLocaleString("es-AR")
-                                );
-                              }}
+                            <span
+                              title="Posible superposición de actividades"
                               style={{
                                 display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
                                 width: "15px",
                                 height: "9px",
-                                padding: 0,
                                 borderRadius: "2px",
                                 background: "#ffff00",
                                 border: "1px solid #e1c900",
-                                color: "#282000",
-                                fontSize: "8px",
-                                lineHeight: 1,
-                                fontWeight: 900,
-                                cursor:
-                                  athlete.hasPenalty && athlete.penalty
-                                    ? "pointer"
-                                    : "default",
+                                flexShrink: 0,
                               }}
-                            >
-                              {athlete.hasPenalty ? "?" : ""}
-                            </button>
+                            />
 
                             {athlete.hasPendingVar && (
                               <strong
