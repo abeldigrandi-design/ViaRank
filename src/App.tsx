@@ -1196,7 +1196,11 @@ async function loadActivityHistory(
   }
 }
 async function applyActivityPenalty(
-  activityIds: string[]
+  activityIds: string[],
+  resolutionPairs: Array<{
+    firstActivityId: string;
+    secondActivityId: string;
+  }>
 ) {
   if (!selectedGroup) {
     throw new Error("No hay un grupo seleccionado.");
@@ -1215,6 +1219,7 @@ async function applyActivityPenalty(
       },
       body: JSON.stringify({
         activityIds,
+        resolutionPairs,
       }),
     }
   );

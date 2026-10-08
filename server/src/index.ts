@@ -3146,6 +3146,48 @@ const penaltyByActivityId =
 const overlappingActivityIds =
   new Set<string>();
 
+const pendingVarActivityIds =
+  new Set<string>();
+
+const overlapPartnersByActivityId =
+  new Map<string, Set<string>>();
+
+const pendingOverlapPartnersByActivityId =
+  new Map<string, Set<string>>();
+
+const resolvedVarPairs =
+  groupId
+    ? await prisma.groupActivityVarResolution.findMany({
+        where: {
+          groupId,
+          OR: [
+            {
+              firstActivityId: {
+                in: activities.map((activity) => activity.id),
+              },
+            },
+            {
+              secondActivityId: {
+                in: activities.map((activity) => activity.id),
+              },
+            },
+          ],
+        },
+        select: {
+          firstActivityId: true,
+          secondActivityId: true,
+        },
+      })
+    : [];
+
+const resolvedPairKeys = new Set(
+  resolvedVarPairs.map((resolution) =>
+    [resolution.firstActivityId, resolution.secondActivityId]
+      .sort()
+      .join(":")
+  )
+);
+
 for (let i = 0; i < activities.length; i++) {
   const a = activities[i];
 
@@ -3171,6 +3213,36 @@ for (let i = 0; i < activities.length; i++) {
     if (overlaps) {
       overlappingActivityIds.add(a.id);
       overlappingActivityIds.add(b.id);
+
+      if (!overlapPartnersByActivityId.has(a.id)) {
+        overlapPartnersByActivityId.set(a.id, new Set<string>());
+      }
+
+      if (!overlapPartnersByActivityId.has(b.id)) {
+        overlapPartnersByActivityId.set(b.id, new Set<string>());
+      }
+
+      overlapPartnersByActivityId.get(a.id)!.add(b.id);
+      overlapPartnersByActivityId.get(b.id)!.add(a.id);
+
+      const pairKey =
+        [a.id, b.id].sort().join(":");
+
+      if (!resolvedPairKeys.has(pairKey)) {
+        pendingVarActivityIds.add(a.id);
+        pendingVarActivityIds.add(b.id);
+
+        if (!pendingOverlapPartnersByActivityId.has(a.id)) {
+          pendingOverlapPartnersByActivityId.set(a.id, new Set<string>());
+        }
+
+        if (!pendingOverlapPartnersByActivityId.has(b.id)) {
+          pendingOverlapPartnersByActivityId.set(b.id, new Set<string>());
+        }
+
+        pendingOverlapPartnersByActivityId.get(a.id)!.add(b.id);
+        pendingOverlapPartnersByActivityId.get(b.id)!.add(a.id);
+      }
     }
   }
 }
@@ -3181,9 +3253,16 @@ for (let i = 0; i < activities.length; i++) {
           (activity) => ({
             ...activity,
 hasOverlap: overlappingActivityIds.has(activity.id),
+            overlappingActivityIds:
+              Array.from(
+                overlapPartnersByActivityId.get(activity.id) ?? []
+              ),
+            pendingOverlapActivityIds:
+              Array.from(
+                pendingOverlapPartnersByActivityId.get(activity.id) ?? []
+              ),
             hasPendingVar:
-              overlappingActivityIds.has(activity.id) &&
-              !penaltyByActivityId.has(activity.id),
+              pendingVarActivityIds.has(activity.id),
             isPenalized:
               penaltyByActivityId.has(activity.id),
             penalty:
@@ -4141,6 +4220,27 @@ if (period === "year") {
           )
         );
 
+      const resolvedGroupVarPairs =
+        await prisma.groupActivityVarResolution.findMany({
+          where: {
+            groupId,
+          },
+          select: {
+            firstActivityId: true,
+            secondActivityId: true,
+          },
+        });
+
+      const resolvedGroupVarPairKeys = new Set(
+        resolvedGroupVarPairs.map((resolution) =>
+          [resolution.firstActivityId, resolution.secondActivityId]
+            .sort()
+            .join(":")
+        )
+      );
+
+      const pendingGroupVarActivityIds = new Set<string>();
+
       const overlappingActivityIds = new Set<string>();
       const activitiesByUser = new Map<string, typeof activities>();
 
@@ -4187,6 +4287,14 @@ if (period === "year") {
             if (overlaps) {
               overlappingActivityIds.add(a.id);
               overlappingActivityIds.add(b.id);
+
+              const pairKey =
+                [a.id, b.id].sort().join(":");
+
+              if (!resolvedGroupVarPairKeys.has(pairKey)) {
+                pendingGroupVarActivityIds.add(a.id);
+                pendingGroupVarActivityIds.add(b.id);
+              }
             }
           }
         }
@@ -4314,8 +4422,7 @@ hasOverlap: activities.some(
 hasPendingVar: activities.some(
   (activity) =>
     activity.userId === athlete.userId &&
-    overlappingActivityIds.has(activity.id) &&
-    !rankingPenaltyByActivityId.has(activity.id)
+    pendingGroupVarActivityIds.has(activity.id)
 ),
 hasPenalty: activities.some(
   (activity) =>
@@ -4549,7 +4656,7 @@ app.post(
   async (req, res) => {
     try {
       const { groupId } = req.params;
-      const { activityIds } = req.body;
+      const { activityIds, resolutionPairs } = req.body;
 
       const requesterId =
         getAuthenticatedUserId(req);
@@ -4585,6 +4692,53 @@ app.post(
         });
       }
 
+      if (
+        !Array.isArray(resolutionPairs) ||
+        resolutionPairs.length !== 1
+      ) {
+        return res.status(400).json({
+          error:
+            "Debés resolver un solo caso VAR por vez",
+        });
+      }
+
+      const resolutionPair = resolutionPairs[0];
+
+      if (
+        !resolutionPair ||
+        typeof resolutionPair.firstActivityId !== "string" ||
+        typeof resolutionPair.secondActivityId !== "string" ||
+        resolutionPair.firstActivityId ===
+          resolutionPair.secondActivityId
+      ) {
+        return res.status(400).json({
+          error:
+            "El caso VAR debe contener dos actividades distintas",
+        });
+      }
+
+      const [firstActivityId, secondActivityId] =
+        [
+          resolutionPair.firstActivityId,
+          resolutionPair.secondActivityId,
+        ].sort();
+
+      const resolutionActivityIds = new Set([
+        firstActivityId,
+        secondActivityId,
+      ]);
+
+      const selectedBelongToResolution =
+        uniqueActivityIds.every((activityId) =>
+          resolutionActivityIds.has(activityId)
+        );
+
+      if (!selectedBelongToResolution) {
+        return res.status(400).json({
+          error:
+            "Las actividades penalizadas deben pertenecer al caso VAR indicado",
+        });
+      }
       const group =
         await prisma.sportGroup.findUnique({
           where: {
@@ -4766,6 +4920,88 @@ app.post(
         });
       }
 
+      const resolutionPairActivities =
+        await prisma.activity.findMany({
+          where: {
+            id: {
+              in: [firstActivityId, secondActivityId],
+            },
+          },
+          select: {
+            id: true,
+            userId: true,
+            type: true,
+            movingTime: true,
+            startDate: true,
+          },
+        });
+
+      if (resolutionPairActivities.length !== 2) {
+        return res.status(404).json({
+          error:
+            "Una o más actividades del caso VAR no fueron encontradas",
+        });
+      }
+
+      const resolutionPairIsValidForGroup =
+        resolutionPairActivities.every(
+          (activity) =>
+            activity.userId === athleteId &&
+            activity.type === group.sport
+        );
+
+      if (!resolutionPairIsValidForGroup) {
+        return res.status(400).json({
+          error:
+            "El caso VAR no corresponde al atleta o al deporte del grupo",
+        });
+      }
+
+      const firstResolutionActivity =
+        resolutionPairActivities.find(
+          (activity) => activity.id === firstActivityId
+        )!;
+
+      const secondResolutionActivity =
+        resolutionPairActivities.find(
+          (activity) => activity.id === secondActivityId
+        )!;
+
+      const firstResolutionStart =
+        new Date(firstResolutionActivity.startDate);
+      const firstResolutionEnd =
+        new Date(
+          firstResolutionStart.getTime() +
+            firstResolutionActivity.movingTime * 1000
+        );
+
+      const secondResolutionStart =
+        new Date(secondResolutionActivity.startDate);
+      const secondResolutionEnd =
+        new Date(
+          secondResolutionStart.getTime() +
+            secondResolutionActivity.movingTime * 1000
+        );
+
+      const resolutionSameDay =
+        firstResolutionStart.getFullYear() ===
+          secondResolutionStart.getFullYear() &&
+        firstResolutionStart.getMonth() ===
+          secondResolutionStart.getMonth() &&
+        firstResolutionStart.getDate() ===
+          secondResolutionStart.getDate();
+
+      const resolutionPairOverlaps =
+        resolutionSameDay &&
+        firstResolutionStart < secondResolutionEnd &&
+        secondResolutionStart < firstResolutionEnd;
+
+      if (!resolutionPairOverlaps) {
+        return res.status(400).json({
+          error:
+            "Las actividades indicadas no forman un caso VAR superpuesto",
+        });
+      }
       const existingActivePenalties =
         await prisma.groupActivityPenalty.findMany({
           where: {
@@ -4787,13 +5023,36 @@ app.post(
         });
       }
 
+      const existingResolution =
+        await prisma.groupActivityVarResolution.findUnique({
+          where: {
+            groupId_firstActivityId_secondActivityId: {
+              groupId,
+              firstActivityId,
+              secondActivityId,
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+      if (existingResolution) {
+        return res.status(409).json({
+          error:
+            "Este caso VAR ya fue resuelto",
+        });
+      }
+
       const appliedAt = new Date();
 
-      const penalties =
-        await prisma.$transaction(
-          activities.map(
-            (activity) =>
-              prisma.groupActivityPenalty.upsert({
+      const penalties = await prisma.$transaction(
+        async (tx) => {
+          const createdPenalties = [];
+
+          for (const activity of activities) {
+            createdPenalties.push(
+              await tx.groupActivityPenalty.upsert({
                 where: {
                   groupId_activityId: {
                     groupId,
@@ -4822,8 +5081,22 @@ app.post(
                   revertedAt: null,
                 },
               })
-          )
-        );
+            );
+          }
+
+          await tx.groupActivityVarResolution.create({
+            data: {
+              groupId,
+              firstActivityId,
+              secondActivityId,
+              resolvedBy: requesterId,
+              resolvedAt: appliedAt,
+            },
+          });
+
+          return createdPenalties;
+        }
+      );
 
       return res.json({
         success: true,

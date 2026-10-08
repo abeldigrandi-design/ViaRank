@@ -36,6 +36,8 @@ type ActivityHistoryItem = {
   distanceKm: number;
   endDate: string;
   hasOverlap?: boolean;
+  overlappingActivityIds?: string[];
+  pendingOverlapActivityIds?: string[];
   hasPendingVar?: boolean;
   isPenalized?: boolean;
   penalty?: {
@@ -86,7 +88,13 @@ type Props = {
   onBack: () => void;
   onOpenAthlete: (athlete: RankingAthlete) => void;
   canApplyPenalty: boolean;
-  onApplyPenalty: (activityIds: string[]) => Promise<unknown>;
+  onApplyPenalty: (
+    activityIds: string[],
+    resolutionPairs: Array<{
+      firstActivityId: string;
+      secondActivityId: string;
+    }>
+  ) => Promise<unknown>;
   onCreateEvent: (
     groupId: string,
     eventData: {
@@ -157,6 +165,49 @@ export default function GroupPage({
       return;
     }
 
+    const resolutionPairs: Array<{
+      firstActivityId: string;
+      secondActivityId: string;
+    }> = [];
+
+    for (const activityId of selectedPenaltyActivities) {
+      const activity = activityHistory.find(
+        (item) => item.id === activityId
+      );
+
+      const pendingPartners =
+        activity?.pendingOverlapActivityIds ?? [];
+
+      if (pendingPartners.length !== 1) {
+        setPenaltyMessage(
+          "Este caso VAR tiene más de una superposición pendiente y debe revisarse por separado."
+        );
+        return;
+      }
+
+      const pair = [activityId, pendingPartners[0]].sort();
+
+      if (
+        !resolutionPairs.some(
+          (existingPair) =>
+            existingPair.firstActivityId === pair[0] &&
+            existingPair.secondActivityId === pair[1]
+        )
+      ) {
+        resolutionPairs.push({
+          firstActivityId: pair[0],
+          secondActivityId: pair[1],
+        });
+      }
+    }
+
+
+    if (resolutionPairs.length !== 1) {
+      setPenaltyMessage(
+        "Seleccioná actividades pertenecientes a un solo caso VAR por vez."
+      );
+      return;
+    }
     const confirmed = window.confirm(
       "¿Confirmás aplicar la penalización VAR? Las actividades seleccionadas computarán 0,01 km cada una únicamente en el ranking de este grupo."
     );
@@ -167,7 +218,10 @@ export default function GroupPage({
       setApplyingPenalty(true);
       setPenaltyMessage("");
 
-      await onApplyPenalty(selectedPenaltyActivities);
+      await onApplyPenalty(
+        selectedPenaltyActivities,
+        resolutionPairs
+      );
 
       setSelectedPenaltyActivities([]);
       setPenaltyMessage("Penalización aplicada correctamente.");

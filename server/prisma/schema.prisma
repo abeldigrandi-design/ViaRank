@@ -72,6 +72,7 @@ model User {
   sessions           UserSession[]
   travelCompanyAdministrations TravelCompanyAdministrator[]
   rankingPenaltiesApplied GroupActivityPenalty[] @relation("PenaltyAppliedBy")
+  varResolutionsApplied   GroupActivityVarResolution[] @relation("VarResolvedBy")
 }
 
 model UserSession {
@@ -118,8 +119,10 @@ model Activity {
   startDate     DateTime
   createdAt     DateTime       @default(now())
 
-  groupActivityReviews GroupActivityReview[]
-  groupActivityPenalties GroupActivityPenalty[]
+  groupActivityReviews    GroupActivityReview[]
+  groupActivityPenalties  GroupActivityPenalty[]
+  varResolutionsAsFirst   GroupActivityVarResolution[] @relation("VarFirstActivity")
+  varResolutionsAsSecond  GroupActivityVarResolution[] @relation("VarSecondActivity")
 
   @@unique([source, externalId])
 }
@@ -139,8 +142,9 @@ model SportGroup {
 
   members GroupMember[]
   events  GroupEvent[]
-  activityReviews GroupActivityReview[]
-  activityPenalties GroupActivityPenalty[]
+  activityReviews      GroupActivityReview[]
+  activityPenalties    GroupActivityPenalty[]
+  varResolutions       GroupActivityVarResolution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -208,6 +212,27 @@ model GroupActivityPenalty {
   @@index([groupId])
   @@index([activityId])
   @@index([appliedBy])
+}
+model GroupActivityVarResolution {
+  id String @id @default(cuid())
+
+  groupId          String
+  firstActivityId  String
+  secondActivityId String
+  resolvedBy       String
+
+  group          SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  firstActivity  Activity   @relation("VarFirstActivity", fields: [firstActivityId], references: [id], onDelete: Cascade)
+  secondActivity Activity   @relation("VarSecondActivity", fields: [secondActivityId], references: [id], onDelete: Cascade)
+  reviewer       User       @relation("VarResolvedBy", fields: [resolvedBy], references: [id])
+
+  resolvedAt DateTime @default(now())
+
+  @@unique([groupId, firstActivityId, secondActivityId])
+  @@index([groupId])
+  @@index([firstActivityId])
+  @@index([secondActivityId])
+  @@index([resolvedBy])
 }
 model GroupActivityReview {
   id         String @id @default(cuid())
