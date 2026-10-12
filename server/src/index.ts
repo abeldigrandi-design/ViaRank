@@ -2,7 +2,7 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import cors from "cors";
 import dotenv from "dotenv";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient, TravelModuleType } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { randomBytes, randomInt } from "node:crypto";
@@ -15,6 +15,172 @@ const JWT_SECRET =
   process.env.JWT_SECRET ||
   "viarank-dev-secret";
 const prisma = new PrismaClient();
+function hasTravelCompanyOperationalAccess(
+  company: {
+    accessStatus: string;
+    trialEndsAt?: Date | null;
+  }
+) {
+  if (
+    company.accessStatus === "ACTIVE" ||
+    company.accessStatus === "EXEMPT"
+  ) {
+    return true;
+  }
+
+  if (company.accessStatus !== "TRIAL") {
+    return false;
+  }
+
+  if (!company.trialEndsAt) {
+    return false;
+  }
+
+  return company.trialEndsAt.getTime() > Date.now();
+}
+
+type TravelTripAccessPermission =
+  | "participants"
+  | "activities"
+  | "accommodation"
+  | "food"
+  | "transport"
+  | "insurance"
+  | "equipment"
+  | "notices"
+  | "participantContact"
+  | "viewFinancials"
+  | "manageFinancials";
+
+async function getTravelTripAccess(
+  tripId: string,
+  userId: string
+) {
+  const trip =
+    await prisma.travelTrip.findUnique({
+      where: {
+        id: tripId,
+      },
+      select: {
+        id: true,
+        companyId: true,
+        company: {
+          select: {
+            accessStatus: true,
+            trialEndsAt: true,
+          },
+        },
+      },
+    });
+
+  if (!trip) {
+    return null;
+  }
+
+  const administration =
+    await prisma.travelCompanyAdministrator.findUnique({
+      where: {
+        companyId_userId: {
+          companyId: trip.companyId,
+          userId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  if (administration) {
+    return {
+      trip,
+      isCompanyAdministrator: true,
+      isOrganizer: false,
+      isCollaborator: false,
+      teamMembership: null,
+    };
+  }
+
+  const teamMembership =
+    await prisma.travelTripTeamMember.findUnique({
+      where: {
+        tripId_userId: {
+          tripId,
+          userId,
+        },
+      },
+    });
+
+  return {
+    trip,
+    isCompanyAdministrator: false,
+    isOrganizer:
+      teamMembership?.role === "ORGANIZER",
+    isCollaborator:
+      teamMembership?.role === "COLLABORATOR",
+    teamMembership,
+  };
+}
+
+function hasTravelTripPermission(
+  access: NonNullable<
+    Awaited<ReturnType<typeof getTravelTripAccess>>
+  >,
+  permission: TravelTripAccessPermission
+) {
+  if (access.isCompanyAdministrator) {
+    return true;
+  }
+
+  if (access.isOrganizer) {
+    return true;
+  }
+
+  if (
+    !access.isCollaborator ||
+    !access.teamMembership
+  ) {
+    return false;
+  }
+
+  switch (permission) {
+    case "participants":
+      return access.teamMembership.canManageParticipants;
+
+    case "activities":
+      return access.teamMembership.canManageActivities;
+
+    case "accommodation":
+      return access.teamMembership.canManageAccommodation;
+
+    case "food":
+      return access.teamMembership.canManageFood;
+
+    case "transport":
+      return access.teamMembership.canManageTransport;
+
+    case "insurance":
+      return access.teamMembership.canManageInsurance;
+
+    case "equipment":
+      return access.teamMembership.canManageEquipment;
+
+    case "notices":
+      return access.teamMembership.canManageNotices;
+
+    case "participantContact":
+      return access.teamMembership.canContactParticipants;
+
+    case "viewFinancials":
+      return access.teamMembership.canViewFinancials;
+
+    case "manageFinancials":
+      return access.teamMembership.canManageFinancials;
+
+    default:
+      return false;
+  }
+}
+
 
 const promoteStravaId =
   process.env.PROMOTE_STRAVA_ID?.trim();
@@ -6798,6 +6964,7 @@ app.get(
                 id: true,
                 name: true,
                 accessStatus: true,
+              trialEndsAt: true,
               },
             },
           },
@@ -6879,6 +7046,7 @@ app.post(
                 id: true,
                 name: true,
                 accessStatus: true,
+              trialEndsAt: true,
               },
             },
           },
@@ -6891,11 +7059,7 @@ app.post(
         });
       }
 
-      if (
-        administration.company.accessStatus !== "ACTIVE" &&
-        administration.company.accessStatus !== "TRIAL" &&
-        administration.company.accessStatus !== "EXEMPT"
-      ) {
+      if (!hasTravelCompanyOperationalAccess(administration.company)) {
         return res.status(403).json({
           error:
             "La empresa no está habilitada para crear viajes",
@@ -6969,7 +7133,7 @@ app.post(
 
 /*
   Editar un viaje general de ViaRank Viajes.
-  Solo los administradores de la empresa pueden modificarlo.
+  Los administradores de la empresa y organizadores del viaje pueden modificarlo.
 */
 app.patch(
   "/api/travel/trips/:tripId",
@@ -6998,6 +7162,7 @@ app.patch(
             company: {
               select: {
                 accessStatus: true,
+              trialEndsAt: true,
               },
             },
           },
@@ -7009,31 +7174,25 @@ app.patch(
         });
       }
 
-      const administration =
-        await prisma.travelCompanyAdministrator.findUnique({
-          where: {
-            companyId_userId: {
-              companyId: existingTrip.companyId,
-              userId: requesterId,
-            },
-          },
-          select: {
-            id: true,
-          },
-        });
-
-      if (!administration) {
-        return res.status(403).json({
-          error:
-            "No tenés permisos para administrar este viaje",
-        });
-      }
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
 
       if (
-        existingTrip.company.accessStatus !== "ACTIVE" &&
-        existingTrip.company.accessStatus !== "TRIAL" &&
-        existingTrip.company.accessStatus !== "EXEMPT"
+        !access ||
+        (
+          !access.isCompanyAdministrator &&
+          !access.isOrganizer
+        )
       ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar la configuración general de este viaje",
+        });
+      }
+      if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
         return res.status(403).json({
           error:
             "La empresa no está habilitada para editar viajes",
@@ -7258,6 +7417,4467 @@ app.patch(
   }
 );
 
+
+/* =========================================================
+   VIARANK VIAJES - CONTENIDO COMPLETO DEL VIAJE
+========================================================= */
+
+/*
+  Cargar la configuracion completa de un viaje para su
+  administracion. Solo administradores de la empresa.
+*/
+app.get(
+  "/api/travel/trips/:tripId/content",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      if (!tripId) {
+        return res.status(400).json({
+          error: "Viaje invalido",
+        });
+      }
+
+      const tripAccess =
+        await prisma.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          select: {
+            id: true,
+            companyId: true,
+          },
+        });
+
+      if (!tripAccess) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        (
+          !access.isCompanyAdministrator &&
+          !access.isOrganizer &&
+          !access.isCollaborator
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para acceder a este viaje",
+        });
+      }
+
+      const canViewFinancials =
+        hasTravelTripPermission(
+          access,
+          "viewFinancials"
+        );
+
+      const trip =
+        await prisma.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          include: {
+            modules: {
+              orderBy: {
+                type: "asc",
+              },
+            },
+
+            activities: {
+              orderBy: [
+                {
+                  dayNumber: "asc",
+                },
+                {
+                  displayOrder: "asc",
+                },
+                {
+                  createdAt: "asc",
+                },
+              ],
+              include: {
+                requirements: {
+                  orderBy: [
+                    {
+                      displayOrder: "asc",
+                    },
+                    {
+                      createdAt: "asc",
+                    },
+                  ],
+                },
+                meals: {
+                  orderBy: [
+                    {
+                      dayNumber: "asc",
+                    },
+                    {
+                      displayOrder: "asc",
+                    },
+                    {
+                      createdAt: "asc",
+                    },
+                  ],
+                },
+              },
+            },
+
+            accommodations: {
+              orderBy: [
+                {
+                  displayOrder: "asc",
+                },
+                {
+                  createdAt: "asc",
+                },
+              ],
+            },
+
+            meals: {
+              where: {
+                activityId: null,
+              },
+              orderBy: [
+                {
+                  dayNumber: "asc",
+                },
+                {
+                  displayOrder: "asc",
+                },
+                {
+                  createdAt: "asc",
+                },
+              ],
+            },
+
+            transport: true,
+
+            transfers: true,
+
+            insurance: true,
+            equipment: {
+              orderBy: [
+                {
+                  displayOrder: "asc",
+                },
+                {
+                  createdAt: "asc",
+                },
+              ],
+            },
+            pricing: {
+              include: {
+                versions: {
+                  orderBy: {
+                    version: "desc",
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      if (!trip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      if (!canViewFinancials) {
+        const {
+          price: _price,
+          pricing: _pricing,
+          transfers: tripTransfers,
+          insurance: tripInsurance,
+          equipment: tripEquipment,
+          ...tripWithoutFinancials
+        } = trip;
+
+        const insuranceWithoutFinancials =
+          tripInsurance
+            ? (() => {
+                const {
+                  price: _insurancePrice,
+                  ...safeInsurance
+                } = tripInsurance;
+
+                return safeInsurance;
+              })()
+            : tripInsurance;
+
+        const transfersWithoutFinancials =
+          tripTransfers
+            ? (() => {
+                const {
+                  arrivalTransferPrice:
+                    _arrivalTransferPrice,
+                  departureTransferPrice:
+                    _departureTransferPrice,
+                  ...safeTransfers
+                } = tripTransfers;
+
+                return safeTransfers;
+              })()
+            : tripTransfers;
+
+        
+        const equipmentWithoutFinancials =
+          tripEquipment.map((item) => {
+            const {
+              price: _equipmentPrice,
+              ...safeEquipment
+            } = item;
+
+            return safeEquipment;
+          });
+return res.json({
+          success: true,
+          trip: {
+            ...tripWithoutFinancials,
+            transfers:
+              transfersWithoutFinancials,
+            insurance:
+              insuranceWithoutFinancials,
+            equipment: equipmentWithoutFinancials,
+          },
+        });
+      }
+
+      return res.json({
+        success: true,
+        trip,
+      });
+    } catch (error) {
+      console.error(
+        "Error cargando contenido completo del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo cargar el contenido del viaje",
+      });
+    }
+  }
+);
+
+/*
+  Activar o desactivar modulos de un viaje.
+  Los modulos no seleccionados permanecen desactivados.
+*/
+app.put(
+  "/api/travel/trips/:tripId/modules",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          select: {
+            id: true,
+            companyId: true,
+            company: {
+              select: {
+                accessStatus: true,
+              trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        (
+          !access.isCompanyAdministrator &&
+          !access.isOrganizer
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar la configuración general de este viaje",
+        });
+      }
+      if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const modules =
+        Array.isArray(req.body?.modules)
+          ? req.body.modules
+          : null;
+
+      if (!modules) {
+        return res.status(400).json({
+          error:
+            "Debés enviar una lista de módulos",
+        });
+      }
+
+      const validTypes = new Set<TravelModuleType>([
+        "ACCOMMODATION",
+        "SPORTS_ACTIVITIES",
+        "FOOD",
+        "PASSENGER_TRANSPORT",
+        "BICYCLE_TRANSPORT",
+        "TRANSFERS",
+        "INSURANCE",
+        "EQUIPMENT_RENTAL",
+        "RESERVATIONS",
+        "PAYMENTS",
+        "RULES_WAIVER",
+        "VIARANK_GROUP",
+        "OFFICIAL_NOTICES",
+        "PARTICIPANT_CONTACT",
+      ]);
+
+      const normalizedModules: Array<{
+        type: TravelModuleType;
+        isEnabled: boolean;
+      }> = [];
+
+      const receivedTypes = new Set<string>();
+
+      for (const item of modules) {
+        const type =
+          typeof item?.type === "string"
+            ? item.type.trim().toUpperCase()
+            : "";
+
+        if (
+          !validTypes.has(
+            type as TravelModuleType
+          )
+        ) {
+          return res.status(400).json({
+            error:
+              `Módulo inválido: ${type || "(vacío)"}`,
+          });
+        }
+
+        const moduleType =
+          type as TravelModuleType;
+
+        if (receivedTypes.has(type)) {
+          return res.status(400).json({
+            error:
+              `El módulo ${type} está repetido`,
+          });
+        }
+
+        receivedTypes.add(type);
+
+        normalizedModules.push({
+          type: moduleType,
+          isEnabled: item?.isEnabled === true,
+        });
+      }
+
+      const allTypes = Array.from(validTypes);
+
+      await prisma.$transaction(
+        allTypes.map((type) => {
+          const received =
+            normalizedModules.find(
+              (item) => item.type === type
+            );
+
+          return prisma.travelTripModule.upsert({
+            where: {
+              tripId_type: {
+                tripId,
+                type,
+              },
+            },
+            create: {
+              tripId,
+              type,
+              isEnabled:
+                received?.isEnabled ?? false,
+            },
+            update: {
+              isEnabled:
+                received?.isEnabled ?? false,
+            },
+          });
+        })
+      );
+
+      const updatedModules =
+        await prisma.travelTripModule.findMany({
+          where: {
+            tripId,
+          },
+          orderBy: {
+            type: "asc",
+          },
+        });
+
+      return res.json({
+        success: true,
+        modules: updatedModules,
+      });
+    } catch (error) {
+      console.error(
+        "Error actualizando modulos del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron actualizar los módulos del viaje",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   VIARANK VIAJES - RECORRIDOS Y ACTIVIDADES
+========================================================= */
+
+app.put(
+  "/api/travel/trips/:tripId/activities",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          select: {
+            id: true,
+            company: {
+              select: {
+                accessStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "activities"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar los recorridos y actividades de este viaje",
+        });
+      }
+
+      if (
+        !hasTravelCompanyOperationalAccess(
+          existingTrip.company
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const activities =
+        Array.isArray(req.body?.activities)
+          ? req.body.activities
+          : null;
+
+      if (!activities) {
+        return res.status(400).json({
+          error:
+            "Debés enviar una lista de recorridos y actividades",
+        });
+      }
+
+      const validCategories = new Set([
+        "CYCLING",
+        "HIKING",
+        "WALKING",
+        "RUNNING",
+        "SWIMMING",
+        "KAYAK",
+        "ROWING",
+        "SAILING",
+        "COMPLEMENTARY",
+        "OTHER",
+      ]);
+
+      const validScheduleTypes = new Set([
+        "PROGRAMMED",
+        "ALTERNATIVE",
+        "WEATHER_DEPENDENT",
+      ]);
+
+      const validInclusionStatuses = new Set([
+        "INCLUDED",
+        "NOT_INCLUDED",
+        "NOT_APPLICABLE",
+      ]);
+
+      const optionalString = (
+        value: unknown
+      ) => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const normalized = value.trim();
+
+        return normalized || null;
+      };
+
+      const optionalNumber = (
+        value: unknown
+      ) => {
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        const parsed = Number(value);
+
+        return Number.isFinite(parsed)
+          ? parsed
+          : null;
+      };
+
+      const normalizedActivities: any[] = [];
+
+      for (
+        let index = 0;
+        index < activities.length;
+        index += 1
+      ) {
+        const item = activities[index];
+
+        const category =
+          typeof item?.category === "string"
+            ? item.category.trim().toUpperCase()
+            : "";
+
+        const scheduleType =
+          typeof item?.scheduleType === "string"
+            ? item.scheduleType
+                .trim()
+                .toUpperCase()
+            : "PROGRAMMED";
+
+        const entranceStatus =
+          typeof item?.entranceStatus === "string"
+            ? item.entranceStatus
+                .trim()
+                .toUpperCase()
+            : "NOT_APPLICABLE";
+
+        const transferStatus =
+          typeof item?.transferStatus === "string"
+            ? item.transferStatus
+                .trim()
+                .toUpperCase()
+            : "NOT_APPLICABLE";
+
+        const name =
+          typeof item?.name === "string"
+            ? item.name.trim()
+            : "";
+
+        if (!validCategories.has(category)) {
+          return res.status(400).json({
+            error:
+              `Categoría inválida en la actividad ${index + 1}`,
+          });
+        }
+
+        if (
+          !validScheduleTypes.has(scheduleType)
+        ) {
+          return res.status(400).json({
+            error:
+              `Tipo de programación inválido en la actividad ${index + 1}`,
+          });
+        }
+
+        if (
+          !validInclusionStatuses.has(
+            entranceStatus
+          ) ||
+          !validInclusionStatuses.has(
+            transferStatus
+          )
+        ) {
+          return res.status(400).json({
+            error:
+              `Estado de inclusión inválido en la actividad ${index + 1}`,
+          });
+        }
+
+        if (!name) {
+          return res.status(400).json({
+            error:
+              `La actividad ${index + 1} debe tener un nombre`,
+          });
+        }
+
+        const dayNumber =
+          optionalNumber(item?.dayNumber);
+
+        const displayOrder =
+          optionalNumber(item?.displayOrder) ??
+          index;
+
+        const distanceKm =
+          optionalNumber(item?.distanceKm);
+
+        const durationMinutes =
+          optionalNumber(
+            item?.durationMinutes
+          );
+
+        const activeMinutes =
+          optionalNumber(item?.activeMinutes);
+
+        const elevationGain =
+          optionalNumber(item?.elevationGain);
+
+        const maxAltitude =
+          optionalNumber(item?.maxAltitude);
+
+        if (
+          dayNumber !== null &&
+          (
+            !Number.isInteger(dayNumber) ||
+            dayNumber < 1
+          )
+        ) {
+          return res.status(400).json({
+            error:
+              `El día de la actividad ${index + 1} debe ser un número entero mayor que cero`,
+          });
+        }
+
+        if (
+          !Number.isInteger(displayOrder) ||
+          displayOrder < 0
+        ) {
+          return res.status(400).json({
+            error:
+              `El orden de la actividad ${index + 1} no es válido`,
+          });
+        }
+
+        const nonNegativeValues = [
+          ["distancia", distanceKm],
+          ["duración", durationMinutes],
+          ["tiempo activo", activeMinutes],
+          ["desnivel", elevationGain],
+          ["altitud máxima", maxAltitude],
+        ];
+
+        for (const [label, value] of nonNegativeValues) {
+          if (
+            value !== null &&
+            Number(value) < 0
+          ) {
+            return res.status(400).json({
+              error:
+                `La ${label} de la actividad ${index + 1} no puede ser negativa`,
+            });
+          }
+        }
+
+        let activityDate = null;
+
+        if (
+          item?.activityDate !== null &&
+          item?.activityDate !== undefined &&
+          item?.activityDate !== ""
+        ) {
+          const parsedDate =
+            new Date(item.activityDate);
+
+          if (
+            Number.isNaN(
+              parsedDate.getTime()
+            )
+          ) {
+            return res.status(400).json({
+              error:
+                `La fecha de la actividad ${index + 1} no es válida`,
+            });
+          }
+
+          activityDate = parsedDate;
+        }
+
+        const requirements =
+          Array.isArray(item?.requirements)
+            ? item.requirements
+            : [];
+
+        const normalizedRequirements =
+          requirements.map(
+            (
+              requirement: any,
+              requirementIndex: number
+            ) => {
+              const requirementName =
+                typeof requirement?.name ===
+                "string"
+                  ? requirement.name.trim()
+                  : "";
+
+              if (!requirementName) {
+                throw new Error(
+                  `REQUISITO_INVALIDO:${index + 1}:${requirementIndex + 1}`
+                );
+              }
+
+              const requirementOrder =
+                optionalNumber(
+                  requirement?.displayOrder
+                ) ?? requirementIndex;
+
+              if (
+                !Number.isInteger(
+                  requirementOrder
+                ) ||
+                requirementOrder < 0
+              ) {
+                throw new Error(
+                  `ORDEN_REQUISITO_INVALIDO:${index + 1}:${requirementIndex + 1}`
+                );
+              }
+
+              return {
+                name: requirementName,
+                isMandatory:
+                  requirement?.isMandatory ===
+                  true,
+                displayOrder:
+                  requirementOrder,
+              };
+            }
+          );
+
+        const activityId =
+          typeof item?.id === "string"
+            ? item.id.trim() || null
+            : null;
+
+        normalizedActivities.push({
+          id: activityId,
+          category,
+          scheduleType,
+          name,
+          description:
+            optionalString(
+              item?.description
+            ),
+          imageUrl:
+            optionalString(item?.imageUrl),
+          dayNumber,
+          activityDate,
+          displayOrder,
+          distanceKm,
+          durationMinutes:
+            durationMinutes === null
+              ? null
+              : Math.trunc(durationMinutes),
+          activeMinutes:
+            activeMinutes === null
+              ? null
+              : Math.trunc(activeMinutes),
+          elevationGain,
+          maxAltitude,
+          expectedPace:
+            optionalString(
+              item?.expectedPace
+            ),
+          expectedSpeed:
+            optionalString(
+              item?.expectedSpeed
+            ),
+          difficulty:
+            optionalString(
+              item?.difficulty
+            ),
+          terrain:
+            optionalString(item?.terrain),
+          departurePoint:
+            optionalString(
+              item?.departurePoint
+            ),
+          arrivalPoint:
+            optionalString(
+              item?.arrivalPoint
+            ),
+          guideEnabled:
+            item?.guideEnabled === true,
+          closerEnabled:
+            item?.closerEnabled === true,
+          radioCommunication:
+            item?.radioCommunication === true,
+          supportVehicleEnabled:
+            item?.supportVehicleEnabled ===
+            true,
+          lightMechanicsEnabled:
+            item?.lightMechanicsEnabled ===
+            true,
+          entranceStatus,
+          transferStatus,
+          notes:
+            optionalString(item?.notes),
+          requirements:
+            normalizedRequirements,
+        });
+      }
+
+      await prisma.$transaction(
+        async (tx) => {
+          const existingActivities =
+            await tx.travelTripActivity.findMany({
+              where: {
+                tripId,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+          const existingIds =
+            new Set(
+              existingActivities.map(
+                (activity) => activity.id
+              )
+            );
+
+          const receivedExistingIds =
+            new Set<string>();
+
+          for (
+            const activity
+            of normalizedActivities
+          ) {
+            const {
+              id,
+              requirements,
+              ...activityData
+            } = activity;
+
+            if (id) {
+              if (!existingIds.has(id)) {
+                throw new Error(
+                  `ACTIVIDAD_AJENA:${id}`
+                );
+              }
+
+              if (
+                receivedExistingIds.has(id)
+              ) {
+                throw new Error(
+                  `ACTIVIDAD_REPETIDA:${id}`
+                );
+              }
+
+              receivedExistingIds.add(id);
+
+              await tx.travelTripActivity.update({
+                where: {
+                  id,
+                },
+                data: {
+                  ...activityData,
+                  requirements: {
+                    deleteMany: {},
+                    create: requirements,
+                  },
+                },
+              });
+
+              continue;
+            }
+
+            await tx.travelTripActivity.create({
+              data: {
+                tripId,
+                ...activityData,
+                requirements: {
+                  create: requirements,
+                },
+              },
+            });
+          }
+
+          const idsToDelete =
+            existingActivities
+              .map(
+                (activity) => activity.id
+              )
+              .filter(
+                (id) =>
+                  !receivedExistingIds.has(id)
+              );
+
+          if (idsToDelete.length > 0) {
+            await tx.travelTripActivity.deleteMany({
+              where: {
+                tripId,
+                id: {
+                  in: idsToDelete,
+                },
+              },
+            });
+          }
+        }
+      );
+
+      const updatedActivities =
+        await prisma.travelTripActivity.findMany({
+          where: {
+            tripId,
+          },
+          include: {
+            requirements: {
+              orderBy: {
+                displayOrder: "asc",
+              },
+            },
+          },
+          orderBy: [
+            {
+              dayNumber: "asc",
+            },
+            {
+              displayOrder: "asc",
+            },
+          ],
+        });
+
+      return res.json({
+        success: true,
+        activities: updatedActivities,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "ACTIVIDAD_AJENA:"
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Una de las actividades indicadas no pertenece a este viaje",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "ACTIVIDAD_REPETIDA:"
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Una misma actividad fue enviada más de una vez",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "REQUISITO_INVALIDO:"
+        )
+      ) {
+        const [, activity, requirement] =
+          error.message.split(":");
+
+        return res.status(400).json({
+          error:
+            `El requisito ${requirement} de la actividad ${activity} debe tener un nombre`,
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "ORDEN_REQUISITO_INVALIDO:"
+        )
+      ) {
+        const [, activity, requirement] =
+          error.message.split(":");
+
+        return res.status(400).json({
+          error:
+            `El orden del requisito ${requirement} de la actividad ${activity} no es válido`,
+        });
+      }
+
+      console.error(
+        "Error actualizando recorridos y actividades del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron actualizar los recorridos y actividades del viaje",
+      });
+    }
+  }
+);
+/* =========================================================
+   VIARANK VIAJES - ALIMENTACIÓN Y VIABREAK
+========================================================= */
+
+app.put(
+  "/api/travel/trips/:tripId/meals",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          select: {
+            id: true,
+            company: {
+              select: {
+                accessStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "food"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar la alimentación de este viaje",
+        });
+      }
+
+      if (
+        !hasTravelCompanyOperationalAccess(
+          existingTrip.company
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const meals =
+        Array.isArray(req.body?.meals)
+          ? req.body.meals
+          : null;
+
+      if (!meals) {
+        return res.status(400).json({
+          error:
+            "Debés enviar una lista de comidas",
+        });
+      }
+
+      const validMealTypes = new Set([
+        "BREAKFAST",
+        "LUNCH",
+        "PACKED_MEAL",
+        "REFRESHMENT",
+        "DINNER",
+        "WELCOME_DINNER",
+      ]);
+
+      const validStatuses = new Set([
+        "INCLUDED",
+        "NOT_INCLUDED",
+        "NOT_APPLICABLE",
+      ]);
+
+      const optionalString = (
+        value: unknown
+      ) => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const normalized = value.trim();
+
+        return normalized || null;
+      };
+
+      const normalizedMeals: Array<{
+        id: string | null;
+        activityId: string | null;
+        dayNumber: number | null;
+        type: any;
+        status: any;
+        restaurantName: string | null;
+        restaurantAddress: string | null;
+        approximateTime: string | null;
+        reservationCoordinated: boolean;
+        viaBreakEnabled: boolean;
+        description: string | null;
+        displayOrder: number;
+      }> = [];
+
+      const activityIds =
+        new Set<string>();
+
+      for (
+        let index = 0;
+        index < meals.length;
+        index += 1
+      ) {
+        const item = meals[index];
+
+        const id =
+          typeof item?.id === "string"
+            ? item.id.trim() || null
+            : null;
+
+        const activityId =
+          typeof item?.activityId === "string"
+            ? item.activityId.trim() || null
+            : null;
+
+        const type =
+          String(item?.type || "").trim();
+
+        if (!validMealTypes.has(type)) {
+          return res.status(400).json({
+            error:
+              `El tipo de comida ${index + 1} no es válido`,
+          });
+        }
+
+        const status =
+          String(
+            item?.status ||
+            "NOT_APPLICABLE"
+          ).trim();
+
+        if (!validStatuses.has(status)) {
+          return res.status(400).json({
+            error:
+              `El estado de la comida ${index + 1} no es válido`,
+          });
+        }
+
+        let dayNumber: number | null = null;
+
+        if (
+          item?.dayNumber !== null &&
+          item?.dayNumber !== undefined &&
+          item?.dayNumber !== ""
+        ) {
+          const parsedDay =
+            Number(item.dayNumber);
+
+          if (
+            !Number.isInteger(parsedDay) ||
+            parsedDay < 1
+          ) {
+            return res.status(400).json({
+              error:
+                `El día de la comida ${index + 1} no es válido`,
+            });
+          }
+
+          dayNumber = parsedDay;
+        }
+
+        const displayOrder =
+          item?.displayOrder === null ||
+          item?.displayOrder === undefined ||
+          item?.displayOrder === ""
+            ? index
+            : Number(item.displayOrder);
+
+        if (
+          !Number.isInteger(displayOrder) ||
+          displayOrder < 0
+        ) {
+          return res.status(400).json({
+            error:
+              `El orden de la comida ${index + 1} no es válido`,
+          });
+        }
+
+        if (activityId) {
+          activityIds.add(activityId);
+        }
+
+        normalizedMeals.push({
+          id,
+          activityId,
+          dayNumber,
+          type,
+          status,
+          restaurantName:
+            optionalString(
+              item?.restaurantName
+            ),
+          restaurantAddress:
+            optionalString(
+              item?.restaurantAddress
+            ),
+          approximateTime:
+            optionalString(
+              item?.approximateTime
+            ),
+          reservationCoordinated:
+            item?.reservationCoordinated ===
+            true,
+          viaBreakEnabled:
+            item?.viaBreakEnabled === true,
+          description:
+            optionalString(
+              item?.description
+            ),
+          displayOrder,
+        });
+      }
+
+      if (activityIds.size > 0) {
+        const validActivities =
+          await prisma.travelTripActivity.findMany({
+            where: {
+              tripId,
+              id: {
+                in: Array.from(activityIds),
+              },
+            },
+            select: {
+              id: true,
+            },
+          });
+
+        const validActivityIds =
+          new Set(
+            validActivities.map(
+              (activity) => activity.id
+            )
+          );
+
+        const invalidActivityId =
+          Array.from(activityIds).find(
+            (id) =>
+              !validActivityIds.has(id)
+          );
+
+        if (invalidActivityId) {
+          return res.status(400).json({
+            error:
+              "Una de las actividades asociadas a la alimentación no pertenece a este viaje",
+          });
+        }
+      }
+
+      await prisma.$transaction(
+        async (tx) => {
+          const existingMeals =
+            await tx.travelTripMeal.findMany({
+              where: {
+                tripId,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+          const existingIds =
+            new Set(
+              existingMeals.map(
+                (meal) => meal.id
+              )
+            );
+
+          const receivedExistingIds =
+            new Set<string>();
+
+          for (
+            const meal
+            of normalizedMeals
+          ) {
+            const {
+              id,
+              ...mealData
+            } = meal;
+
+            if (id) {
+              if (!existingIds.has(id)) {
+                throw new Error(
+                  `COMIDA_AJENA:${id}`
+                );
+              }
+
+              if (
+                receivedExistingIds.has(id)
+              ) {
+                throw new Error(
+                  `COMIDA_REPETIDA:${id}`
+                );
+              }
+
+              receivedExistingIds.add(id);
+
+              await tx.travelTripMeal.update({
+                where: {
+                  id,
+                },
+                data: mealData,
+              });
+
+              continue;
+            }
+
+            await tx.travelTripMeal.create({
+              data: {
+                tripId,
+                ...mealData,
+              },
+            });
+          }
+
+          const idsToDelete =
+            existingMeals
+              .map(
+                (meal) => meal.id
+              )
+              .filter(
+                (id) =>
+                  !receivedExistingIds.has(id)
+              );
+
+          if (idsToDelete.length > 0) {
+            await tx.travelTripMeal.deleteMany({
+              where: {
+                tripId,
+                id: {
+                  in: idsToDelete,
+                },
+              },
+            });
+          }
+        }
+      );
+
+      const updatedMeals =
+        await prisma.travelTripMeal.findMany({
+          where: {
+            tripId,
+          },
+          include: {
+            activity: {
+              select: {
+                id: true,
+                name: true,
+                category: true,
+                dayNumber: true,
+              },
+            },
+          },
+          orderBy: [
+            {
+              dayNumber: "asc",
+            },
+            {
+              displayOrder: "asc",
+            },
+          ],
+        });
+
+      return res.json({
+        success: true,
+        meals: updatedMeals,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "COMIDA_AJENA:"
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Una de las comidas indicadas no pertenece a este viaje",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "COMIDA_REPETIDA:"
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Una misma comida fue enviada más de una vez",
+        });
+      }
+
+      console.error(
+        "Error actualizando alimentación del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo actualizar la alimentación del viaje",
+      });
+    }
+  }
+);
+/* =========================================================
+   VIARANK VIAJES - ALOJAMIENTO
+========================================================= */
+
+app.put(
+  "/api/travel/trips/:tripId/accommodations",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: { id: tripId },
+          select: {
+            id: true,
+            companyId: true,
+            company: {
+              select: {
+                accessStatus: true,
+              trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "accommodation"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar el alojamiento de este viaje",
+        });
+      }
+
+      if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const accommodations =
+        Array.isArray(req.body?.accommodations)
+          ? req.body.accommodations
+          : null;
+
+      if (!accommodations) {
+        return res.status(400).json({
+          error:
+            "Debés enviar una lista de alojamientos",
+        });
+      }
+
+      const normalized: Prisma.TravelAccommodationCreateManyInput[] = [];
+
+      for (let index = 0; index < accommodations.length; index++) {
+        const item = accommodations[index];
+
+        const type =
+          typeof item?.type === "string"
+            ? item.type.trim()
+            : "";
+
+        const name =
+          typeof item?.name === "string"
+            ? item.name.trim()
+            : "";
+
+        if (!type || !name) {
+          return res.status(400).json({
+            error:
+              "Cada alojamiento debe tener tipo y nombre",
+          });
+        }
+
+        const parseOptionalNumber = (
+          value: unknown
+        ): number | null => {
+          if (
+            value === null ||
+            value === undefined ||
+            value === ""
+          ) {
+            return null;
+          }
+
+          const parsed = Number(value);
+          return Number.isFinite(parsed)
+            ? parsed
+            : NaN;
+        };
+
+        const nights =
+          parseOptionalNumber(item?.nights);
+
+        const capacity =
+          parseOptionalNumber(item?.capacity);
+
+        const privateOptionPrice =
+          parseOptionalNumber(
+            item?.privateOptionPrice
+          );
+
+        const previousNightPrice =
+          parseOptionalNumber(
+            item?.previousNightPrice
+          );
+
+        const followingNightPrice =
+          parseOptionalNumber(
+            item?.followingNightPrice
+          );
+
+        const numericValues = [
+          nights,
+          capacity,
+          privateOptionPrice,
+          previousNightPrice,
+          followingNightPrice,
+        ];
+
+        if (
+          numericValues.some(
+            (value) =>
+              value !== null &&
+              (!Number.isFinite(value) || value < 0)
+          )
+        ) {
+          return res.status(400).json({
+            error:
+              "Los valores del alojamiento deben ser válidos y no negativos",
+          });
+        }
+
+        if (
+          nights !== null &&
+          !Number.isInteger(nights)
+        ) {
+          return res.status(400).json({
+            error:
+              "Las noches deben ser un número entero",
+          });
+        }
+
+        if (
+          capacity !== null &&
+          !Number.isInteger(capacity)
+        ) {
+          return res.status(400).json({
+            error:
+              "La capacidad del alojamiento debe ser un número entero",
+          });
+        }
+
+        normalized.push({
+          tripId,
+          type,
+          name,
+          location:
+            typeof item?.location === "string" &&
+            item.location.trim()
+              ? item.location.trim()
+              : null,
+          description:
+            typeof item?.description === "string" &&
+            item.description.trim()
+              ? item.description.trim()
+              : null,
+          nights,
+          capacity,
+          sharedAccommodationText:
+            typeof item?.sharedAccommodationText === "string" &&
+            item.sharedAccommodationText.trim()
+              ? item.sharedAccommodationText.trim()
+              : null,
+          privateOptionEnabled:
+            item?.privateOptionEnabled === true,
+          privateOptionPrice,
+          privateOptionSubjectToAvailability:
+            item?.privateOptionSubjectToAvailability !== false,
+          previousNightEnabled:
+            item?.previousNightEnabled === true,
+          previousNightPrice,
+          followingNightEnabled:
+            item?.followingNightEnabled === true,
+          followingNightPrice,
+          features:
+            item?.features &&
+            typeof item.features === "object"
+              ? item.features
+              : undefined,
+          displayOrder:
+            Number.isInteger(Number(item?.displayOrder)) &&
+            Number(item?.displayOrder) >= 0
+              ? Number(item.displayOrder)
+              : index,
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.travelAccommodation.deleteMany({
+          where: { tripId },
+        });
+
+        if (normalized.length > 0) {
+          await tx.travelAccommodation.createMany({
+            data: normalized,
+          });
+        }
+      });
+
+      const updatedAccommodations =
+        await prisma.travelAccommodation.findMany({
+          where: { tripId },
+          orderBy: [
+            { displayOrder: "asc" },
+            { createdAt: "asc" },
+          ],
+        });
+
+      return res.json({
+        success: true,
+        accommodations: updatedAccommodations,
+      });
+    } catch (error) {
+      console.error(
+        "Error actualizando alojamientos del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron actualizar los alojamientos del viaje",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   VIARANK VIAJES - TRANSPORTE
+========================================================= */
+
+app.put(
+  "/api/travel/trips/:tripId/transport",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: { id: tripId },
+          select: {
+            id: true,
+            companyId: true,
+            company: {
+              select: {
+                accessStatus: true,
+              trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "transport"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar el transporte de este viaje",
+        });
+      }
+
+      if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const parseOptionalNumber = (
+        value: unknown
+      ): number | null => {
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed)
+          ? parsed
+          : NaN;
+      };
+
+      const passengerCapacity =
+        parseOptionalNumber(
+          req.body?.passengerCapacity
+        );
+
+      const bicycleCapacity =
+        parseOptionalNumber(
+          req.body?.bicycleCapacity
+        );
+
+      const bicycleTransportPrice =
+        parseOptionalNumber(
+          req.body?.bicycleTransportPrice
+        );
+
+      const numericValues = [
+        passengerCapacity,
+        bicycleCapacity,
+        bicycleTransportPrice,
+      ];
+
+      if (
+        numericValues.some(
+          (value) =>
+            value !== null &&
+            (!Number.isFinite(value) || value < 0)
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Los valores de transporte deben ser válidos y no negativos",
+        });
+      }
+
+      if (
+        passengerCapacity !== null &&
+        !Number.isInteger(passengerCapacity)
+      ) {
+        return res.status(400).json({
+          error:
+            "La capacidad de pasajeros debe ser un número entero",
+        });
+      }
+
+      if (
+        bicycleCapacity !== null &&
+        !Number.isInteger(bicycleCapacity)
+      ) {
+        return res.status(400).json({
+          error:
+            "La capacidad de bicicletas debe ser un número entero",
+        });
+      }
+
+      const passengerTransportEnabled =
+        req.body?.passengerTransportEnabled === true;
+
+      const bicycleTransportEnabled =
+        req.body?.bicycleTransportEnabled === true;
+
+      const data = {
+        passengerTransportEnabled,
+
+        passengerTransportIncluded:
+          passengerTransportEnabled &&
+          req.body?.passengerTransportIncluded === true,
+
+        passengerCapacity:
+          passengerTransportEnabled
+            ? passengerCapacity
+            : null,
+
+        bicycleTransportEnabled,
+
+        bicycleTransportIncluded:
+          bicycleTransportEnabled &&
+          req.body?.bicycleTransportIncluded === true,
+
+        bicycleCapacity:
+          bicycleTransportEnabled
+            ? bicycleCapacity
+            : null,
+
+        bicycleTransportType:
+          bicycleTransportEnabled &&
+          typeof req.body?.bicycleTransportType === "string" &&
+          req.body.bicycleTransportType.trim()
+            ? req.body.bicycleTransportType.trim()
+            : null,
+
+        bicycleTransportPrice:
+          bicycleTransportEnabled
+            ? bicycleTransportPrice
+            : null,
+
+        notes:
+          typeof req.body?.notes === "string" &&
+          req.body.notes.trim()
+            ? req.body.notes.trim()
+            : null,
+      };
+
+      const transport =
+        await prisma.travelTripTransport.upsert({
+          where: { tripId },
+          create: {
+            tripId,
+            ...data,
+          },
+          update: data,
+        });
+
+      return res.json({
+        success: true,
+        transport,
+      });
+    } catch (error) {
+      console.error(
+        "Error actualizando transporte del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo actualizar el transporte del viaje",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   VIARANK VIAJES - TRANSFERS DE LLEGADA Y SALIDA
+========================================================= */
+
+app.put(
+  "/api/travel/trips/:tripId/transfers",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: { id: tripId },
+          select: {
+            id: true,
+            companyId: true,
+            company: {
+              select: {
+                accessStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "transport"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar los transfers de este viaje",
+        });
+      }
+
+      const canManageTransferFinancials =
+        hasTravelTripPermission(
+          access,
+          "manageFinancials"
+        );
+
+      if (
+        !hasTravelCompanyOperationalAccess(
+          existingTrip.company
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const parseOptionalNumber = (
+        value: unknown
+      ): number | null => {
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        const parsed = Number(value);
+
+        return Number.isFinite(parsed)
+          ? parsed
+          : NaN;
+      };
+
+      const optionalString = (
+        value: unknown
+      ): string | null => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const trimmed = value.trim();
+
+        return trimmed
+          ? trimmed
+          : null;
+      };
+
+      const arrivalTransferEnabled =
+        req.body?.arrivalTransferEnabled === true;
+
+      const departureTransferEnabled =
+        req.body?.departureTransferEnabled === true;
+
+      const arrivalTransferPrice =
+        parseOptionalNumber(
+          req.body?.arrivalTransferPrice
+        );
+
+      const departureTransferPrice =
+        parseOptionalNumber(
+          req.body?.departureTransferPrice
+        );
+
+      const prices = [
+        arrivalTransferPrice,
+        departureTransferPrice,
+      ];
+
+      if (
+        prices.some(
+          (value) =>
+            value !== null &&
+            (
+              !Number.isFinite(value) ||
+              value < 0
+            )
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Los valores de los transfers deben ser válidos y no negativos",
+        });
+      }
+
+      const currentTransfers =
+        await prisma.travelTripTransfer.findUnique({
+          where: { tripId },
+        });
+
+      const arrivalTransferIncluded =
+        canManageTransferFinancials
+          ? (
+              arrivalTransferEnabled &&
+              req.body?.arrivalTransferIncluded === true
+            )
+          : (
+              arrivalTransferEnabled &&
+              (
+                currentTransfers
+                  ?.arrivalTransferIncluded ??
+                false
+              )
+            );
+
+      const departureTransferIncluded =
+        canManageTransferFinancials
+          ? (
+              departureTransferEnabled &&
+              req.body?.departureTransferIncluded === true
+            )
+          : (
+              departureTransferEnabled &&
+              (
+                currentTransfers
+                  ?.departureTransferIncluded ??
+                false
+              )
+            );
+
+      const data = {
+        arrivalTransferEnabled,
+
+        arrivalTransferIncluded,
+
+        arrivalTransferPrice:
+          arrivalTransferEnabled &&
+          !arrivalTransferIncluded
+            ? (
+                canManageTransferFinancials
+                  ? arrivalTransferPrice
+                  : (
+                      currentTransfers
+                        ?.arrivalTransferPrice ??
+                      null
+                    )
+              )
+            : null,
+
+        arrivalPickupPoint:
+          arrivalTransferEnabled
+            ? optionalString(
+                req.body?.arrivalPickupPoint
+              )
+            : null,
+
+        arrivalDestination:
+          arrivalTransferEnabled
+            ? optionalString(
+                req.body?.arrivalDestination
+              )
+            : null,
+
+        arrivalInstructions:
+          arrivalTransferEnabled
+            ? optionalString(
+                req.body?.arrivalInstructions
+              )
+            : null,
+
+        departureTransferEnabled,
+
+        departureTransferIncluded,
+
+        departureTransferPrice:
+          departureTransferEnabled &&
+          !departureTransferIncluded
+            ? (
+                canManageTransferFinancials
+                  ? departureTransferPrice
+                  : (
+                      currentTransfers
+                        ?.departureTransferPrice ??
+                      null
+                    )
+              )
+            : null,
+
+        departurePickupPoint:
+          departureTransferEnabled
+            ? optionalString(
+                req.body?.departurePickupPoint
+              )
+            : null,
+
+        departureDestination:
+          departureTransferEnabled
+            ? optionalString(
+                req.body?.departureDestination
+              )
+            : null,
+
+        departureInstructions:
+          departureTransferEnabled
+            ? optionalString(
+                req.body?.departureInstructions
+              )
+            : null,
+
+        notes:
+          optionalString(req.body?.notes),
+      };
+
+      const transfers =
+        await prisma.travelTripTransfer.upsert({
+          where: { tripId },
+
+          create: {
+            tripId,
+            ...data,
+          },
+
+          update: data,
+        });
+
+      if (!canManageTransferFinancials) {
+        const {
+          arrivalTransferPrice:
+            _arrivalTransferPrice,
+          departureTransferPrice:
+            _departureTransferPrice,
+          ...transfersWithoutFinancials
+        } = transfers;
+
+        return res.json({
+          success: true,
+          transfers:
+            transfersWithoutFinancials,
+        });
+      }
+
+      return res.json({
+        success: true,
+        transfers,
+      });
+    } catch (error) {
+      console.error(
+        "Error actualizando transfers del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron actualizar los transfers del viaje",
+      });
+    }
+  }
+);
+/* =========================================================
+   VIARANK VIAJES - EQUIPO DEL VIAJE
+   Administradores, organizadores y colaboradores
+========================================================= */
+
+/*
+  Configuracion de seguro del viaje.
+  La gestion operativa usa canManageInsurance.
+  Precio e inclusion son informacion economica.
+*/
+/*
+  Catalogo de equipamiento disponible para alquiler.
+  Puede incluir bicicletas, kayaks, cascos, bastones,
+  neoprene u otros elementos.
+*/
+app.put(
+  "/api/travel/trips/:tripId/equipment",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const { tripId } = req.params;
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: { id: tripId },
+          select: {
+            id: true,
+            company: {
+              select: {
+                accessStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "equipment"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar el equipamiento de este viaje",
+        });
+      }
+
+      if (
+        !hasTravelCompanyOperationalAccess(
+          existingTrip.company
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const canManageEquipmentFinancials =
+        hasTravelTripPermission(
+          access,
+          "manageFinancials"
+        );
+
+      const equipment =
+        Array.isArray(req.body?.equipment)
+          ? req.body.equipment
+          : null;
+
+      if (!equipment) {
+        return res.status(400).json({
+          error:
+            "Debés enviar una lista de equipamiento",
+        });
+      }
+
+      const currentEquipment =
+        await prisma.travelTripEquipment.findMany({
+          where: { tripId },
+        });
+
+      const currentById =
+        new Map(
+          currentEquipment.map((item) => [
+            item.id,
+            item,
+          ])
+        );
+
+      const incomingIds =
+        new Set<string>();
+
+      const normalized: Array<{
+        id: string | null;
+        name: string;
+        type: string | null;
+        description: string | null;
+        quantityAvailable: number | null;
+        price: number | null;
+        conditions: string | null;
+        notes: string | null;
+        displayOrder: number;
+        enabled: boolean;
+      }> = [];
+
+      const cleanText = (
+        value: unknown
+      ): string | null => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const trimmed = value.trim();
+
+        return trimmed || null;
+      };
+
+      for (
+        let index = 0;
+        index < equipment.length;
+        index++
+      ) {
+        const item = equipment[index];
+
+        const id =
+          typeof item?.id === "string" &&
+          item.id.trim()
+            ? item.id.trim()
+            : null;
+
+        if (id) {
+          if (incomingIds.has(id)) {
+            return res.status(400).json({
+              error:
+                "Hay equipamiento repetido en la lista",
+            });
+          }
+
+          incomingIds.add(id);
+
+          if (!currentById.has(id)) {
+            return res.status(400).json({
+              error:
+                "Uno de los elementos de equipamiento no pertenece a este viaje",
+            });
+          }
+        }
+
+        const name =
+          typeof item?.name === "string"
+            ? item.name.trim()
+            : "";
+
+        if (!name) {
+          return res.status(400).json({
+            error:
+              `El equipamiento ${index + 1} debe tener un nombre`,
+          });
+        }
+
+        let quantityAvailable:
+          number | null = null;
+
+        if (
+          item?.quantityAvailable !==
+            undefined &&
+          item?.quantityAvailable !== null &&
+          item?.quantityAvailable !== ""
+        ) {
+          quantityAvailable =
+            Number(item.quantityAvailable);
+
+          if (
+            !Number.isInteger(
+              quantityAvailable
+            ) ||
+            quantityAvailable < 0
+          ) {
+            return res.status(400).json({
+              error:
+                `La cantidad disponible del equipamiento ${index + 1} no es válida`,
+            });
+          }
+        }
+
+        let requestedPrice:
+          number | null = null;
+
+        if (
+          item?.price !== undefined &&
+          item?.price !== null &&
+          item?.price !== ""
+        ) {
+          requestedPrice =
+            Number(item.price);
+
+          if (
+            !Number.isFinite(
+              requestedPrice
+            ) ||
+            requestedPrice < 0
+          ) {
+            return res.status(400).json({
+              error:
+                `El precio del equipamiento ${index + 1} no es válido`,
+            });
+          }
+        }
+
+        let displayOrder = index;
+
+        if (
+          item?.displayOrder !== undefined &&
+          item?.displayOrder !== null &&
+          item?.displayOrder !== ""
+        ) {
+          displayOrder =
+            Number(item.displayOrder);
+
+          if (
+            !Number.isInteger(
+              displayOrder
+            ) ||
+            displayOrder < 0
+          ) {
+            return res.status(400).json({
+              error:
+                `El orden del equipamiento ${index + 1} no es válido`,
+            });
+          }
+        }
+
+        const previous =
+          id
+            ? currentById.get(id)
+            : null;
+
+        normalized.push({
+          id,
+          name,
+
+          type:
+            cleanText(item?.type),
+
+          description:
+            cleanText(
+              item?.description
+            ),
+
+          quantityAvailable,
+
+          price:
+            canManageEquipmentFinancials
+              ? requestedPrice
+              : (
+                  previous?.price ??
+                  null
+                ),
+
+          conditions:
+            cleanText(
+              item?.conditions
+            ),
+
+          notes:
+            cleanText(item?.notes),
+
+          displayOrder,
+
+          enabled:
+            item?.enabled !== false,
+        });
+      }
+
+      const savedEquipment =
+        await prisma.$transaction(
+          async (tx) => {
+            const keepIds =
+              normalized
+                .map((item) => item.id)
+                .filter(
+                  (id): id is string =>
+                    Boolean(id)
+                );
+
+            await tx.travelTripEquipment.deleteMany({
+              where: {
+                tripId,
+                ...(keepIds.length
+                  ? {
+                      id: {
+                        notIn: keepIds,
+                      },
+                    }
+                  : {}),
+              },
+            });
+
+            for (
+              const item of normalized
+            ) {
+              const {
+                id,
+                ...data
+              } = item;
+
+              if (id) {
+                await tx.travelTripEquipment.update({
+                  where: { id },
+                  data,
+                });
+              } else {
+                await tx.travelTripEquipment.create({
+                  data: {
+                    tripId,
+                    ...data,
+                  },
+                });
+              }
+            }
+
+            return tx.travelTripEquipment.findMany({
+              where: { tripId },
+              orderBy: [
+                {
+                  displayOrder: "asc",
+                },
+                {
+                  createdAt: "asc",
+                },
+              ],
+            });
+          }
+        );
+
+      if (
+        !hasTravelTripPermission(
+          access,
+          "viewFinancials"
+        )
+      ) {
+        const safeEquipment =
+          savedEquipment.map((item) => {
+            const {
+              price: _price,
+              ...safeItem
+            } = item;
+
+            return safeItem;
+          });
+
+        return res.json({
+          success: true,
+          equipment: safeEquipment,
+        });
+      }
+
+      return res.json({
+        success: true,
+        equipment: savedEquipment,
+      });
+    } catch (error) {
+      console.error(
+        "Error guardando equipamiento del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo guardar el equipamiento del viaje",
+      });
+    }
+  }
+);
+app.put(
+  "/api/travel/trips/:tripId/insurance",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const { tripId } = req.params;
+
+      const existingTrip =
+        await prisma.travelTrip.findUnique({
+          where: { id: tripId },
+          select: {
+            id: true,
+            company: {
+              select: {
+                accessStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+      if (!existingTrip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          requesterId
+        );
+
+      if (
+        !access ||
+        !hasTravelTripPermission(
+          access,
+          "insurance"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permisos para administrar el seguro de este viaje",
+        });
+      }
+
+      const canManageInsuranceFinancials =
+        hasTravelTripPermission(
+          access,
+          "manageFinancials"
+        );
+
+      if (
+        !hasTravelCompanyOperationalAccess(
+          existingTrip.company
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no tiene acceso operativo habilitado",
+        });
+      }
+
+      const enabled =
+        req.body?.enabled === true;
+
+      const currentInsurance =
+        await prisma.travelTripInsurance.findUnique({
+          where: { tripId },
+        });
+
+      const parseDate = (
+        value: unknown
+      ): Date | null | "INVALID" => {
+        if (
+          value === undefined ||
+          value === null ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        if (typeof value !== "string") {
+          return "INVALID";
+        }
+
+        const parsed = new Date(value);
+
+        if (
+          Number.isNaN(parsed.getTime())
+        ) {
+          return "INVALID";
+        }
+
+        return parsed;
+      };
+
+      const validFrom =
+        parseDate(req.body?.validFrom);
+
+      const validUntil =
+        parseDate(req.body?.validUntil);
+
+      if (
+        validFrom === "INVALID" ||
+        validUntil === "INVALID"
+      ) {
+        return res.status(400).json({
+          error:
+            "La vigencia del seguro contiene una fecha inválida",
+        });
+      }
+
+      if (
+        validFrom &&
+        validUntil &&
+        validUntil < validFrom
+      ) {
+        return res.status(400).json({
+          error:
+            "La fecha final del seguro no puede ser anterior a la fecha inicial",
+        });
+      }
+
+      let requestedPrice: number | null =
+        null;
+
+      if (
+        req.body?.price !== undefined &&
+        req.body?.price !== null &&
+        req.body?.price !== ""
+      ) {
+        requestedPrice =
+          Number(req.body.price);
+
+        if (
+          !Number.isFinite(
+            requestedPrice
+          ) ||
+          requestedPrice < 0
+        ) {
+          return res.status(400).json({
+            error:
+              "El valor del seguro no es válido",
+          });
+        }
+      }
+
+      const required =
+        enabled &&
+        req.body?.required === true;
+
+      const included =
+        canManageInsuranceFinancials
+          ? (
+              enabled &&
+              req.body?.included === true
+            )
+          : (
+              enabled &&
+              (
+                currentInsurance?.included ??
+                false
+              )
+            );
+
+      const cleanText = (
+        value: unknown
+      ) => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const trimmed = value.trim();
+
+        return trimmed || null;
+      };
+
+      const data = {
+        enabled,
+
+        required:
+          enabled
+            ? required
+            : false,
+
+        included:
+          enabled
+            ? included
+            : false,
+
+        provider:
+          enabled
+            ? cleanText(
+                req.body?.provider
+              )
+            : null,
+
+        coverageType:
+          enabled
+            ? cleanText(
+                req.body?.coverageType
+              )
+            : null,
+
+        coverage:
+          enabled
+            ? cleanText(
+                req.body?.coverage
+              )
+            : null,
+
+        price:
+          enabled &&
+          !included
+            ? (
+                canManageInsuranceFinancials
+                  ? requestedPrice
+                  : (
+                      currentInsurance
+                        ?.price ??
+                      null
+                    )
+              )
+            : null,
+
+        validFrom:
+          enabled
+            ? validFrom
+            : null,
+
+        validUntil:
+          enabled
+            ? validUntil
+            : null,
+
+        instructions:
+          enabled
+            ? cleanText(
+                req.body?.instructions
+              )
+            : null,
+
+        notes:
+          enabled
+            ? cleanText(
+                req.body?.notes
+              )
+            : null,
+      };
+
+      const insurance =
+        await prisma.travelTripInsurance.upsert({
+          where: { tripId },
+
+          create: {
+            tripId,
+            ...data,
+          },
+
+          update: data,
+        });
+
+      if (
+        !canManageInsuranceFinancials
+      ) {
+        const {
+          price: _insurancePrice,
+          ...insuranceWithoutFinancials
+        } = insurance;
+
+        return res.json({
+          success: true,
+          insurance:
+            insuranceWithoutFinancials,
+        });
+      }
+
+      return res.json({
+        success: true,
+        insurance,
+      });
+    } catch (error) {
+      console.error(
+        "Error guardando seguro del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo guardar el seguro del viaje",
+      });
+    }
+  }
+);
+/* =========================================================
+   VIARANK VIAJES - INSCRIPCIÓN / RESERVA DEL PARTICIPANTE
+========================================================= */
+
+app.post(
+  "/api/travel/trips/:tripId/reservations/me",
+  async (req, res) => {
+    try {
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autorizado.",
+        });
+      }
+
+      const tripId = String(req.params.tripId || "").trim();
+
+      if (!tripId) {
+        return res.status(400).json({
+          error: "Viaje inválido.",
+        });
+      }
+
+      const requiredString = (
+        value: unknown
+      ): string | null => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const normalized = value.trim();
+
+        return normalized || null;
+      };
+
+      const optionalString = (
+        value: unknown
+      ): string | null => {
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const normalized = value.trim();
+
+        return normalized || null;
+      };
+
+      const parseOptionalDate = (
+        value: unknown
+      ): Date | null => {
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const parsed = new Date(value);
+
+        return Number.isNaN(parsed.getTime())
+          ? null
+          : parsed;
+      };
+
+      const firstName = requiredString(
+        req.body?.firstName
+      );
+
+      const lastName = requiredString(
+        req.body?.lastName
+      );
+
+      if (!firstName || !lastName) {
+        return res.status(400).json({
+          error:
+            "Nombre y apellido son obligatorios.",
+        });
+      }
+
+      const birthDateInput =
+        req.body?.birthDate;
+
+      const birthDate =
+        parseOptionalDate(birthDateInput);
+
+      if (
+        birthDateInput !== null &&
+        birthDateInput !== undefined &&
+        birthDateInput !== "" &&
+        !birthDate
+      ) {
+        return res.status(400).json({
+          error:
+            "La fecha de nacimiento no es válida.",
+        });
+      }
+
+      const passengerTransportChoice =
+        req.body?.passengerTransportChoice ??
+        null;
+
+      if (
+        passengerTransportChoice !== null &&
+        passengerTransportChoice !==
+          "ORGANIZER_TRANSPORT" &&
+        passengerTransportChoice !==
+          "OWN_MEANS"
+      ) {
+        return res.status(400).json({
+          error:
+            "La elección de transporte de pasajero no es válida.",
+        });
+      }
+
+      const bicycleTransportChoice =
+        req.body?.bicycleTransportChoice ??
+        null;
+
+      if (
+        bicycleTransportChoice !== null &&
+        bicycleTransportChoice !==
+          "ORGANIZER_TRANSPORT" &&
+        bicycleTransportChoice !==
+          "OWN_MEANS" &&
+        bicycleTransportChoice !==
+          "NOT_APPLICABLE"
+      ) {
+        return res.status(400).json({
+          error:
+            "La elección de transporte de bicicleta no es válida.",
+        });
+      }
+
+      const runReservationTransaction = async () =>
+        prisma.$transaction(
+          async (tx) => {
+            const trip =
+              await tx.travelTrip.findUnique({
+                where: {
+                  id: tripId,
+                },
+                select: {
+                  id: true,
+                  status: true,
+                  totalCapacity: true,
+                  externalReservedPlaces: true,
+                  company: {
+                    select: {
+                      accessStatus: true,
+                      trialEndsAt: true,
+                    },
+                  },
+                },
+              });
+
+            if (!trip) {
+              return {
+                type: "NOT_FOUND" as const,
+              };
+            }
+
+            if (
+              !hasTravelCompanyOperationalAccess(
+                trip.company
+              )
+            ) {
+              return {
+                type:
+                  "COMPANY_UNAVAILABLE" as const,
+              };
+            }
+
+            if (trip.status !== "PUBLISHED") {
+              return {
+                type:
+                  "TRIP_NOT_PUBLISHED" as const,
+              };
+            }
+
+            const existing =
+              await tx.travelReservation.findUnique({
+                where: {
+                  tripId_userId: {
+                    tripId,
+                    userId,
+                  },
+                },
+              });
+
+            if (
+              existing &&
+              existing.status !== "CANCELLED"
+            ) {
+              return {
+                type: "DUPLICATE" as const,
+                reservation: existing,
+              };
+            }
+
+            const activeReservations =
+              await tx.travelReservation.count({
+                where: {
+                  tripId,
+                  status: {
+                    in: [
+                      "PENDING",
+                      "CONFIRMED",
+                    ],
+                  },
+                },
+              });
+
+            const occupiedPlaces =
+              activeReservations +
+              trip.externalReservedPlaces;
+
+            if (
+              trip.totalCapacity !== null &&
+              occupiedPlaces >=
+                trip.totalCapacity
+            ) {
+              return {
+                type: "FULL" as const,
+                totalCapacity:
+                  trip.totalCapacity,
+                occupiedPlaces,
+              };
+            }
+
+            const reservationData = {
+              status: "PENDING" as const,
+
+              firstName,
+              lastName,
+
+              document: optionalString(
+                req.body?.document
+              ),
+
+              birthDate,
+
+              phone: optionalString(
+                req.body?.phone
+              ),
+
+              email: optionalString(
+                req.body?.email
+              ),
+
+              city: optionalString(
+                req.body?.city
+              ),
+
+              address: optionalString(
+                req.body?.address
+              ),
+
+              healthCoverageName:
+                optionalString(
+                  req.body
+                    ?.healthCoverageName
+                ),
+
+              healthCoverageNumber:
+                optionalString(
+                  req.body
+                    ?.healthCoverageNumber
+                ),
+
+              emergencyContactName:
+                optionalString(
+                  req.body
+                    ?.emergencyContactName
+                ),
+
+              emergencyContactRelationship:
+                optionalString(
+                  req.body
+                    ?.emergencyContactRelationship
+                ),
+
+              emergencyContactPhone:
+                optionalString(
+                  req.body
+                    ?.emergencyContactPhone
+                ),
+
+              emergencyContactPhoneAlt:
+                optionalString(
+                  req.body
+                    ?.emergencyContactPhoneAlt
+                ),
+
+              passengerTransportChoice,
+
+              bicycleTransportChoice,
+            };
+
+            const reservation =
+              existing
+                ? await tx.travelReservation.update({
+                    where: {
+                      id: existing.id,
+                    },
+                    data: reservationData,
+                  })
+                : await tx.travelReservation.create({
+                    data: {
+                      tripId,
+                      userId,
+                      ...reservationData,
+                    },
+                  });
+
+            return {
+              type: "CREATED" as const,
+              reservation,
+            };
+          },
+          {
+            isolationLevel:
+              Prisma.TransactionIsolationLevel
+                .Serializable,
+          }
+        );
+
+      let result:
+        Awaited<
+          ReturnType<
+            typeof runReservationTransaction
+          >
+        >;
+
+      for (let attempt = 1; ; attempt++) {
+        try {
+          result =
+            await runReservationTransaction();
+          break;
+        } catch (error: any) {
+          if (
+            error?.code === "P2034" &&
+            attempt < 3
+          ) {
+            continue;
+          }
+
+          throw error;
+        }
+      }
+
+      if (result.type === "NOT_FOUND") {
+        return res.status(404).json({
+          error: "Viaje no encontrado.",
+        });
+      }
+
+      if (
+        result.type === "COMPANY_UNAVAILABLE"
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no tiene acceso operativo habilitado.",
+        });
+      }
+
+      if (
+        result.type === "TRIP_NOT_PUBLISHED"
+      ) {
+        return res.status(409).json({
+          error:
+            "El viaje todavía no está publicado.",
+        });
+      }
+
+      if (result.type === "DUPLICATE") {
+        return res.status(409).json({
+          error:
+            "Ya tenés una reserva para este viaje.",
+          reservation: result.reservation,
+        });
+      }
+
+      if (result.type === "FULL") {
+        return res.status(409).json({
+          error:
+            "No quedan lugares disponibles.",
+          totalCapacity:
+            result.totalCapacity,
+          occupiedPlaces:
+            result.occupiedPlaces,
+          availablePlaces: 0,
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        reservation: result.reservation,
+      });
+    } catch (error: any) {
+      if (error?.code === "P2002") {
+        return res.status(409).json({
+          error:
+            "Ya tenés una reserva para este viaje.",
+        });
+      }
+
+      console.error(
+        "Error creando reserva de viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo crear la reserva.",
+      });
+    }
+  }
+);
+app.get("/api/travel/trips/:tripId/team", async (req, res) => {
+  try {
+    const requesterId = getAuthenticatedUserId(req);
+
+    if (!requesterId) {
+      return res.status(401).json({
+        error: "No autenticado",
+      });
+    }
+
+    const tripId = String(req.params.tripId || "").trim();
+
+    const trip = await prisma.travelTrip.findUnique({
+      where: { id: tripId },
+      select: {
+        id: true,
+        companyId: true,
+      },
+    });
+
+    if (!trip) {
+      return res.status(404).json({
+        error: "Viaje no encontrado",
+      });
+    }
+
+    const administration =
+      await prisma.travelCompanyAdministrator.findUnique({
+        where: {
+          companyId_userId: {
+            companyId: trip.companyId,
+            userId: requesterId,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    const ownTeamMembership =
+      await prisma.travelTripTeamMember.findUnique({
+        where: {
+          tripId_userId: {
+            tripId,
+            userId: requesterId,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+    const canViewTeam =
+      Boolean(administration) ||
+      ownTeamMembership?.role === "ORGANIZER";
+
+    if (!canViewTeam) {
+      return res.status(403).json({
+        error: "No tenés permisos para ver el equipo de este viaje",
+      });
+    }
+
+    const team =
+      await prisma.travelTripTeamMember.findMany({
+        where: {
+          tripId,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              profilePicture: true,
+            },
+          },
+        },
+        orderBy: [
+          {
+            role: "asc",
+          },
+          {
+            createdAt: "asc",
+          },
+        ],
+      });
+
+    return res.json({
+      success: true,
+      team,
+    });
+  } catch (error) {
+    console.error(
+      "Error obteniendo equipo del viaje:",
+      error
+    );
+
+    return res.status(500).json({
+      error: "No se pudo obtener el equipo del viaje",
+    });
+  }
+});
+
+app.post("/api/travel/trips/:tripId/team", async (req, res) => {
+  try {
+    const requesterId = getAuthenticatedUserId(req);
+
+    if (!requesterId) {
+      return res.status(401).json({
+        error: "No autenticado",
+      });
+    }
+
+    const tripId = String(req.params.tripId || "").trim();
+
+    const email =
+      String(req.body?.email || "")
+        .trim()
+        .toLowerCase();
+
+    const role =
+      String(req.body?.role || "")
+        .trim()
+        .toUpperCase();
+
+    if (!email) {
+      return res.status(400).json({
+        error: "El email es obligatorio",
+      });
+    }
+
+    if (
+      role !== "ORGANIZER" &&
+      role !== "COLLABORATOR"
+    ) {
+      return res.status(400).json({
+        error: "Rol de equipo inválido",
+      });
+    }
+
+    const trip = await prisma.travelTrip.findUnique({
+      where: { id: tripId },
+      select: {
+        id: true,
+        companyId: true,
+        company: {
+          select: {
+            accessStatus: true,
+            trialEndsAt: true,
+          },
+        },
+      },
+    });
+
+    if (!trip) {
+      return res.status(404).json({
+        error: "Viaje no encontrado",
+      });
+    }
+
+    if (!hasTravelCompanyOperationalAccess(trip.company)) {
+      return res.status(403).json({
+        error: "La empresa no está habilitada para editar viajes",
+      });
+    }
+
+    const administration =
+      await prisma.travelCompanyAdministrator.findUnique({
+        where: {
+          companyId_userId: {
+            companyId: trip.companyId,
+            userId: requesterId,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    const requesterTeam =
+      await prisma.travelTripTeamMember.findUnique({
+        where: {
+          tripId_userId: {
+            tripId,
+            userId: requesterId,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+    const requesterIsOrganizer =
+      requesterTeam?.role === "ORGANIZER";
+
+    if (
+      !administration &&
+      !requesterIsOrganizer
+    ) {
+      return res.status(403).json({
+        error: "No tenés permisos para administrar el equipo de este viaje",
+      });
+    }
+
+    if (
+      role === "ORGANIZER" &&
+      !administration
+    ) {
+      return res.status(403).json({
+        error: "Solo un administrador de la empresa puede designar organizadores",
+      });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        error: "No existe un usuario ViaRank con ese email",
+      });
+    }
+
+    const existingMember =
+      await prisma.travelTripTeamMember.findUnique({
+        where: {
+          tripId_userId: {
+            tripId,
+            userId: targetUser.id,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (existingMember) {
+      return res.status(409).json({
+        error: "La persona ya pertenece al equipo de este viaje",
+      });
+    }
+
+    const collaboratorPermissions =
+      role === "COLLABORATOR"
+        ? {
+            canManageParticipants:
+              req.body?.canManageParticipants === true,
+            canManageActivities:
+              req.body?.canManageActivities === true,
+            canManageAccommodation:
+              req.body?.canManageAccommodation === true,
+            canManageFood:
+              req.body?.canManageFood === true,
+            canManageTransport:
+              req.body?.canManageTransport === true,
+            canManageInsurance:
+              req.body?.canManageInsurance === true,
+            canManageEquipment:
+              req.body?.canManageEquipment === true,
+            canManageNotices:
+              req.body?.canManageNotices === true,
+            canContactParticipants:
+              req.body?.canContactParticipants === true,
+            canViewFinancials:
+              req.body?.canViewFinancials === true,
+            canManageFinancials:
+              req.body?.canManageFinancials === true,
+          }
+        : {
+            canManageParticipants: false,
+            canManageActivities: false,
+            canManageAccommodation: false,
+            canManageFood: false,
+            canManageTransport: false,
+            canManageInsurance: false,
+            canManageEquipment: false,
+            canManageNotices: false,
+            canContactParticipants: false,
+            canViewFinancials: false,
+            canManageFinancials: false,
+          };
+
+    if (
+      !administration &&
+      (
+        collaboratorPermissions.canViewFinancials ||
+        collaboratorPermissions.canManageFinancials
+      )
+    ) {
+      return res.status(403).json({
+        error: "Solo un administrador de la empresa puede otorgar permisos económicos",
+      });
+    }
+
+    if (collaboratorPermissions.canManageFinancials) {
+      collaboratorPermissions.canViewFinancials = true;
+    }
+
+    const member =
+      await prisma.travelTripTeamMember.create({
+        data: {
+          tripId,
+          userId: targetUser.id,
+          role,
+          ...collaboratorPermissions,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              profilePicture: true,
+            },
+          },
+        },
+      });
+
+    return res.status(201).json({
+      success: true,
+      member,
+    });
+  } catch (error) {
+    console.error(
+      "Error agregando integrante al viaje:",
+      error
+    );
+
+    return res.status(500).json({
+      error: "No se pudo agregar el integrante al viaje",
+    });
+  }
+});
+
+app.patch(
+  "/api/travel/trips/:tripId/team/:memberId",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const memberId =
+        String(req.params.memberId || "").trim();
+
+      const trip = await prisma.travelTrip.findUnique({
+        where: { id: tripId },
+        select: {
+          id: true,
+          companyId: true,
+          company: {
+            select: {
+              accessStatus: true,
+              trialEndsAt: true,
+            },
+          },
+        },
+      });
+
+      if (!trip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      if (!hasTravelCompanyOperationalAccess(trip.company)) {
+        return res.status(403).json({
+          error: "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const targetMember =
+        await prisma.travelTripTeamMember.findFirst({
+          where: {
+            id: memberId,
+            tripId,
+          },
+        });
+
+      if (!targetMember) {
+        return res.status(404).json({
+          error: "Integrante no encontrado",
+        });
+      }
+
+      const administration =
+        await prisma.travelCompanyAdministrator.findUnique({
+          where: {
+            companyId_userId: {
+              companyId: trip.companyId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+      const requesterTeam =
+        await prisma.travelTripTeamMember.findUnique({
+          where: {
+            tripId_userId: {
+              tripId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            role: true,
+          },
+        });
+
+      const requesterIsOrganizer =
+        requesterTeam?.role === "ORGANIZER";
+
+      if (
+        !administration &&
+        !requesterIsOrganizer
+      ) {
+        return res.status(403).json({
+          error: "No tenés permisos para modificar este equipo",
+        });
+      }
+
+      const requestedRole =
+        req.body?.role === undefined
+          ? targetMember.role
+          : String(req.body.role)
+              .trim()
+              .toUpperCase();
+
+      if (
+        requestedRole !== "ORGANIZER" &&
+        requestedRole !== "COLLABORATOR"
+      ) {
+        return res.status(400).json({
+          error: "Rol de equipo inválido",
+        });
+      }
+
+      if (
+        !administration &&
+        (
+          targetMember.role === "ORGANIZER" ||
+          requestedRole === "ORGANIZER"
+        )
+      ) {
+        return res.status(403).json({
+          error: "Solo un administrador de la empresa puede modificar organizadores",
+        });
+      }
+
+      const boolValue = (
+        value: unknown,
+        current: boolean
+      ) =>
+        typeof value === "boolean"
+          ? value
+          : current;
+
+      let permissions = {
+        canManageParticipants:
+          boolValue(
+            req.body?.canManageParticipants,
+            targetMember.canManageParticipants
+          ),
+        canManageActivities:
+          boolValue(
+            req.body?.canManageActivities,
+            targetMember.canManageActivities
+          ),
+        canManageAccommodation:
+          boolValue(
+            req.body?.canManageAccommodation,
+            targetMember.canManageAccommodation
+          ),
+        canManageFood:
+          boolValue(
+            req.body?.canManageFood,
+            targetMember.canManageFood
+          ),
+        canManageTransport:
+          boolValue(
+            req.body?.canManageTransport,
+            targetMember.canManageTransport
+          ),
+        canManageInsurance:
+          boolValue(
+            req.body?.canManageInsurance,
+            targetMember.canManageInsurance
+          ),
+        canManageEquipment:
+          boolValue(
+            req.body?.canManageEquipment,
+            targetMember.canManageEquipment
+          ),
+        canManageNotices:
+          boolValue(
+            req.body?.canManageNotices,
+            targetMember.canManageNotices
+          ),
+        canContactParticipants:
+          boolValue(
+            req.body?.canContactParticipants,
+            targetMember.canContactParticipants
+          ),
+        canViewFinancials:
+          boolValue(
+            req.body?.canViewFinancials,
+            targetMember.canViewFinancials
+          ),
+        canManageFinancials:
+          boolValue(
+            req.body?.canManageFinancials,
+            targetMember.canManageFinancials
+          ),
+      };
+
+      if (requestedRole === "ORGANIZER") {
+        permissions = {
+          canManageParticipants: false,
+          canManageActivities: false,
+          canManageAccommodation: false,
+          canManageFood: false,
+          canManageTransport: false,
+          canManageInsurance: false,
+          canManageEquipment: false,
+          canManageNotices: false,
+          canContactParticipants: false,
+          canViewFinancials: false,
+          canManageFinancials: false,
+        };
+      }
+
+      if (
+        !administration &&
+        (
+          permissions.canViewFinancials !==
+            targetMember.canViewFinancials ||
+          permissions.canManageFinancials !==
+            targetMember.canManageFinancials
+        )
+      ) {
+        return res.status(403).json({
+          error: "Solo un administrador de la empresa puede modificar permisos económicos",
+        });
+      }
+
+      if (permissions.canManageFinancials) {
+        permissions.canViewFinancials = true;
+      }
+
+      const updatedMember =
+        await prisma.travelTripTeamMember.update({
+          where: {
+            id: targetMember.id,
+          },
+          data: {
+            role: requestedRole,
+            ...permissions,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                profilePicture: true,
+              },
+            },
+          },
+        });
+
+      return res.json({
+        success: true,
+        member: updatedMember,
+      });
+    } catch (error) {
+      console.error(
+        "Error modificando integrante del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error: "No se pudo modificar el integrante",
+      });
+    }
+  }
+);
+
+app.delete(
+  "/api/travel/trips/:tripId/team/:memberId",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const tripId =
+        String(req.params.tripId || "").trim();
+
+      const memberId =
+        String(req.params.memberId || "").trim();
+
+      const trip = await prisma.travelTrip.findUnique({
+        where: { id: tripId },
+        select: {
+          id: true,
+          companyId: true,
+          company: {
+            select: {
+              accessStatus: true,
+              trialEndsAt: true,
+            },
+          },
+        },
+      });
+
+      if (!trip) {
+        return res.status(404).json({
+          error: "Viaje no encontrado",
+        });
+      }
+
+      if (!hasTravelCompanyOperationalAccess(trip.company)) {
+        return res.status(403).json({
+          error: "La empresa no está habilitada para editar viajes",
+        });
+      }
+
+      const targetMember =
+        await prisma.travelTripTeamMember.findFirst({
+          where: {
+            id: memberId,
+            tripId,
+          },
+        });
+
+      if (!targetMember) {
+        return res.status(404).json({
+          error: "Integrante no encontrado",
+        });
+      }
+
+      const administration =
+        await prisma.travelCompanyAdministrator.findUnique({
+          where: {
+            companyId_userId: {
+              companyId: trip.companyId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+      const requesterTeam =
+        await prisma.travelTripTeamMember.findUnique({
+          where: {
+            tripId_userId: {
+              tripId,
+              userId: requesterId,
+            },
+          },
+          select: {
+            role: true,
+          },
+        });
+
+      const requesterIsOrganizer =
+        requesterTeam?.role === "ORGANIZER";
+
+      if (
+        !administration &&
+        !requesterIsOrganizer
+      ) {
+        return res.status(403).json({
+          error: "No tenés permisos para quitar integrantes",
+        });
+      }
+
+      if (
+        !administration &&
+        targetMember.role === "ORGANIZER"
+      ) {
+        return res.status(403).json({
+          error: "Solo un administrador de la empresa puede quitar organizadores",
+        });
+      }
+
+      await prisma.travelTripTeamMember.delete({
+        where: {
+          id: targetMember.id,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: "Integrante eliminado del equipo",
+      });
+    } catch (error) {
+      console.error(
+        "Error eliminando integrante del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error: "No se pudo eliminar el integrante",
+      });
+    }
+  }
+);
+/* =========================================================
+   /* =========================================================
+   VIARANK VIAJES - ADMINISTRACION DE EMPRESAS
+   Pruebas gratuitas y semaforo de vencimiento
+========================================================= */
+
+app.get(
+  "/api/admin/travel/companies",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const requester =
+        await prisma.user.findUnique({
+          where: {
+            id: requesterId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (
+        !requester ||
+        requester.role !== "SUPER_ADMIN"
+      ) {
+        return res.status(403).json({
+          error:
+            "Acceso exclusivo para SUPER_ADMIN",
+        });
+      }
+
+      const companies =
+        await prisma.travelCompany.findMany({
+          orderBy: {
+            createdAt: "desc",
+          },
+        });
+
+      const now = new Date();
+      const warningDays = 15;
+      const millisecondsPerDay =
+        1000 * 60 * 60 * 24;
+
+      const companiesWithTrialStatus =
+        companies.map((company) => {
+          let trialSemaphore:
+            | "GREEN"
+            | "YELLOW"
+            | "RED"
+            | null = null;
+
+          let trialDaysRemaining:
+            | number
+            | null = null;
+
+          if (
+            company.accessStatus === "TRIAL" &&
+            company.trialEndsAt
+          ) {
+            const difference =
+              company.trialEndsAt.getTime() -
+              now.getTime();
+
+            trialDaysRemaining =
+              Math.max(
+                0,
+                Math.ceil(
+                  difference /
+                    millisecondsPerDay
+                )
+              );
+
+            if (difference <= 0) {
+              trialSemaphore = "RED";
+              trialDaysRemaining = 0;
+            } else if (
+              trialDaysRemaining <= warningDays
+            ) {
+              trialSemaphore = "YELLOW";
+            } else {
+              trialSemaphore = "GREEN";
+            }
+          }
+
+          return {
+            ...company,
+            trialSemaphore,
+            trialDaysRemaining,
+          };
+        });
+
+      const trialSummary = {
+        green: companiesWithTrialStatus.filter(
+          (company) =>
+            company.trialSemaphore === "GREEN"
+        ).length,
+        yellow: companiesWithTrialStatus.filter(
+          (company) =>
+            company.trialSemaphore === "YELLOW"
+        ).length,
+        red: companiesWithTrialStatus.filter(
+          (company) =>
+            company.trialSemaphore === "RED"
+        ).length,
+      };
+
+      return res.json({
+        success: true,
+        warningDays,
+        trialSummary,
+        companies: companiesWithTrialStatus,
+      });
+    } catch (error) {
+      console.error(
+        "Error listando empresas de ViaRank Viajes:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudieron obtener las empresas",
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/admin/travel/companies/:companyId/trial",
+  async (req, res) => {
+    try {
+      const requesterId =
+        getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "No autenticado",
+        });
+      }
+
+      const requester =
+        await prisma.user.findUnique({
+          where: {
+            id: requesterId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        });
+
+      if (
+        !requester ||
+        requester.role !== "SUPER_ADMIN"
+      ) {
+        return res.status(403).json({
+          error:
+            "Acceso exclusivo para SUPER_ADMIN",
+        });
+      }
+
+      const companyId =
+        req.params.companyId;
+
+      const months =
+        Number(req.body?.months);
+
+      if (
+        !Number.isInteger(months) ||
+        months < 1 ||
+        months > 60
+      ) {
+        return res.status(400).json({
+          error:
+            "La cantidad de meses debe ser un numero entero entre 1 y 60",
+        });
+      }
+
+      const company =
+        await prisma.travelCompany.findUnique({
+          where: {
+            id: companyId,
+          },
+        });
+
+      if (!company) {
+        return res.status(404).json({
+          error: "Empresa no encontrada",
+        });
+      }
+
+      const now = new Date();
+
+      /*
+        Si ya tiene una prueba vigente, la extension
+        comienza desde el vencimiento actual.
+        Si no, comienza desde hoy.
+      */
+      const extensionBase =
+        company.accessStatus === "TRIAL" &&
+        company.trialEndsAt &&
+        company.trialEndsAt.getTime() >
+          now.getTime()
+          ? new Date(company.trialEndsAt)
+          : new Date(now);
+
+      const trialStartedAt =
+        company.accessStatus === "TRIAL" &&
+        company.trialStartedAt
+          ? company.trialStartedAt
+          : now;
+
+      const trialEndsAt =
+        new Date(extensionBase);
+
+      trialEndsAt.setMonth(
+        trialEndsAt.getMonth() + months
+      );
+
+      const previousMonths =
+        company.accessStatus === "TRIAL"
+          ? company.trialMonthsGranted ?? 0
+          : 0;
+
+      const updatedCompany =
+        await prisma.travelCompany.update({
+          where: {
+            id: companyId,
+          },
+          data: {
+            accessStatus: "TRIAL",
+            accessStartsAt:
+              company.accessStartsAt ?? now,
+            accessExpiresAt: trialEndsAt,
+
+            trialStartedAt,
+            trialEndsAt,
+            trialMonthsGranted:
+              previousMonths + months,
+            trialGrantedAt: now,
+            trialGrantedByUserId:
+              requesterId,
+          },
+        });
+
+      const millisecondsPerDay =
+        1000 * 60 * 60 * 24;
+
+      const trialDaysRemaining =
+        Math.max(
+          0,
+          Math.ceil(
+            (
+              trialEndsAt.getTime() -
+              now.getTime()
+            ) / millisecondsPerDay
+          )
+        );
+
+      const trialSemaphore =
+        trialDaysRemaining <= 15
+          ? "YELLOW"
+          : "GREEN";
+
+      return res.json({
+        success: true,
+        message:
+          "Periodo de prueba gratuita actualizado",
+        company: {
+          ...updatedCompany,
+          trialSemaphore,
+          trialDaysRemaining,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Error otorgando prueba gratuita:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo actualizar el periodo de prueba",
+      });
+    }
+  }
+);
 app.listen(
   PORT,
   () => {

@@ -66,13 +66,15 @@ model User {
   updatedAt DateTime @updatedAt
   role      UserRole @default(USER)
 
-  activities         Activity[]
-  groupMemberships   GroupMember[]
-  administeredGroups SportGroup[]  @relation("GroupAdministrator")
-  sessions           UserSession[]
+  activities                   Activity[]
+  groupMemberships             GroupMember[]
+  administeredGroups           SportGroup[]                 @relation("GroupAdministrator")
+  sessions                     UserSession[]
   travelCompanyAdministrations TravelCompanyAdministrator[]
-  rankingPenaltiesApplied GroupActivityPenalty[] @relation("PenaltyAppliedBy")
-  varResolutionsApplied   GroupActivityVarResolution[] @relation("VarResolvedBy")
+  travelReservations           TravelReservation[]
+  travelTripTeamMemberships    TravelTripTeamMember[]
+  rankingPenaltiesApplied      GroupActivityPenalty[]       @relation("PenaltyAppliedBy")
+  varResolutionsApplied        GroupActivityVarResolution[] @relation("VarResolvedBy")
 }
 
 model UserSession {
@@ -119,10 +121,10 @@ model Activity {
   startDate     DateTime
   createdAt     DateTime       @default(now())
 
-  groupActivityReviews    GroupActivityReview[]
-  groupActivityPenalties  GroupActivityPenalty[]
-  varResolutionsAsFirst   GroupActivityVarResolution[] @relation("VarFirstActivity")
-  varResolutionsAsSecond  GroupActivityVarResolution[] @relation("VarSecondActivity")
+  groupActivityReviews   GroupActivityReview[]
+  groupActivityPenalties GroupActivityPenalty[]
+  varResolutionsAsFirst  GroupActivityVarResolution[] @relation("VarFirstActivity")
+  varResolutionsAsSecond GroupActivityVarResolution[] @relation("VarSecondActivity")
 
   @@unique([source, externalId])
 }
@@ -140,11 +142,11 @@ model SportGroup {
   administratorId String
   administrator   User   @relation("GroupAdministrator", fields: [administratorId], references: [id])
 
-  members GroupMember[]
-  events  GroupEvent[]
-  activityReviews      GroupActivityReview[]
-  activityPenalties    GroupActivityPenalty[]
-  varResolutions       GroupActivityVarResolution[]
+  members           GroupMember[]
+  events            GroupEvent[]
+  activityReviews   GroupActivityReview[]
+  activityPenalties GroupActivityPenalty[]
+  varResolutions    GroupActivityVarResolution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -161,8 +163,8 @@ model GroupMember {
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   group SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  joinedAt DateTime @default(now())
-  canCreateEvents Boolean @default(false)
+  joinedAt        DateTime @default(now())
+  canCreateEvents Boolean  @default(false)
 
   @@unique([userId, groupId])
   @@index([groupId])
@@ -203,7 +205,7 @@ model GroupActivityPenalty {
 
   reason                 String
   originalDistanceMeters Float
-  rankingDistanceMeters  Float @default(10)
+  rankingDistanceMeters  Float  @default(10)
 
   appliedAt  DateTime  @default(now())
   revertedAt DateTime?
@@ -213,6 +215,7 @@ model GroupActivityPenalty {
   @@index([activityId])
   @@index([appliedBy])
 }
+
 model GroupActivityVarResolution {
   id String @id @default(cuid())
 
@@ -234,6 +237,7 @@ model GroupActivityVarResolution {
   @@index([secondActivityId])
   @@index([resolvedBy])
 }
+
 model GroupActivityReview {
   id         String @id @default(cuid())
   groupId    String
@@ -272,7 +276,7 @@ enum TravelCompanyApplicationStatus {
 }
 
 model TravelCompany {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
   description String?
   logoUrl     String?
@@ -286,6 +290,12 @@ model TravelCompany {
   accessExpiresAt  DateTime?
   planName         String?
 
+  trialStartedAt       DateTime?
+  trialEndsAt          DateTime?
+  trialMonthsGranted   Int?
+  trialGrantedAt       DateTime?
+  trialGrantedByUserId String?
+
   administrators TravelCompanyAdministrator[]
   trips          TravelTrip[]
   application    TravelCompanyApplication?
@@ -297,7 +307,7 @@ model TravelCompany {
 }
 
 model TravelCompanyAdministrator {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
   userId    String
   isPrimary Boolean @default(false)
@@ -319,12 +329,16 @@ enum TravelTripStatus {
   CANCELLED
 }
 
+enum TravelTripTeamRole {
+  ORGANIZER
+  COLLABORATOR
+}
+
 model TravelTrip {
   id        String @id @default(cuid())
   companyId String
 
-  company TravelCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
+  company     TravelCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title       String
   destination String
   description String?
@@ -344,7 +358,7 @@ model TravelTrip {
 
   price                  Float?
   totalCapacity          Int?
-  externalReservedPlaces Int @default(0)
+  externalReservedPlaces Int    @default(0)
 
   showDates      Boolean @default(true)
   showDistance   Boolean @default(true)
@@ -353,13 +367,59 @@ model TravelTrip {
   showPrice      Boolean @default(true)
   showCapacity   Boolean @default(true)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  modules        TravelTripModule[]
+  activities     TravelTripActivity[]
+  accommodations TravelAccommodation[]
+  meals          TravelTripMeal[]
+  transport      TravelTripTransport?
+  transfers      TravelTripTransfer?
+  insurance      TravelTripInsurance?
+  equipment      TravelTripEquipment[]
+  pricing        TravelTripPricing?
+  reservations   TravelReservation[]
+  teamMembers    TravelTripTeamMember[]
 
   @@index([companyId])
   @@index([status])
   @@index([isFeatured])
   @@index([displayOrder])
+}
+
+model TravelTripTeamMember {
+  id     String @id @default(cuid())
+  tripId String
+  userId String
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role TravelTripTeamRole
+
+  // Permisos operativos para COLLABORATOR.
+  // Los ORGANIZER tienen acceso operativo completo al viaje.
+  canManageParticipants  Boolean @default(false)
+  canManageActivities    Boolean @default(false)
+  canManageAccommodation Boolean @default(false)
+  canManageFood          Boolean @default(false)
+  canManageTransport     Boolean @default(false)
+  canManageInsurance     Boolean @default(false)
+  canManageEquipment     Boolean @default(false)
+  canManageNotices       Boolean @default(false)
+  canContactParticipants Boolean @default(false)
+
+  // Informacion economica bloqueada por defecto.
+  canViewFinancials   Boolean @default(false)
+  canManageFinancials Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tripId, userId])
+  @@index([tripId])
+  @@index([userId])
+  @@index([role])
 }
 
 model TravelCompanyApplication {
@@ -391,4 +451,511 @@ model TravelCompanyApplication {
   @@index([status])
   @@index([createdAt])
   @@index([email])
+}
+
+enum TravelModuleType {
+  ACCOMMODATION
+  SPORTS_ACTIVITIES
+  FOOD
+  PASSENGER_TRANSPORT
+  BICYCLE_TRANSPORT
+  TRANSFERS
+  INSURANCE
+  EQUIPMENT_RENTAL
+  RESERVATIONS
+  PAYMENTS
+  RULES_WAIVER
+  VIARANK_GROUP
+  OFFICIAL_NOTICES
+  PARTICIPANT_CONTACT
+}
+
+enum TravelActivityCategory {
+  CYCLING
+  HIKING
+  WALKING
+  RUNNING
+  SWIMMING
+  KAYAK
+  ROWING
+  SAILING
+  COMPLEMENTARY
+  OTHER
+}
+
+enum TravelActivityScheduleType {
+  PROGRAMMED
+  ALTERNATIVE
+  WEATHER_DEPENDENT
+}
+
+enum TravelInclusionStatus {
+  INCLUDED
+  NOT_INCLUDED
+  NOT_APPLICABLE
+}
+
+enum TravelMealType {
+  BREAKFAST
+  LUNCH
+  PACKED_MEAL
+  REFRESHMENT
+  DINNER
+  WELCOME_DINNER
+}
+
+model TravelTripModule {
+  id        String           @id @default(cuid())
+  tripId    String
+  type      TravelModuleType
+  isEnabled Boolean          @default(false)
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tripId, type])
+  @@index([tripId])
+}
+
+model TravelTripActivity {
+  id     String @id @default(cuid())
+  tripId String
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  category     TravelActivityCategory
+  scheduleType TravelActivityScheduleType @default(PROGRAMMED)
+
+  name        String
+  description String?
+  imageUrl    String?
+
+  dayNumber    Int?
+  activityDate DateTime?
+  displayOrder Int       @default(0)
+
+  distanceKm      Float?
+  durationMinutes Int?
+  activeMinutes   Int?
+  elevationGain   Float?
+  maxAltitude     Float?
+  expectedPace    String?
+  expectedSpeed   String?
+  difficulty      String?
+  terrain         String?
+  departurePoint  String?
+  arrivalPoint    String?
+
+  guideEnabled          Boolean @default(false)
+  closerEnabled         Boolean @default(false)
+  radioCommunication    Boolean @default(false)
+  supportVehicleEnabled Boolean @default(false)
+  lightMechanicsEnabled Boolean @default(false)
+
+  entranceStatus TravelInclusionStatus @default(NOT_APPLICABLE)
+  transferStatus TravelInclusionStatus @default(NOT_APPLICABLE)
+
+  notes String?
+
+  requirements TravelActivityRequirement[]
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  meals        TravelTripMeal[]
+
+  @@index([tripId])
+  @@index([category])
+  @@index([displayOrder])
+}
+
+model TravelActivityRequirement {
+  id         String @id @default(cuid())
+  activityId String
+
+  activity TravelTripActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  name         String
+  isMandatory  Boolean @default(false)
+  displayOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([activityId])
+}
+
+model TravelAccommodation {
+  id     String @id @default(cuid())
+  tripId String
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  type        String
+  name        String
+  location    String?
+  description String?
+
+  nights   Int?
+  capacity Int?
+
+  sharedAccommodationText String?
+
+  privateOptionEnabled               Boolean @default(false)
+  privateOptionPrice                 Float?
+  privateOptionSubjectToAvailability Boolean @default(true)
+
+  previousNightEnabled  Boolean @default(false)
+  previousNightPrice    Float?
+  followingNightEnabled Boolean @default(false)
+  followingNightPrice   Float?
+
+  features Json?
+
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId])
+  @@index([displayOrder])
+}
+
+model TravelTripMeal {
+  id         String  @id @default(cuid())
+  tripId     String
+  activityId String?
+
+  trip     TravelTrip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  activity TravelTripActivity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  dayNumber Int?
+  type      TravelMealType
+  status    TravelInclusionStatus @default(NOT_APPLICABLE)
+
+  restaurantName         String?
+  restaurantAddress      String?
+  approximateTime        String?
+  reservationCoordinated Boolean @default(false)
+
+  viaBreakEnabled Boolean @default(false)
+
+  description  String?
+  displayOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId])
+  @@index([activityId])
+  @@index([dayNumber])
+}
+
+enum TravelReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum TravelPassengerTransportChoice {
+  ORGANIZER_TRANSPORT
+  OWN_MEANS
+}
+
+enum TravelBicycleTransportChoice {
+  ORGANIZER_TRANSPORT
+  OWN_MEANS
+  NOT_APPLICABLE
+}
+
+enum TravelPaymentStatus {
+  PENDING
+  REPORTED
+  VERIFIED
+  REJECTED
+}
+
+enum TravelPricingMode {
+  FIXED
+  FIXED_DEPOSIT_ADJUSTABLE_BALANCE
+}
+
+enum TravelExtraType {
+  PRIVATE_ACCOMMODATION
+  PREVIOUS_NIGHT
+  FOLLOWING_NIGHT
+  EQUIPMENT_RENTAL
+  TRANSFER
+  OTHER
+}
+
+model TravelTripTransfer {
+  id     String @id @default(cuid())
+  tripId String @unique
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  arrivalTransferEnabled  Boolean @default(false)
+  arrivalTransferIncluded Boolean @default(false)
+  arrivalTransferPrice    Float?
+  arrivalPickupPoint      String?
+  arrivalDestination      String?
+  arrivalInstructions     String?
+
+  departureTransferEnabled  Boolean @default(false)
+  departureTransferIncluded Boolean @default(false)
+  departureTransferPrice    Float?
+  departurePickupPoint      String?
+  departureDestination      String?
+  departureInstructions     String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TravelTripTransport {
+  id     String @id @default(cuid())
+  tripId String @unique
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  passengerTransportEnabled  Boolean @default(false)
+  passengerTransportIncluded Boolean @default(false)
+  passengerCapacity          Int?
+
+  bicycleTransportEnabled  Boolean @default(false)
+  bicycleTransportIncluded Boolean @default(false)
+  bicycleCapacity          Int?
+  bicycleTransportType     String?
+  bicycleTransportPrice    Float?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TravelTripEquipment {
+  id     String @id @default(cuid())
+  tripId String
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  name        String
+  type        String?
+  description String?
+
+  quantityAvailable Int?
+  price             Float?
+
+  conditions String?
+  notes      String?
+
+  displayOrder Int     @default(0)
+  enabled      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId])
+  @@index([enabled])
+  @@index([displayOrder])
+}
+model TravelTripInsurance {
+  id     String @id @default(cuid())
+  tripId String @unique
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  enabled  Boolean @default(false)
+  required Boolean @default(false)
+  included Boolean @default(false)
+
+  provider     String?
+  coverageType String?
+  coverage     String?
+
+  price Float?
+
+  validFrom  DateTime?
+  validUntil DateTime?
+
+  instructions String?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model TravelTripPricing {
+  id     String @id @default(cuid())
+  tripId String @unique
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  mode TravelPricingMode @default(FIXED)
+
+  basePrice    Float?
+  depositValue Float?
+
+  adjustmentMethod      String?
+  adjustmentDescription String?
+
+  versions TravelPricingVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TravelPricingVersion {
+  id        String @id @default(cuid())
+  pricingId String
+
+  pricing TravelTripPricing @relation(fields: [pricingId], references: [id], onDelete: Cascade)
+
+  version     Int
+  termsText   String
+  effectiveAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@unique([pricingId, version])
+  @@index([pricingId])
+}
+
+model TravelReservation {
+  id     String  @id @default(cuid())
+  tripId String
+  userId String?
+
+  trip TravelTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  status TravelReservationStatus @default(PENDING)
+
+  firstName String
+  lastName  String
+  document  String?
+  birthDate DateTime?
+  phone     String?
+  email     String?
+
+  city    String?
+  address String?
+
+  healthCoverageName   String?
+  healthCoverageNumber String?
+
+  emergencyContactName         String?
+  emergencyContactRelationship String?
+  emergencyContactPhone        String?
+  emergencyContactPhoneAlt     String?
+
+  passengerTransportChoice TravelPassengerTransportChoice?
+  bicycleTransportChoice   TravelBicycleTransportChoice?
+
+  arrivalMode          String?
+  arrivalDate          DateTime?
+  arrivalApproxTime    String?
+  arrivalPlace         String?
+  arrivalCompany       String?
+  arrivalServiceNumber String?
+  arrivalNotes         String?
+
+  departureMode          String?
+  departureDate          DateTime?
+  departureApproxTime    String?
+  departurePlace         String?
+  departureCompany       String?
+  departureServiceNumber String?
+  departureNotes         String?
+
+  bicycleType         String?
+  bicycleBrand        String?
+  bicycleModel        String?
+  bicycleColor        String?
+  bicycleWheelSize    String?
+  bicycleSerialNumber String?
+  bicyclePhotoUrl     String?
+  bicycleNotes        String?
+
+  basePrice      Float?
+  extrasTotal    Float  @default(0)
+  totalPrice     Float?
+  totalPaid      Float  @default(0)
+  pendingBalance Float?
+
+  pricingTermsAcceptedAt DateTime?
+  pricingTermsVersion    Int?
+
+  waiverAcceptedAt DateTime?
+  waiverVersion    Int?
+
+  extras             TravelReservationExtra[]
+  payments           TravelPayment[]
+  balanceAdjustments TravelBalanceAdjustment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId])
+  @@index([userId])
+  @@index([status])
+  @@unique([tripId, userId])
+}
+
+model TravelReservationExtra {
+  id            String @id @default(cuid())
+  reservationId String
+
+  reservation TravelReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  type        TravelExtraType
+  name        String
+  description String?
+  quantity    Int             @default(1)
+  unitPrice   Float
+  totalPrice  Float
+
+  createdAt DateTime @default(now())
+
+  @@index([reservationId])
+}
+
+model TravelPayment {
+  id            String @id @default(cuid())
+  reservationId String
+
+  reservation TravelReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  amount Float
+  status TravelPaymentStatus @default(PENDING)
+
+  receiptUrl String?
+  reportedAt DateTime?
+  verifiedAt DateTime?
+  rejectedAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reservationId])
+  @@index([status])
+}
+
+model TravelBalanceAdjustment {
+  id            String @id @default(cuid())
+  reservationId String
+
+  reservation TravelReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  previousBalance Float
+  newBalance      Float
+  reason          String
+
+  createdAt DateTime @default(now())
+
+  @@index([reservationId])
 }
