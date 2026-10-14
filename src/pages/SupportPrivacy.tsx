@@ -1,4 +1,4 @@
-import viarankLogo from "../assets/viarank-logo.png";
+import viarankLogo from "../assets/viarank-header-logo-clean.png";
 import { useLocation, useNavigate } from "react-router-dom";
 
 export default function SupportPrivacy() {
@@ -8,11 +8,11 @@ export default function SupportPrivacy() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f1f5f9",
+        background: "#071a33",
         padding: "24px 16px 48px",
         fontFamily:
           "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        color: "#0f172a",
+        color: "#ffffff",
       }}
     >
       <div
@@ -24,7 +24,7 @@ export default function SupportPrivacy() {
       >
         <div
           style={{
-            background: "#0f172a",
+            background: "#111827",
             borderRadius: "18px",
             padding: "20px",
             marginBottom: "18px",
@@ -44,7 +44,7 @@ export default function SupportPrivacy() {
 
         <main
           style={{
-            background: "#ffffff",
+            background: "#102b4c",
             borderRadius: "18px",
             padding: "24px",
             boxShadow:
@@ -58,12 +58,12 @@ export default function SupportPrivacy() {
             }}
             style={{
               border: "none",
-              background: "#f1f5f9",
+              background: "#071a33",
               borderRadius: "10px",
               padding: "9px 14px",
               cursor: "pointer",
               fontWeight: 700,
-              color: "#334155",
+              color: "#ffffff",
               marginBottom: "22px",
             }}
           >
@@ -82,7 +82,7 @@ export default function SupportPrivacy() {
           <p
             style={{
               margin: "0 0 28px",
-              color: "#64748b",
+              color: "#b8cde5",
               lineHeight: 1.6,
             }}
           >
@@ -99,7 +99,7 @@ export default function SupportPrivacy() {
   <p
     style={{
       lineHeight: 1.7,
-      color: "#475569",
+      color: "#d1e2f5",
     }}
   >
     Si necesitás ayuda con ViaRank,
@@ -109,7 +109,7 @@ export default function SupportPrivacy() {
   </p>
 
   <a
-    href="mailto:abeldigrandi@gmail.com"
+    href="mailto:viarank.app@gmail.com"
     style={{
       display: "inline-block",
       color: "#ea580c",
@@ -117,8 +117,9 @@ export default function SupportPrivacy() {
       textDecoration: "none",
     }}
   >
-    abeldigrandi@gmail.com
+    viarank.app@gmail.com
   </a>
+  <p style={{ color: "#b8cde5", marginTop: "12px" }}>Desarrollador: <strong style={{ color: "#ffffff" }}>AJD</strong></p>
 </section>
 
           <section style={{ marginBottom: "28px" }}>
@@ -129,7 +130,7 @@ export default function SupportPrivacy() {
             <p
               style={{
                 lineHeight: 1.7,
-                color: "#475569",
+                color: "#d1e2f5",
               }}
             >
               ViaRank permite conectar tu cuenta
@@ -144,7 +145,7 @@ export default function SupportPrivacy() {
             <p
               style={{
                 lineHeight: 1.7,
-                color: "#475569",
+                color: "#d1e2f5",
               }}
             >
               ViaRank no solicita tu contraseña
@@ -162,7 +163,7 @@ export default function SupportPrivacy() {
             <p
               style={{
                 lineHeight: 1.7,
-                color: "#475569",
+                color: "#d1e2f5",
               }}
             >
               Los datos obtenidos mediante la
@@ -183,7 +184,7 @@ export default function SupportPrivacy() {
             <p
               style={{
                 lineHeight: 1.7,
-                color: "#475569",
+                color: "#d1e2f5",
               }}
             >
               Podés retirar la autorización de
@@ -198,7 +199,7 @@ export default function SupportPrivacy() {
     Eliminación de datos
   </h2>
 
-  <p style={{ lineHeight: 1.7, color: "#475569" }}>Podés solicitar la eliminación de tu cuenta y de los datos asociados en ViaRank.</p><p style={{ lineHeight: 1.7, color: "#475569", fontWeight: 600 }}>Importante: si sos administrador de uno o más grupos, al eliminar tu cuenta también se eliminarán permanentemente esos grupos y sus membresías. Esta acción no se puede deshacer.</p>
+  <p style={{ lineHeight: 1.7, color: "#d1e2f5" }}>Podés solicitar la eliminación de tu cuenta y de los datos asociados en ViaRank.</p><p style={{ lineHeight: 1.7, color: "#d1e2f5", fontWeight: 600 }}>Importante: si sos administrador de uno o más grupos, al eliminar tu cuenta también se eliminarán permanentemente esos grupos y sus membresías. Esta acción no se puede deshacer.</p>
 
     <button
     onClick={async () => {
@@ -285,7 +286,7 @@ export default function SupportPrivacy() {
             style={{
               marginTop: "32px",
               paddingTop: "20px",
-              borderTop: "1px solid #e2e8f0",
+              borderTop: "1px solid #148cff",
               color: "#94a3b8",
               fontSize: "13px",
               lineHeight: 1.6,
