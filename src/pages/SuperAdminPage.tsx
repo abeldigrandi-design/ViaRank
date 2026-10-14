@@ -8,7 +8,8 @@ type AdminUser = {
   lastName?: string;
   email?: string | null;
   role?: string;
-};
+
+  isActive?: boolean;};
 
 type AdminGroup = {
   id: string;
@@ -121,6 +122,90 @@ export default function SuperAdminPage({
 }: Props) {
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [updatingUsers, setUpdatingUsers] = useState(false);
+
+  /* VIARANK_BULK_USER_STATUS_HANDLER */
+  const changeSelectedUsersStatus = async (isActive: boolean) => {
+    if (!isSuperAdmin || updatingUsers) return;
+
+    const targets = adminUsers.filter(
+      (candidate) =>
+        selectedUsers.includes(candidate.id) &&
+        candidate.role !== "SUPER_ADMIN" &&
+        candidate.id !== user?.id
+    );
+
+    if (targets.length === 0) {
+      window.alert("No hay usuarios habilitados para esta operación.");
+      return;
+    }
+
+    const action = isActive ? "reactivar" : "desactivar";
+
+    if (
+      !window.confirm(
+        `¿Querés ${action} ${targets.length} usuario(s)?`
+      )
+    ) {
+      return;
+    }
+
+    setUpdatingUsers(true);
+
+    try {
+      const token = localStorage.getItem("viarank_auth_token");
+
+      if (!token) {
+        throw new Error("No se encontró la sesión.");
+      }
+
+      let completed = 0;
+      const errors: string[] = [];
+
+      for (const target of targets) {
+        try {
+          const response = await fetch(
+            `${API_URL}/api/admin/users/${encodeURIComponent(target.id)}/status`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ isActive }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          completed++;
+        } catch {
+          errors.push(
+            `${target.firstName ?? ""} ${target.lastName ?? ""}`.trim()
+          );
+        }
+      }
+
+      setSelectedUsers([]);
+
+      window.alert(
+        `${completed} usuario(s) procesados correctamente.` +
+          (errors.length
+            ? `\nNo se pudieron modificar: ${errors.join(", ")}`
+            : "")
+      );
+
+      window.location.reload();
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Error al procesar usuarios."
+      );
+    } finally {
+      setUpdatingUsers(false);
+    }
+  };
   const [selectedGroup, setSelectedGroup] = useState<AdminGroup | null>(null);
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
   const [activityControlSpeed, setActivityControlSpeed] = useState("");
@@ -1077,7 +1162,8 @@ export default function SuperAdminPage({
                         member.user.id
                       );
 
-                      return (
+
+  return (
                         <label
                           key={member.membershipId}
                           style={{
@@ -1641,6 +1727,49 @@ export default function SuperAdminPage({
               </span>
             </div>
 
+            {/* VIARANK_BULK_USER_STATUS */}
+            {isSuperAdmin && selectedUsers.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  marginBottom: "12px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => void changeSelectedUsersStatus(false)}
+                  disabled={updatingUsers}
+                  style={{
+                    padding: "9px 12px",
+                    background: "#9a3412",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Desactivar seleccionados
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void changeSelectedUsersStatus(true)}
+                  disabled={updatingUsers}
+                  style={{
+                    padding: "9px 12px",
+                    background: "#166534",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Reactivar seleccionados
+                </button>
+              </div>
+            )}
             {!adminUsersLoading && (
               <div
                 style={{
@@ -1674,7 +1803,8 @@ export default function SuperAdminPage({
                     >
                       <input
                         type="checkbox"
-                        checked={selected}
+                        disabled={adminUser.role === "SUPER_ADMIN" || adminUser.id === user?.id}
+                         checked={selected}
                         onChange={() => toggleUser(adminUser.id)}
                         style={{
                           width: "14px",
@@ -1698,6 +1828,17 @@ export default function SuperAdminPage({
                       >
                         <strong style={{ color: "#ffffff" }}>
                           {adminUser.lastName ?? ""}{" "}
+{adminUser.isActive === false && (
+  <span
+    style={{
+      color: "#fca5a5",
+      fontWeight: 800,
+      marginLeft: "6px",
+    }}
+  >
+    (DESACTIVADO)
+  </span>
+)}
                           {adminUser.firstName ?? ""}
                         </strong>
 

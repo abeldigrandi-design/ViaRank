@@ -287,6 +287,42 @@ function getAuthenticatedUserId(
   }
 }
 
+/* VIARANK_ACCOUNT_STATUS_GUARD
+   Bloquea cuentas desactivadas incluso con tokens existentes.
+*/
+app.use(async (req, res, next) => {
+  const authorization = req.headers.authorization;
+
+  if (!authorization?.startsWith("Bearer ")) {
+    return next();
+  }
+
+  const userId = getAuthenticatedUserId(req);
+
+  if (!userId) {
+    return next();
+  }
+
+  try {
+    const account = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!account || !account.isActive) {
+      return res.status(403).json({
+        error: "Cuenta desactivada. Contactá al administrador de ViaRank.",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error("Error verificando estado de cuenta:", error);
+    return res.status(503).json({
+      error: "No se pudo verificar el estado de la cuenta.",
+    });
+  }
+});
 /* =========================================================
    RUTA PRINCIPAL
 ========================================================= */
@@ -657,6 +693,11 @@ app.post(
         await prisma.user.findUnique({
           where: { email },
         });
+      if (user && !user.isActive) {
+        return res.status(403).json({
+          error: "Cuenta desactivada. Contactá al administrador.",
+        });
+      }
 
       if (!user) {
         return res.status(401).json({
@@ -799,6 +840,11 @@ app.post(
           where: { email },
         });
 
+      if (existingUser && !existingUser.isActive) {
+        return res.status(403).json({
+          error: "Cuenta desactivada. Contactá al administrador.",
+        });
+      }
       const verifiedUser =
         existingUser
           ? await prisma.user.update({
@@ -926,6 +972,12 @@ app.post(
           },
         });
 
+      /* VIARANK_INACTIVE_AUTH_CHECK */
+      if (session && !session.user.isActive) {
+        return res.status(403).json({
+          error: "Cuenta desactivada. Contactá al administrador.",
+        });
+      }
       if (!session) {
         return res.status(401).json({
           error:
@@ -1215,6 +1267,82 @@ app.patch("/api/profile", async (req, res) => {
     });
   }
 });
+/* VIARANK_ADMIN_USER_STATUS */
+app.patch("/api/admin/users/:userId/status", async (req, res) => {
+  try {
+    const requesterId = getAuthenticatedUserId(req);
+
+    if (!requesterId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const requester = await prisma.user.findUnique({
+      where: { id: requesterId },
+      select: { role: true, isActive: true },
+    });
+
+    if (requester?.role !== "SUPER_ADMIN" || !requester.isActive) {
+      return res.status(403).json({ error: "Acceso denegado" });
+    }
+
+    const userId = String(req.params.userId || "").trim();
+    const isActive = req.body?.isActive;
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        error: "El estado debe ser verdadero o falso",
+      });
+    }
+
+    if (userId === requesterId) {
+      return res.status(403).json({
+        error: "No podés modificar tu propia cuenta",
+      });
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!target) {
+      return res.status(404).json({ error: "Usuario inexistente" });
+    }
+
+    if (target.role === "SUPER_ADMIN") {
+      return res.status(403).json({
+        error: "No se pueden modificar cuentas SUPER_ADMIN",
+      });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isActive },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        isActive: true,
+      },
+    });
+
+    if (!isActive) {
+      await prisma.userSession.updateMany({
+        where: { userId },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    return res.json({ success: true, user: updated });
+  } catch (error) {
+    console.error("Error administrando usuario:", error);
+    return res.status(500).json({
+      error: "No se pudo modificar el estado del usuario",
+    });
+  }
+});
+
 app.get("/api/users", async (req, res) => {
   try {
         const requesterId =
@@ -1257,6 +1385,7 @@ app.get("/api/users", async (req, res) => {
         email: true,
         profilePicture: true,
         role: true,
+        isActive: true,
         city: true,
         country: true,
 _count: {

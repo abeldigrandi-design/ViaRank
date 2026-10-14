@@ -62,6 +62,19 @@ export default function TravelCompanyPage() {
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
   const [message, setMessage] = useState("");
+  const [showApplication, setShowApplication] = useState(false);
+  const [sendingApplication, setSendingApplication] = useState(false);
+  const [application, setApplication] = useState({
+    companyName: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    whatsapp: "",
+    city: "",
+    country: "Argentina",
+    website: "",
+    description: "",
+  });
 
   async function loadCompanies() {
     const token = localStorage.getItem("viarank_auth_token");
@@ -108,6 +121,64 @@ export default function TravelCompanyPage() {
     void loadCompanies();
   }, []);
 
+  async function submitCompanyApplication() {
+    if (
+      !application.companyName.trim() ||
+      !application.contactName.trim() ||
+      !application.email.trim()
+    ) {
+      setMessage("Completá empresa, responsable y correo electrónico.");
+      return;
+    }
+
+    setSendingApplication(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/travel/company-applications`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(application),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "No se pudo enviar la solicitud."
+        );
+      }
+
+      setMessage(
+        "Solicitud enviada correctamente. ViaRank revisará los datos y deberá aprobar el acceso antes de entregar un código de activación."
+      );
+      setShowApplication(false);
+      setApplication({
+        companyName: "",
+        contactName: "",
+        email: "",
+        phone: "",
+        whatsapp: "",
+        city: "",
+        country: "Argentina",
+        website: "",
+        description: "",
+      });
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo enviar la solicitud."
+      );
+    } finally {
+      setSendingApplication(false);
+    }
+  }
   async function activateCompany() {
     const code = activationCode.trim().toUpperCase();
 
@@ -459,6 +530,149 @@ export default function TravelCompanyPage() {
                 }}
               />
 
+              <div
+                style={{
+                  border: "1px solid rgba(20,140,255,.45)",
+                  borderRadius: "14px",
+                  background: "#082440",
+                  padding: "16px",
+                  marginBottom: "18px",
+                }}
+              >
+                <h2 style={{ margin: "0 0 8px", fontSize: "19px" }}>
+                  ¿Querés organizar viajes con ViaRank?
+                </h2>
+
+                <p
+                  style={{
+                    color: "#bcd3e9",
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Solicitá autorización para registrar tu empresa.
+                  ViaRank evaluará la solicitud antes de habilitarla.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApplication(!showApplication);
+                    setMessage("");
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "13px",
+                    border: 0,
+                    borderRadius: "11px",
+                    background: "linear-gradient(90deg, #087dff, #148cff)",
+                    color: "#fff",
+                    fontSize: "14px",
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  {showApplication
+                    ? "CERRAR SOLICITUD"
+                    : "SOLICITAR ACCESO COMO EMPRESA"}
+                </button>
+
+                {showApplication && (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitCompanyApplication();
+                    }}
+                    style={{
+                      display: "grid",
+                      gap: "12px",
+                      marginTop: "16px",
+                    }}
+                  >
+                    {([
+                      ["companyName", "Nombre de la empresa *"],
+                      ["contactName", "Nombre del responsable *"],
+                      ["email", "Correo electrónico *"],
+                      ["phone", "Teléfono"],
+                      ["whatsapp", "WhatsApp"],
+                      ["city", "Ciudad"],
+                      ["country", "País"],
+                      ["website", "Sitio web"],
+                    ] as const).map(([key, label]) => (
+                      <label
+                        key={key}
+                        style={{
+                          display: "grid",
+                          gap: "5px",
+                          color: "#cfe8ff",
+                          fontSize: "13px",
+                        }}
+                      >
+                        {label}
+                        <input
+                          type={key === "email" ? "email" : "text"}
+                          required={
+                            key === "companyName" ||
+                            key === "contactName" ||
+                            key === "email"
+                          }
+                          value={application[key]}
+                          onChange={(event) =>
+                            setApplication((previous) => ({
+                              ...previous,
+                              [key]: event.target.value,
+                            }))
+                          }
+                          style={fieldStyle}
+                        />
+                      </label>
+                    ))}
+
+                    <label
+                      style={{
+                        display: "grid",
+                        gap: "5px",
+                        color: "#cfe8ff",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Descripción de la actividad
+                      <textarea
+                        rows={3}
+                        value={application.description}
+                        onChange={(event) =>
+                          setApplication((previous) => ({
+                            ...previous,
+                            description: event.target.value,
+                          }))
+                        }
+                        style={fieldStyle}
+                      />
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={sendingApplication}
+                      style={{
+                        padding: "13px",
+                        border: 0,
+                        borderRadius: "11px",
+                        background: "#148cff",
+                        color: "#fff",
+                        fontWeight: 900,
+                        cursor: sendingApplication
+                          ? "not-allowed"
+                          : "pointer",
+                        opacity: sendingApplication ? 0.7 : 1,
+                      }}
+                    >
+                      {sendingApplication
+                        ? "ENVIANDO..."
+                        : "ENVIAR SOLICITUD A VIARANK"}
+                    </button>
+                  </form>
+                )}
+              </div>
               <h2
                 style={{
                   margin: "0 0 6px",
