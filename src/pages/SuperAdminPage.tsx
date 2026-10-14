@@ -1269,7 +1269,8 @@ export default function SuperAdminPage({
                   }}
                 >
                   {administeredGroups.map((group) => (
-                    <button
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                     <button
                       type="button"
                       key={group.id}
                       onClick={() => void openGroup(group)}
@@ -1320,8 +1321,75 @@ export default function SuperAdminPage({
                       >
                         ›
                       </span>
-                    </button>
-                  ))}
+                                         </button>
+                     {isSuperAdmin && (
+                       <button
+                         /* VIARANK_DELETE_GROUP_BUTTON */
+                         type="button"
+                         onClick={async () => {
+                           if (!window.confirm(
+                             `¿Querés eliminar definitivamente el grupo "${group.name}"?`
+                           )) return;
+
+                           const nombre = window.prompt(
+                             `Para confirmar, escribí exactamente: ${group.name}`
+                           );
+
+                           if (nombre !== group.name) {
+                             window.alert("El nombre no coincide. No se eliminó el grupo.");
+                             return;
+                           }
+
+                           const token = localStorage.getItem("viarank_auth_token");
+
+                           if (!token) {
+                             window.alert("Tu sesión no está disponible.");
+                             return;
+                           }
+
+                           try {
+                             const response = await fetch(
+                               `${API_URL}/api/groups/${encodeURIComponent(group.id)}`,
+                               {
+                                 method: "DELETE",
+                                 headers: {
+                                   Authorization: `Bearer ${token}`,
+                                 },
+                               }
+                             );
+
+                             const result = await response.json();
+
+                             if (!response.ok) {
+                               throw new Error(result.error || "No se pudo eliminar el grupo");
+                             }
+
+                             window.alert(`Grupo "${group.name}" eliminado correctamente.`);
+                             window.location.reload();
+                           } catch (error) {
+                             window.alert(
+                               error instanceof Error
+                                 ? error.message
+                                 : "Error al eliminar el grupo"
+                             );
+                           }
+                         }}
+                         style={{
+                           background: "#8b1e2d",
+                           color: "#ffffff",
+                           border: "1px solid #ef4444",
+                           borderRadius: "7px",
+                           padding: "6px 10px",
+                           fontSize: "11px",
+                           fontWeight: 800,
+                           cursor: "pointer",
+                           flexShrink: 0,
+                         }}
+                       >
+                         ELIMINAR
+                       </button>
+                     )}
+                   </div>                  ))}
                 </div>
               )}
             </>
