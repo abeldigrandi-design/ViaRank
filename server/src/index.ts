@@ -2241,11 +2241,13 @@ const response = await fetch(
       await prisma.$transaction(
         async (tx) => {
           // Si administra grupos, tambiÃ©n se eliminan.
-          await tx.sportGroup.deleteMany({
-            where: {
-              administratorId: userId,
-            },
+          const administeredGroups = await tx.sportGroup.count({
+            where: { administratorId: userId },
           });
+
+          if (administeredGroups > 0) {
+            throw new Error("USER_ADMINISTERS_GROUPS");
+          }
 
           // Eliminar membresÃ­as.
           await tx.groupMember.deleteMany({
@@ -2281,6 +2283,15 @@ const response = await fetch(
           `${user.firstName} ${user.lastName} fue eliminado correctamente`,
       });
     } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "USER_ADMINISTERS_GROUPS"
+      ) {
+        return res.status(409).json({
+          error: "Este usuario administra grupos. Primero transferi la administracion de esos grupos.",
+        });
+      }
+
       console.error(
         "Error eliminando usuario desde SUPER_ADMIN:",
         error

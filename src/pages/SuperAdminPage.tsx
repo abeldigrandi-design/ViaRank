@@ -1795,50 +1795,85 @@ export default function SuperAdminPage({
               </span>
             </div>
 
-            {/* VIARANK_BULK_USER_STATUS */}
+            {/* VIARANK_BULK_USER_DELETE */}
             {isSuperAdmin && selectedUsers.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  marginBottom: "12px",
-                }}
-              >
+              <div style={{ marginBottom: "12px" }}>
                 <button
                   type="button"
-                  onClick={() => void changeSelectedUsersStatus(false)}
                   disabled={updatingUsers}
-                  style={{
-                    padding: "9px 12px",
-                    background: "#9a3412",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Desactivar seleccionados
-                </button>
+                  onClick={async () => {
+                    const targets = adminUsers.filter(
+                      (u) =>
+                        selectedUsers.includes(u.id) &&
+                        u.id !== user?.id &&
+                        u.role !== "SUPER_ADMIN"
+                    );
 
-                <button
-                  type="button"
-                  onClick={() => void changeSelectedUsersStatus(true)}
-                  disabled={updatingUsers}
+                    if (targets.length === 0) return;
+
+                    const confirmation = window.prompt(
+                      `Vas a eliminar definitivamente ${targets.length} usuario(s). Escribi ELIMINAR para confirmar:`
+                    );
+
+                    if (confirmation !== "ELIMINAR") return;
+
+                    setUpdatingUsers(true);
+
+                    try {
+                      const errors: string[] = [];
+                      let deleted = 0;
+
+                      for (const target of targets) {
+                        try {
+                          const response = await fetch(
+                            `${API_URL}/api/users/${encodeURIComponent(target.id)}`,
+                            {
+                              method: "DELETE",
+                              headers: {
+                                Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+                              },
+                            }
+                          );
+
+                          const data = await response.json();
+
+                          if (!response.ok) {
+                            errors.push(`${target.firstName ?? ""} ${target.lastName ?? ""}: ${data.error ?? "Error"}`);
+                          } else {
+                            deleted++;
+                          }
+                        } catch {
+                          errors.push(`${target.firstName ?? ""} ${target.lastName ?? ""}: Error de conexion`);
+                        }
+                      }
+
+                      setSelectedUsers([]);
+
+                      alert(
+                        `${deleted} usuario(s) eliminado(s).` +
+                        (errors.length ? `\n\nNo eliminados:\n${errors.join("\n")}` : "") +
+                        "\n\nActualiza el panel para ver la lista."
+                      );
+
+                    } finally {
+                      setUpdatingUsers(false);
+                    }
+                  }}
                   style={{
-                    padding: "9px 12px",
-                    background: "#166534",
+                    padding: "9px 14px",
+                    background: "#b91c1c",
                     color: "#ffffff",
                     border: "none",
                     borderRadius: "8px",
-                    cursor: "pointer",
+                    fontWeight: 800,
+                    cursor: updatingUsers ? "default" : "pointer",
                   }}
                 >
-                  Reactivar seleccionados
+                  {updatingUsers ? "Eliminando..." : `ELIMINAR ${selectedUsers.length} SELECCIONADO(S)`}
                 </button>
               </div>
             )}
-            {!adminUsersLoading && (
+{!adminUsersLoading && (
               <div
                 style={{
                   display: "flex",
