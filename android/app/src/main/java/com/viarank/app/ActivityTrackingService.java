@@ -26,6 +26,8 @@ public class ActivityTrackingService extends Service implements LocationListener
 private Location ultimaUbicacion = null;
 private float distanciaMetros = 0f;
 private long horaInicio = 0L;
+private long tiempoMovimientoMs = 0L;
+private long ultimaPosicionTimestamp = 0L;
 private SharedPreferences actividadStorage;
     @Override
     public void onCreate() {
@@ -87,6 +89,7 @@ actividadStorage = getSharedPreferences(
 
    @Override
 public void onLocationChanged(Location location) {
+    long timestampActual = System.currentTimeMillis();
     if (location.getAccuracy() > 100) {
         return;
     }
@@ -97,12 +100,20 @@ public void onLocationChanged(Location location) {
 
         if (metros >= 2 && metros <= 100) {
             distanciaMetros += metros;
+            if (ultimaPosicionTimestamp > 0) {
+                long intervaloMs = timestampActual - ultimaPosicionTimestamp;
+                if (intervaloMs > 0 && intervaloMs <= 5000) {
+                    tiempoMovimientoMs += intervaloMs;
+                }
+            }
         }
     }
 
     ultimaUbicacion = location;
+    ultimaPosicionTimestamp = timestampActual;
 actividadStorage.edit()
         .putFloat("distanciaMetros", distanciaMetros)
+        .putLong("tiempoMovimientoMs", tiempoMovimientoMs)
         .putLong("horaInicio", horaInicio)
         .putLong("ultimaActualizacion", System.currentTimeMillis())
         .apply();

@@ -374,7 +374,8 @@ model TravelTrip {
   accommodations TravelAccommodation[]
   meals          TravelTripMeal[]
   transport      TravelTripTransport?
-  transfers      TravelTripTransfer?
+  transfers      TravelTripTransfer?
+
   insurance      TravelTripInsurance?
   equipment      TravelTripEquipment[]
   pricing        TravelTripPricing?
@@ -404,7 +405,8 @@ model TravelTripTeamMember {
   canManageAccommodation Boolean @default(false)
   canManageFood          Boolean @default(false)
   canManageTransport     Boolean @default(false)
-  canManageInsurance     Boolean @default(false)
+  canManageInsurance     Boolean @default(false)
+
   canManageEquipment     Boolean @default(false)
   canManageNotices       Boolean @default(false)
   canContactParticipants Boolean @default(false)
@@ -679,6 +681,12 @@ enum TravelPricingMode {
   FIXED_DEPOSIT_ADJUSTABLE_BALANCE
 }
 
+enum TravelReservationPaymentMode {
+  FIXED_DEPOSIT
+  PERCENTAGE_DEPOSIT
+  FULL_PAYMENT
+}
+
 enum TravelExtraType {
   PRIVATE_ACCOMMODATION
   PREVIOUS_NIGHT
@@ -796,7 +804,13 @@ model TravelTripPricing {
   mode TravelPricingMode @default(FIXED)
 
   basePrice    Float?
-  depositValue Float?
+  reservationPaymentMode TravelReservationPaymentMode?
+  depositValue           Float?
+  depositPercentage      Float?
+
+  participantCancellationPolicy String?
+  weatherPolicy                 String?
+  companyCancellationPolicy     String?
 
   adjustmentMethod      String?
   adjustmentDescription String?
@@ -815,6 +829,19 @@ model TravelPricingVersion {
 
   version     Int
   termsText   String
+
+  pricingMode TravelPricingMode
+  basePrice   Float
+
+  reservationPaymentMode TravelReservationPaymentMode?
+  depositValue           Float?
+  depositPercentage      Float?
+
+  participantCancellationPolicy String?
+  weatherPolicy                 String?
+  companyCancellationPolicy     String?
+  adjustmentMethod      String?
+  adjustmentDescription String?
   effectiveAt DateTime @default(now())
 
   createdAt DateTime @default(now())
@@ -884,9 +911,11 @@ model TravelReservation {
   totalPrice     Float?
   totalPaid      Float  @default(0)
   pendingBalance Float?
+  reservationRequiredAmount Float?
 
   pricingTermsAcceptedAt DateTime?
   pricingTermsVersion    Int?
+  confirmedAt                DateTime?
 
   waiverAcceptedAt DateTime?
   waiverVersion    Int?
@@ -911,6 +940,7 @@ model TravelReservationExtra {
   reservation TravelReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
 
   type        TravelExtraType
+  sourceId    String?
   name        String
   description String?
   quantity    Int             @default(1)
@@ -920,6 +950,7 @@ model TravelReservationExtra {
   createdAt DateTime @default(now())
 
   @@index([reservationId])
+  @@index([type, sourceId])
 }
 
 model TravelPayment {

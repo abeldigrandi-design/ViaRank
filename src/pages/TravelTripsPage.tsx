@@ -145,6 +145,25 @@ export default function TravelTripsPage() {
     void loadTrips();
   }, [companyId]);
 
+  useEffect(() => {
+    const requestedTripId = location.state?.editTripId;
+
+    if (!requestedTripId || loading) return;
+
+    const requestedTrip = trips.find(
+      (trip) => trip.id === requestedTripId
+    );
+
+    if (!requestedTrip) return;
+
+    startEditingTrip(requestedTrip);
+
+    navigate(location.pathname, {
+      replace: true,
+      state: { companyName: location.state?.companyName },
+    });
+  }, [trips, loading, location.state?.editTripId]);
+
   async function createTrip() {
     const normalizedTitle = title.trim();
     const normalizedDestination = destination.trim();
@@ -874,24 +893,57 @@ export default function TravelTripsPage() {
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEditingTrip(trip)}
-                      style={{
-                        width: "100%",
-                        marginTop: "12px",
-                        padding: "10px",
-                        borderRadius: "9px",
-                        border: "1px solid rgba(20,140,255,.55)",
-                        background: "#0a2947",
-                        color: "#d8ebff",
-                        fontSize: "12px",
-                        fontWeight: 900,
-                        cursor: "pointer",
-                      }}
-                    >
-                      EDITAR VIAJE
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/viajes/empresa/${companyId}/viajes/${trip.id}`,
+                            {
+                              state: {
+                                companyName:
+                                  company?.name ||
+                                  location.state?.companyName,
+                              },
+                            }
+                          )
+                        }
+                        style={{
+                          width: "100%",
+                          marginTop: "12px",
+                          padding: "11px",
+                          borderRadius: "9px",
+                          border: 0,
+                          background:
+                            "linear-gradient(90deg, #087dff, #148cff)",
+                          color: "#ffffff",
+                          fontSize: "12px",
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ABRIR VIAJE
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => startEditingTrip(trip)}
+                        style={{
+                          width: "100%",
+                          marginTop: "8px",
+                          padding: "10px",
+                          borderRadius: "9px",
+                          border: "1px solid rgba(20,140,255,.55)",
+                          background: "#0a2947",
+                          color: "#d8ebff",
+                          fontSize: "12px",
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        EDITAR VIAJE
+                      </button>
+                    </>
                   )}
                 </div>
               ))}

@@ -17,6 +17,8 @@ import RecordActivity from "./pages/RecordActivity";
 import ProfilePage from "./pages/ProfilePage";
 import TravelCompanyPage from "./pages/TravelCompanyPage";
 import TravelTripsPage from "./pages/TravelTripsPage";
+import TravelTripPage from "./pages/TravelTripPage";
+import TravelAccommodationPage from "./pages/TravelAccommodationPage";
 CapacitorApp.addListener("appUrlOpen", ({ url }) => {
   try {
     const incomingUrl = new URL(url);
@@ -56,6 +58,12 @@ createRoot(document.getElementById("root")!).render(
         path="/viajes/empresa/:companyId/viajes"
         element={<TravelTripsPage />}
       />
+      <Route
+        path="/viajes/empresa/:companyId/viajes/:tripId"
+        element={<TravelTripPage />}
+      />
+      <Route path="/viajes/empresa/:companyId/viajes/:tripId/alojamiento" element={<TravelAccommodationPage />} />
+      <Route path="/viajes/empresa/:companyId/viajes/:tripId/informacion-general" element={<TravelTripPage />} />
 <Route
   path="/validar-actividad"
   element={<ValidateActivity />}

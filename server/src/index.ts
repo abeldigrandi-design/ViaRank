@@ -7159,6 +7159,7 @@ app.patch(
           select: {
             id: true,
             companyId: true,
+            price: true,
             company: {
               select: {
                 accessStatus: true,
@@ -7256,7 +7257,7 @@ app.patch(
       const normalizedNights = parseOptionalNumber(nights);
       const normalizedDistance = parseOptionalNumber(totalDistanceKm);
       const normalizedElevation = parseOptionalNumber(elevationGain);
-      const normalizedPrice = parseOptionalNumber(price);
+      const normalizedPrice = price === undefined ? existingTrip.price : parseOptionalNumber(price);
       const normalizedCapacity = parseOptionalNumber(totalCapacity);
 
       const normalizedExternalReserved =
@@ -10418,6 +10419,402 @@ app.put(
   }
 );
 /* =========================================================
+   VIARANK VIAJES - PRECIO Y CONDICIONES DE RESERVA
+========================================================= */
+
+app.put(
+  "/api/travel/trips/:tripId/pricing",
+  async (req, res) => {
+    try {
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autorizado.",
+        });
+      }
+
+      const tripId = String(
+        req.params.tripId || ""
+      ).trim();
+
+      if (!tripId) {
+        return res.status(400).json({
+          error: "Viaje inválido.",
+        });
+      }
+
+      const access =
+        await getTravelTripAccess(
+          tripId,
+          userId
+        );
+
+      if (!access) {
+        return res.status(404).json({
+          error: "Viaje no encontrado.",
+        });
+      }
+
+      if (
+        !hasTravelCompanyOperationalAccess(
+          access.trip.company
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "La empresa no tiene acceso operativo.",
+        });
+      }
+
+      if (
+        !hasTravelTripPermission(
+          access,
+          "manageFinancials"
+        )
+      ) {
+        return res.status(403).json({
+          error:
+            "No tenés permiso para administrar precios y condiciones.",
+        });
+      }
+
+      const cleanText = (
+        value: unknown
+      ) => {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const trimmed = value.trim();
+
+        return trimmed || null;
+      };
+
+      const basePrice =
+        typeof req.body?.basePrice ===
+          "number" &&
+        Number.isFinite(
+          req.body.basePrice
+        )
+          ? req.body.basePrice
+          : null;
+
+      if (
+        basePrice === null ||
+        basePrice < 0
+      ) {
+        return res.status(400).json({
+          error:
+            "El valor del viaje debe ser un número no negativo.",
+        });
+      }
+
+      const pricingMode:
+        | "FIXED"
+        | "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
+        | null =
+        req.body?.mode ===
+        "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
+          ? "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
+          : req.body?.mode === "FIXED"
+            ? "FIXED"
+            : null;
+
+      if (!pricingMode) {
+        return res.status(400).json({
+          error:
+            "La modalidad de precio es inválida.",
+        });
+      }
+
+      const reservationPaymentMode:
+        | "FIXED_DEPOSIT"
+        | "PERCENTAGE_DEPOSIT"
+        | "FULL_PAYMENT"
+        | null =
+        req.body?.reservationPaymentMode ===
+        "FIXED_DEPOSIT"
+          ? "FIXED_DEPOSIT"
+          : req.body?.reservationPaymentMode ===
+              "PERCENTAGE_DEPOSIT"
+            ? "PERCENTAGE_DEPOSIT"
+            : req.body?.reservationPaymentMode ===
+                "FULL_PAYMENT"
+              ? "FULL_PAYMENT"
+              : null;
+
+      if (
+        reservationPaymentMode !==
+          "FIXED_DEPOSIT" &&
+        reservationPaymentMode !==
+          "PERCENTAGE_DEPOSIT" &&
+        reservationPaymentMode !==
+          "FULL_PAYMENT"
+      ) {
+        return res.status(400).json({
+          error:
+            "La modalidad para asegurar la reserva es inválida.",
+        });
+      }
+
+      let depositValue:
+        | number
+        | null = null;
+
+      let depositPercentage:
+        | number
+        | null = null;
+
+      if (
+        reservationPaymentMode ===
+        "FIXED_DEPOSIT"
+      ) {
+        if (
+          typeof req.body
+            ?.depositValue !==
+            "number" ||
+          !Number.isFinite(
+            req.body.depositValue
+          ) ||
+          req.body.depositValue <= 0
+        ) {
+          return res.status(400).json({
+            error:
+              "La seña fija debe ser mayor que cero.",
+          });
+        }
+
+        if (
+          req.body.depositValue >
+          basePrice
+        ) {
+          return res.status(400).json({
+            error:
+              "La seña fija no puede superar el valor del viaje.",
+          });
+        }
+
+        depositValue =
+          req.body.depositValue;
+      }
+
+      if (
+        reservationPaymentMode ===
+        "PERCENTAGE_DEPOSIT"
+      ) {
+        if (
+          typeof req.body
+            ?.depositPercentage !==
+            "number" ||
+          !Number.isFinite(
+            req.body.depositPercentage
+          ) ||
+          req.body
+            .depositPercentage <= 0 ||
+          req.body
+            .depositPercentage > 100
+        ) {
+          return res.status(400).json({
+            error:
+              "El porcentaje de seña debe ser mayor que 0 y no superar 100.",
+          });
+        }
+
+        depositPercentage =
+          req.body.depositPercentage;
+      }
+
+      const participantCancellationPolicy =
+        cleanText(
+          req.body
+            ?.participantCancellationPolicy
+        );
+
+      const weatherPolicy =
+        cleanText(
+          req.body?.weatherPolicy
+        );
+
+      const companyCancellationPolicy =
+        cleanText(
+          req.body
+            ?.companyCancellationPolicy
+        );
+
+      if (
+        !participantCancellationPolicy ||
+        !weatherPolicy ||
+        !companyCancellationPolicy
+      ) {
+        return res.status(400).json({
+          error:
+            "Las políticas de cancelación del participante, clima/fuerza mayor y cancelación de la empresa son obligatorias.",
+        });
+      }
+
+      const adjustmentMethod =
+        pricingMode ===
+        "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
+          ? cleanText(
+              req.body
+                ?.adjustmentMethod
+            )
+          : null;
+
+      const adjustmentDescription =
+        pricingMode ===
+        "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
+          ? cleanText(
+              req.body
+                ?.adjustmentDescription
+            )
+          : null;
+
+      if (
+        pricingMode ===
+          "FIXED_DEPOSIT_ADJUSTABLE_BALANCE" &&
+        (!adjustmentMethod ||
+          !adjustmentDescription)
+      ) {
+        return res.status(400).json({
+          error:
+            "El método y la descripción de actualización del saldo son obligatorios.",
+        });
+      }
+
+      const termsText = [
+        `Valor del viaje: ${basePrice}`,
+        reservationPaymentMode ===
+        "FIXED_DEPOSIT"
+          ? `Reserva: seña fija de ${depositValue}`
+          : reservationPaymentMode ===
+              "PERCENTAGE_DEPOSIT"
+            ? `Reserva: seña del ${depositPercentage}%`
+            : "Reserva: pago total",
+        "",
+        "Cancelación del participante:",
+        participantCancellationPolicy,
+        "",
+        "Clima, seguridad o fuerza mayor:",
+        weatherPolicy,
+        "",
+        "Cancelación por parte de la empresa:",
+        companyCancellationPolicy,
+        ...(pricingMode ===
+          "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
+          ? [
+              "",
+              "Actualización del saldo:",
+              adjustmentMethod,
+              adjustmentDescription,
+            ]
+          : []),
+      ].join("\n");
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            const currentPricing =
+              await tx.travelTripPricing.findUnique(
+                {
+                  where: {
+                    tripId,
+                  },
+                  include: {
+                    versions: {
+                      orderBy: {
+                        version:
+                          "desc",
+                      },
+                      take: 1,
+                    },
+                  },
+                }
+              );
+
+            const nextVersion =
+              (currentPricing
+                ?.versions[0]
+                ?.version ?? 0) + 1;
+
+            const pricingData = {
+              mode: pricingMode,
+              basePrice,
+              reservationPaymentMode,
+              depositValue,
+              depositPercentage,
+              participantCancellationPolicy,
+              weatherPolicy,
+              companyCancellationPolicy,
+              adjustmentMethod,
+              adjustmentDescription,
+            };
+
+            const pricing =
+              await tx.travelTripPricing.upsert(
+                {
+                  where: {
+                    tripId,
+                  },
+                  create: {
+                    tripId,
+                    ...pricingData,
+                  },
+                  update:
+                    pricingData,
+                }
+              );
+
+            const version =
+              await tx.travelPricingVersion.create(
+                {
+                  data: {
+                    pricingId:
+                      pricing.id,
+                    version:
+                      nextVersion,
+                    termsText,
+                    pricingMode,
+                    basePrice,
+                    reservationPaymentMode,
+                    depositValue,
+                    depositPercentage,
+                    participantCancellationPolicy,
+                    weatherPolicy,
+                    companyCancellationPolicy,
+                    adjustmentMethod,
+                    adjustmentDescription,
+                  },
+                }
+              );
+
+            return {
+              pricing,
+              version,
+            };
+          }
+        );
+
+      return res.json({
+        success: true,
+        pricing: result.pricing,
+        version: result.version,
+      });
+    } catch (error) {
+      console.error(
+        "Error guardando precio y condiciones del viaje:",
+        error
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo guardar el precio y las condiciones del viaje.",
+      });
+    }
+  }
+);
+/* =========================================================
    VIARANK VIAJES - INSCRIPCIÓN / RESERVA DEL PARTICIPANTE
 ========================================================= */
 
@@ -10564,6 +10961,42 @@ app.post(
         });
       }
 
+      const arrivalDateInput =
+        req.body?.arrivalDate;
+
+      const arrivalDate =
+        parseOptionalDate(arrivalDateInput);
+
+      if (
+        arrivalDateInput !== null &&
+        arrivalDateInput !== undefined &&
+        arrivalDateInput !== "" &&
+        !arrivalDate
+      ) {
+        return res.status(400).json({
+          error:
+            "La fecha de llegada no es válida.",
+        });
+      }
+
+      const departureDateInput =
+        req.body?.departureDate;
+
+      const departureDate =
+        parseOptionalDate(departureDateInput);
+
+      if (
+        departureDateInput !== null &&
+        departureDateInput !== undefined &&
+        departureDateInput !== "" &&
+        !departureDate
+      ) {
+        return res.status(400).json({
+          error:
+            "La fecha de salida no es válida.",
+        });
+      }
+
       const runReservationTransaction = async () =>
         prisma.$transaction(
           async (tx) => {
@@ -10577,6 +11010,27 @@ app.post(
                   status: true,
                   totalCapacity: true,
                   externalReservedPlaces: true,
+                  transport: {
+                    select: {
+                      passengerTransportEnabled: true,
+                      passengerCapacity: true,
+                      bicycleTransportEnabled: true,
+                      bicycleCapacity: true,
+                    },
+                  },
+                  accommodations: true,
+                  transfers: true,
+                  equipment: {
+                    where: {
+                      enabled: true,
+                    },
+                    orderBy: [
+                      { displayOrder: "asc" },
+                      { createdAt: "asc" },
+                    ],
+                  },
+                  pricing: true,
+                  price: true,
                   company: {
                     select: {
                       accessStatus: true,
@@ -10620,48 +11074,583 @@ app.post(
                 },
               });
 
-            if (
-              existing &&
-              existing.status !== "CANCELLED"
-            ) {
+            if (!existing) {
               return {
-                type: "DUPLICATE" as const,
-                reservation: existing,
+                type: "PAYMENT_REQUIRED" as const,
               };
             }
 
-            const activeReservations =
-              await tx.travelReservation.count({
-                where: {
-                  tripId,
-                  status: {
-                    in: [
-                      "PENDING",
-                      "CONFIRMED",
-                    ],
-                  },
-                },
+            if (existing.status === "CANCELLED") {
+              return {
+                type: "RESERVATION_CANCELLED" as const,
+              };
+            }
+
+            if (existing.status !== "CONFIRMED") {
+              return {
+                type: "PAYMENT_VERIFICATION_REQUIRED" as const,
+              };
+            }
+
+            if (
+              passengerTransportChoice ===
+              "ORGANIZER_TRANSPORT"
+            ) {
+              if (
+                !trip.transport
+                  ?.passengerTransportEnabled
+              ) {
+                return {
+                  type:
+                    "PASSENGER_TRANSPORT_UNAVAILABLE" as const,
+                };
+              }
+
+              if (
+                trip.transport.passengerCapacity !==
+                null
+              ) {
+                const passengerTransportReservations =
+                  await tx.travelReservation.count({
+                    where: {
+                      tripId,
+                      status: "CONFIRMED",
+                      id: {
+                        not: existing.id,
+                      },
+                      passengerTransportChoice:
+                        "ORGANIZER_TRANSPORT",
+                    },
+                  });
+
+                if (
+                  passengerTransportReservations >=
+                  trip.transport.passengerCapacity
+                ) {
+                  return {
+                    type:
+                      "PASSENGER_TRANSPORT_FULL" as const,
+                    capacity:
+                      trip.transport.passengerCapacity,
+                    occupiedPlaces:
+                      passengerTransportReservations,
+                  };
+                }
+              }
+            }
+
+            if (
+              bicycleTransportChoice ===
+              "ORGANIZER_TRANSPORT"
+            ) {
+              if (
+                !trip.transport
+                  ?.bicycleTransportEnabled
+              ) {
+                return {
+                  type:
+                    "BICYCLE_TRANSPORT_UNAVAILABLE" as const,
+                };
+              }
+
+              if (
+                trip.transport.bicycleCapacity !==
+                null
+              ) {
+                const bicycleTransportReservations =
+                  await tx.travelReservation.count({
+                    where: {
+                      tripId,
+                      status: "CONFIRMED",
+                      id: {
+                        not: existing.id,
+                      },
+                      bicycleTransportChoice:
+                        "ORGANIZER_TRANSPORT",
+                    },
+                  });
+
+                if (
+                  bicycleTransportReservations >=
+                  trip.transport.bicycleCapacity
+                ) {
+                  return {
+                    type:
+                      "BICYCLE_TRANSPORT_FULL" as const,
+                    capacity:
+                      trip.transport.bicycleCapacity,
+                    occupiedPlaces:
+                      bicycleTransportReservations,
+                  };
+                }
+              }
+            }
+
+            const requestedAccommodationId =
+              optionalString(
+                req.body?.accommodationId
+              );
+
+            const requestedAccommodation =
+              requestedAccommodationId
+                ? trip.accommodations.find(
+                    (item) =>
+                      item.id ===
+                      requestedAccommodationId
+                  )
+                : null;
+
+            if (
+              requestedAccommodationId &&
+              !requestedAccommodation
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "El alojamiento seleccionado no pertenece a este viaje.",
+              };
+            }
+
+            const wantsPrivateAccommodation =
+              req.body?.privateAccommodation ===
+              true;
+
+            const previousNights =
+              req.body?.previousNights ===
+                undefined ||
+              req.body?.previousNights === null ||
+              req.body?.previousNights === ""
+                ? 0
+                : Number(
+                    req.body.previousNights
+                  );
+
+            const followingNights =
+              req.body?.followingNights ===
+                undefined ||
+              req.body?.followingNights === null ||
+              req.body?.followingNights === ""
+                ? 0
+                : Number(
+                    req.body.followingNights
+                  );
+
+            if (
+              !Number.isInteger(previousNights) ||
+              previousNights < 0 ||
+              !Number.isInteger(followingNights) ||
+              followingNights < 0
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "Las noches adicionales deben ser cantidades enteras y no negativas.",
+              };
+            }
+
+            if (
+              wantsPrivateAccommodation &&
+              (
+                !requestedAccommodation ||
+                !requestedAccommodation
+                  .privateOptionEnabled
+              )
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "La opción de alojamiento privado no está disponible.",
+              };
+            }
+
+            if (
+              previousNights > 0 &&
+              (
+                !requestedAccommodation ||
+                !requestedAccommodation
+                  .previousNightEnabled
+              )
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "La noche previa no está disponible para el alojamiento seleccionado.",
+              };
+            }
+
+            if (
+              followingNights > 0 &&
+              (
+                !requestedAccommodation ||
+                !requestedAccommodation
+                  .followingNightEnabled
+              )
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "La noche posterior no está disponible para el alojamiento seleccionado.",
+              };
+            }
+
+            const wantsArrivalTransfer =
+              req.body?.arrivalTransfer === true;
+
+            const wantsDepartureTransfer =
+              req.body?.departureTransfer ===
+              true;
+
+            if (
+              wantsArrivalTransfer &&
+              !trip.transfers
+                ?.arrivalTransferEnabled
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "El transfer de llegada no está disponible.",
+              };
+            }
+
+            if (
+              wantsDepartureTransfer &&
+              !trip.transfers
+                ?.departureTransferEnabled
+            ) {
+              return {
+                type: "INVALID_EXTRA" as const,
+                error:
+                  "El transfer de salida no está disponible.",
+              };
+            }
+
+            const requestedEquipment =
+              Array.isArray(req.body?.equipment)
+                ? req.body.equipment
+                : [];
+
+            const equipmentRequests: Array<{
+              item: (typeof trip.equipment)[number];
+              quantity: number;
+            }> = [];
+
+            const requestedEquipmentIds =
+              new Set<string>();
+
+            for (
+              let index = 0;
+              index <
+              requestedEquipment.length;
+              index++
+            ) {
+              const requested =
+                requestedEquipment[index];
+
+              const equipmentId =
+                optionalString(
+                  requested?.equipmentId
+                );
+
+              const quantity =
+                Number(requested?.quantity);
+
+              if (
+                !equipmentId ||
+                !Number.isInteger(quantity) ||
+                quantity <= 0
+              ) {
+                return {
+                  type: "INVALID_EXTRA" as const,
+                  error:
+                    "El equipamiento solicitado debe tener un identificador y una cantidad válida.",
+                };
+              }
+
+              if (
+                requestedEquipmentIds.has(
+                  equipmentId
+                )
+              ) {
+                return {
+                  type: "INVALID_EXTRA" as const,
+                  error:
+                    "Hay equipamiento repetido en la reserva.",
+                };
+              }
+
+              requestedEquipmentIds.add(
+                equipmentId
+              );
+
+              const equipmentItem =
+                trip.equipment.find(
+                  (item) =>
+                    item.id === equipmentId
+                );
+
+              if (!equipmentItem) {
+                return {
+                  type: "INVALID_EXTRA" as const,
+                  error:
+                    "Uno de los elementos de equipamiento no está disponible para este viaje.",
+                };
+              }
+
+              if (
+                equipmentItem.quantityAvailable !==
+                null
+              ) {
+                const alreadyReserved =
+                  await tx.travelReservationExtra.aggregate({
+                    where: {
+                      type:
+                        "EQUIPMENT_RENTAL",
+                      sourceId:
+                        equipmentItem.id,
+                      reservation: {
+                        tripId,
+                        status: "CONFIRMED",
+                        id: {
+                          not: existing.id,
+                        },
+                      },
+                    },
+                    _sum: {
+                      quantity: true,
+                    },
+                  });
+
+                const occupiedQuantity =
+                  alreadyReserved._sum
+                    .quantity ?? 0;
+
+                if (
+                  occupiedQuantity +
+                    quantity >
+                  equipmentItem
+                    .quantityAvailable
+                ) {
+                  return {
+                    type:
+                      "EQUIPMENT_FULL" as const,
+                    equipmentId:
+                      equipmentItem.id,
+                    equipmentName:
+                      equipmentItem.name,
+                    capacity:
+                      equipmentItem
+                        .quantityAvailable,
+                    occupiedQuantity,
+                    requestedQuantity:
+                      quantity,
+                  };
+                }
+              }
+
+              equipmentRequests.push({
+                item: equipmentItem,
+                quantity,
               });
+            }
 
-            const occupiedPlaces =
-              activeReservations +
-              trip.externalReservedPlaces;
+            const extraLines: Array<{
+              type:
+                | "PRIVATE_ACCOMMODATION"
+                | "PREVIOUS_NIGHT"
+                | "FOLLOWING_NIGHT"
+                | "EQUIPMENT_RENTAL"
+                | "TRANSFER";
+              sourceId: string | null;
+              name: string;
+              description: string | null;
+              quantity: number;
+              unitPrice: number;
+              totalPrice: number;
+            }> = [];
+
+            const addExtra = (
+              type:
+                | "PRIVATE_ACCOMMODATION"
+                | "PREVIOUS_NIGHT"
+                | "FOLLOWING_NIGHT"
+                | "EQUIPMENT_RENTAL"
+                | "TRANSFER",
+              sourceId: string | null,
+              name: string,
+              description: string | null,
+              quantity: number,
+              unitPrice: number | null
+            ) => {
+              if (unitPrice === null) {
+                throw Object.assign(
+                  new Error(
+                    `El servicio "${name}" no tiene un precio definido.`
+                  ),
+                  { httpStatus: 409 }
+                );
+              }
+
+              extraLines.push({
+                type,
+                sourceId,
+                name,
+                description,
+                quantity,
+                unitPrice,
+                totalPrice:
+                  unitPrice * quantity,
+              });
+            };
 
             if (
-              trip.totalCapacity !== null &&
-              occupiedPlaces >=
-                trip.totalCapacity
+              wantsPrivateAccommodation &&
+              requestedAccommodation
             ) {
-              return {
-                type: "FULL" as const,
-                totalCapacity:
-                  trip.totalCapacity,
-                occupiedPlaces,
-              };
+              addExtra(
+                "PRIVATE_ACCOMMODATION",
+                requestedAccommodation.id,
+                `Alojamiento privado - ${requestedAccommodation.name}`,
+                requestedAccommodation
+                  .privateOptionSubjectToAvailability
+                  ? "Sujeto a disponibilidad"
+                  : null,
+                1,
+                requestedAccommodation
+                  .privateOptionPrice
+              );
             }
+
+            if (
+              previousNights > 0 &&
+              requestedAccommodation
+            ) {
+              addExtra(
+                "PREVIOUS_NIGHT",
+                requestedAccommodation.id,
+                `Noche previa - ${requestedAccommodation.name}`,
+                null,
+                previousNights,
+                requestedAccommodation
+                  .previousNightPrice
+              );
+            }
+
+            if (
+              followingNights > 0 &&
+              requestedAccommodation
+            ) {
+              addExtra(
+                "FOLLOWING_NIGHT",
+                requestedAccommodation.id,
+                `Noche posterior - ${requestedAccommodation.name}`,
+                null,
+                followingNights,
+                requestedAccommodation
+                  .followingNightPrice
+              );
+            }
+
+            if (
+              wantsArrivalTransfer &&
+              trip.transfers
+            ) {
+              addExtra(
+                "TRANSFER",
+                trip.transfers.id,
+                "Transfer de llegada",
+                trip.transfers
+                  .arrivalPickupPoint,
+                1,
+                trip.transfers
+                  .arrivalTransferIncluded
+                  ? 0
+                  : trip.transfers
+                      .arrivalTransferPrice
+              );
+            }
+
+            if (
+              wantsDepartureTransfer &&
+              trip.transfers
+            ) {
+              addExtra(
+                "TRANSFER",
+                trip.transfers.id,
+                "Transfer de salida",
+                trip.transfers
+                  .departurePickupPoint,
+                1,
+                trip.transfers
+                  .departureTransferIncluded
+                  ? 0
+                  : trip.transfers
+                      .departureTransferPrice
+              );
+            }
+
+            for (
+              const request of
+              equipmentRequests
+            ) {
+              addExtra(
+                "EQUIPMENT_RENTAL",
+                request.item.id,
+                request.item.name,
+                request.item.description,
+                request.quantity,
+                request.item.price
+              );
+            }
+
+            const extrasTotal =
+              extraLines.reduce(
+                (sum, item) =>
+                  sum + item.totalPrice,
+                0
+              );
+
+            const basePrice =
+              existing.basePrice;
+
+            if (basePrice === null) {
+              throw Object.assign(
+                new Error(
+                  "La reserva no tiene un valor base registrado."
+                ),
+                { httpStatus: 409 }
+              );
+            }
+
+            const totalPrice =
+              Math.round(
+                (basePrice +
+                  extrasTotal +
+                  Number.EPSILON) *
+                  100
+              ) / 100;
+
+            if (totalPrice < existing.totalPaid) {
+              throw Object.assign(
+                new Error(
+                  "No se pueden quitar servicios porque el nuevo total quedaría por debajo del importe ya pagado."
+                ),
+                { httpStatus: 409 }
+              );
+            }
+
+            const pendingBalance =
+              Math.max(
+                Math.round(
+                  (totalPrice -
+                    existing.totalPaid +
+                    Number.EPSILON) *
+                    100
+                ) / 100,
+                0
+              );
 
             const reservationData = {
-              status: "PENDING" as const,
+              status: "CONFIRMED" as const,
 
               firstName,
               lastName,
@@ -10727,27 +11716,169 @@ app.post(
               passengerTransportChoice,
 
               bicycleTransportChoice,
+
+              arrivalMode: optionalString(
+                req.body?.arrivalMode
+              ),
+
+              arrivalDate,
+
+              arrivalApproxTime: optionalString(
+                req.body?.arrivalApproxTime
+              ),
+
+              arrivalPlace: optionalString(
+                req.body?.arrivalPlace
+              ),
+
+              arrivalCompany: optionalString(
+                req.body?.arrivalCompany
+              ),
+
+              arrivalServiceNumber:
+                optionalString(
+                  req.body
+                    ?.arrivalServiceNumber
+                ),
+
+              arrivalNotes: optionalString(
+                req.body?.arrivalNotes
+              ),
+
+              departureMode: optionalString(
+                req.body?.departureMode
+              ),
+
+              departureDate,
+
+              departureApproxTime:
+                optionalString(
+                  req.body
+                    ?.departureApproxTime
+                ),
+
+              departurePlace: optionalString(
+                req.body?.departurePlace
+              ),
+
+              departureCompany:
+                optionalString(
+                  req.body?.departureCompany
+                ),
+
+              departureServiceNumber:
+                optionalString(
+                  req.body
+                    ?.departureServiceNumber
+                ),
+
+              departureNotes: optionalString(
+                req.body?.departureNotes
+              ),
+
+              bicycleType: optionalString(
+                req.body?.bicycleType
+              ),
+
+              bicycleBrand: optionalString(
+                req.body?.bicycleBrand
+              ),
+
+              bicycleModel: optionalString(
+                req.body?.bicycleModel
+              ),
+
+              bicycleColor: optionalString(
+                req.body?.bicycleColor
+              ),
+
+              bicycleWheelSize: optionalString(
+                req.body?.bicycleWheelSize
+              ),
+
+              bicycleSerialNumber:
+                optionalString(
+                  req.body
+                    ?.bicycleSerialNumber
+                ),
+
+              bicyclePhotoUrl: optionalString(
+                req.body?.bicyclePhotoUrl
+              ),
+
+              bicycleNotes: optionalString(
+                req.body?.bicycleNotes
+              ),
+
+              basePrice,
+              extrasTotal,
+              totalPrice,
+              pendingBalance,
             };
 
             const reservation =
-              existing
-                ? await tx.travelReservation.update({
-                    where: {
-                      id: existing.id,
-                    },
-                    data: reservationData,
+              await tx.travelReservation.update({
+                where: {
+                  id: existing.id,
+                },
+                data: reservationData,
+              });
+
+            if (
+              Math.abs(
+                pendingBalance -
+                  (existing.pendingBalance ?? 0)
+              ) >= 0.01
+            ) {
+              await tx.travelBalanceAdjustment.create({
+                data: {
+                  reservationId: reservation.id,
+                  previousBalance:
+                    existing.pendingBalance ?? 0,
+                  newBalance: pendingBalance,
+                  reason:
+                    "Actualización de servicios adicionales de la reserva",
+                },
+              });
+            }
+
+            await tx.travelReservationExtra.deleteMany({
+              where: {
+                reservationId:
+                  reservation.id,
+              },
+            });
+
+            if (extraLines.length > 0) {
+              await tx.travelReservationExtra.createMany({
+                data: extraLines.map(
+                  (item) => ({
+                    reservationId:
+                      reservation.id,
+                    ...item,
                   })
-                : await tx.travelReservation.create({
-                    data: {
-                      tripId,
-                      userId,
-                      ...reservationData,
+                ),
+              });
+            }
+
+            const reservationWithExtras =
+              await tx.travelReservation.findUnique({
+                where: {
+                  id: reservation.id,
+                },
+                include: {
+                  extras: {
+                    orderBy: {
+                      createdAt: "asc",
                     },
-                  });
+                  },
+                },
+              });
 
             return {
-              type: "CREATED" as const,
-              reservation,
+              type: "UPDATED" as const,
+              reservation:
+                reservationWithExtras,
             };
           },
           {
@@ -10781,7 +11912,77 @@ app.post(
         }
       }
 
-      if (result.type === "NOT_FOUND") {
+      if (
+        result.type ===
+        "PASSENGER_TRANSPORT_UNAVAILABLE"
+      ) {
+        return res.status(409).json({
+          error:
+            "El transporte de pasajeros del organizador no está disponible para este viaje.",
+        });
+      }
+
+      if (
+        result.type ===
+        "PASSENGER_TRANSPORT_FULL"
+      ) {
+        return res.status(409).json({
+          error:
+            "No quedan lugares disponibles en el transporte de pasajeros.",
+          capacity: result.capacity,
+          occupiedPlaces:
+            result.occupiedPlaces,
+        });
+      }
+
+      if (
+        result.type ===
+        "BICYCLE_TRANSPORT_UNAVAILABLE"
+      ) {
+        return res.status(409).json({
+          error:
+            "El transporte de bicicletas del organizador no está disponible para este viaje.",
+        });
+      }
+
+      if (
+        result.type ===
+        "BICYCLE_TRANSPORT_FULL"
+      ) {
+        return res.status(409).json({
+          error:
+            "No quedan lugares disponibles para transportar bicicletas.",
+          capacity: result.capacity,
+          occupiedPlaces:
+            result.occupiedPlaces,
+        });
+      }
+
+      if (
+      result.type === "INVALID_EXTRA"
+    ) {
+      return res.status(400).json({
+        error: result.error,
+      });
+    }
+
+    if (
+      result.type === "EQUIPMENT_FULL"
+    ) {
+      return res.status(409).json({
+        error:
+          `No hay suficiente disponibilidad de ${result.equipmentName}.`,
+        equipmentId:
+          result.equipmentId,
+        capacity:
+          result.capacity,
+        occupiedQuantity:
+          result.occupiedQuantity,
+        requestedQuantity:
+          result.requestedQuantity,
+      });
+    }
+    if (result.type === "NOT_FOUND") {
         return res.status(404).json({
           error: "Viaje no encontrado.",
         });
@@ -10805,27 +12006,30 @@ app.post(
         });
       }
 
-      if (result.type === "DUPLICATE") {
+      if (result.type === "PAYMENT_REQUIRED") {
         return res.status(409).json({
           error:
-            "Ya tenés una reserva para este viaje.",
-          reservation: result.reservation,
+            "Primero debés informar el pago de la reserva.",
         });
       }
 
-      if (result.type === "FULL") {
+      if (result.type === "RESERVATION_CANCELLED") {
         return res.status(409).json({
           error:
-            "No quedan lugares disponibles.",
-          totalCapacity:
-            result.totalCapacity,
-          occupiedPlaces:
-            result.occupiedPlaces,
-          availablePlaces: 0,
+            "La reserva está cancelada. Contactá a la empresa organizadora.",
         });
       }
 
-      return res.status(201).json({
+      if (
+        result.type === "PAYMENT_VERIFICATION_REQUIRED"
+      ) {
+        return res.status(409).json({
+          error:
+            "Tu pago de reserva todavía debe ser verificado antes de completar la ficha.",
+        });
+      }
+
+      return res.status(200).json({
         success: true,
         reservation: result.reservation,
       });
@@ -10838,13 +12042,1000 @@ app.post(
       }
 
       console.error(
-        "Error creando reserva de viaje:",
+        "Error actualizando ficha de participante:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo crear la reserva.",
+          "No se pudo actualizar la ficha del participante.",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   VIARANK VIAJES - REPORTAR PAGO DE RESERVA
+========================================================= */
+app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "No autenticado." });
+    }
+
+    const tripId = String(req.params.tripId || "").trim();
+    const amount = req.body?.amount;
+    const receiptUrl =
+      typeof req.body?.receiptUrl === "string"
+        ? req.body.receiptUrl.trim()
+        : "";
+    const pricingTermsVersion = req.body?.pricingTermsVersion;
+
+    if (
+      typeof amount !== "number" ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return res.status(400).json({
+        error: "El importe informado debe ser mayor que cero.",
+      });
+    }
+
+    if (!receiptUrl) {
+      return res.status(400).json({
+        error: "El comprobante de pago es obligatorio.",
+      });
+    }
+
+    if (
+      !Number.isInteger(pricingTermsVersion) ||
+      pricingTermsVersion <= 0
+    ) {
+      return res.status(400).json({
+        error: "La versión de las condiciones es obligatoria.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "Usuario no encontrado.",
+      });
+    }
+
+    const maxRetries = 4;
+    let result: any = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        result = await prisma.$transaction(
+          async (tx) => {
+            const trip = await tx.travelTrip.findUnique({
+              where: { id: tripId },
+              select: {
+                status: true,
+                totalCapacity: true,
+                externalReservedPlaces: true,
+                company: {
+                  select: {
+                    accessStatus: true,
+                    trialEndsAt: true,
+                  },
+                },
+                pricing: {
+                  select: {
+                    versions: {
+                      orderBy: { version: "desc" },
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            });
+
+            if (!trip) {
+              throw Object.assign(
+                new Error("Viaje no encontrado."),
+                { httpStatus: 404 }
+              );
+            }
+
+            if (trip.status !== "PUBLISHED") {
+              throw Object.assign(
+                new Error("El viaje no está disponible para reservas."),
+                { httpStatus: 409 }
+              );
+            }
+
+            if (!hasTravelCompanyOperationalAccess(trip.company)) {
+              throw Object.assign(
+                new Error("La empresa no tiene acceso operativo."),
+                { httpStatus: 403 }
+              );
+            }
+
+            const version = trip.pricing?.versions[0];
+
+            if (!version) {
+              throw Object.assign(
+                new Error("El viaje no tiene condiciones de reserva publicadas."),
+                { httpStatus: 409 }
+              );
+            }
+
+            if (version.version !== pricingTermsVersion) {
+              throw Object.assign(
+                new Error(
+                  "Las condiciones cambiaron. Revisalas y aceptalas nuevamente."
+                ),
+                { httpStatus: 409 }
+              );
+            }
+
+            let requiredAmount = 0;
+
+            if (version.reservationPaymentMode === "FIXED_DEPOSIT") {
+              requiredAmount = version.depositValue ?? 0;
+            } else if (
+              version.reservationPaymentMode === "PERCENTAGE_DEPOSIT"
+            ) {
+              requiredAmount =
+                version.basePrice *
+                ((version.depositPercentage ?? 0) / 100);
+            } else if (
+              version.reservationPaymentMode === "FULL_PAYMENT"
+            ) {
+              requiredAmount = version.basePrice;
+            }
+
+            requiredAmount =
+              Math.round((requiredAmount + Number.EPSILON) * 100) / 100;
+
+            if (requiredAmount <= 0) {
+              throw Object.assign(
+                new Error(
+                  "El importe requerido para reservar no está configurado correctamente."
+                ),
+                { httpStatus: 409 }
+              );
+            }
+
+            if (amount < requiredAmount) {
+              throw Object.assign(
+                new Error(
+                  `Para asegurar la reserva debés informar al menos ${requiredAmount}.`
+                ),
+                { httpStatus: 400 }
+              );
+            }
+
+            const maximumInitialPayment =
+              Math.round(
+                (version.basePrice + Number.EPSILON) * 100
+              ) / 100;
+
+            if (amount > maximumInitialPayment) {
+              throw Object.assign(
+                new Error(
+                  `El importe informado no puede superar el valor del viaje (${maximumInitialPayment}).`
+                ),
+                { httpStatus: 400 }
+              );
+            }
+
+            const existing =
+              await tx.travelReservation.findUnique({
+                where: {
+                  tripId_userId: {
+                    tripId,
+                    userId,
+                  },
+                },
+                include: {
+                  payments: {
+                    where: {
+                      status: {
+                        in: ["REPORTED", "VERIFIED"],
+                      },
+                    },
+                    select: { id: true },
+                  },
+                },
+              });
+
+            if (existing?.status === "CONFIRMED") {
+              throw Object.assign(
+                new Error("Tu reserva ya está confirmada."),
+                { httpStatus: 409 }
+              );
+            }
+
+            if (existing?.status === "CANCELLED") {
+              throw Object.assign(
+                new Error(
+                  "La reserva anterior está cancelada y debe ser revisada por la empresa."
+                ),
+                { httpStatus: 409 }
+              );
+            }
+
+            if (existing && existing.payments.length > 0) {
+              throw Object.assign(
+                new Error("Ya tenés un pago informado para esta reserva."),
+                { httpStatus: 409 }
+              );
+            }
+
+            if (trip.totalCapacity !== null) {
+              const held =
+                await tx.travelReservation.count({
+                  where: {
+                    tripId,
+                    OR: [
+                      { status: "CONFIRMED" },
+                      {
+                        status: "PENDING",
+                        payments: {
+                          some: {
+                            status: {
+                              in: ["REPORTED", "VERIFIED"],
+                            },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                });
+
+              if (
+                held + trip.externalReservedPlaces >=
+                trip.totalCapacity
+              ) {
+                throw Object.assign(
+                  new Error("No quedan lugares disponibles."),
+                  { httpStatus: 409 }
+                );
+              }
+            }
+
+            const now = new Date();
+
+            if (existing) {
+              await tx.travelReservationExtra.deleteMany({
+                where: {
+                  reservationId: existing.id,
+                },
+              });
+            }
+
+            const reservation = existing
+              ? await tx.travelReservation.update({
+                  where: { id: existing.id },
+                  data: {
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    document: null,
+                    birthDate: null,
+                    phone: null,
+                    email: user.email,
+                    city: null,
+                    address: null,
+                    healthCoverageName: null,
+                    healthCoverageNumber: null,
+                    emergencyContactName: null,
+                    emergencyContactRelationship: null,
+                    emergencyContactPhone: null,
+                    emergencyContactPhoneAlt: null,
+                    passengerTransportChoice: null,
+                    bicycleTransportChoice: null,
+                    arrivalMode: null,
+                    arrivalDate: null,
+                    arrivalApproxTime: null,
+                    arrivalPlace: null,
+                    arrivalCompany: null,
+                    arrivalServiceNumber: null,
+                    arrivalNotes: null,
+                    departureMode: null,
+                    departureDate: null,
+                    departureApproxTime: null,
+                    departurePlace: null,
+                    departureCompany: null,
+                    departureServiceNumber: null,
+                    departureNotes: null,
+                    bicycleType: null,
+                    bicycleBrand: null,
+                    bicycleModel: null,
+                    bicycleColor: null,
+                    bicycleWheelSize: null,
+                    bicycleSerialNumber: null,
+                    bicyclePhotoUrl: null,
+                    bicycleNotes: null,
+                    status: "PENDING",
+                    basePrice: version.basePrice,
+                    extrasTotal: 0,
+                    totalPrice: version.basePrice,
+                    totalPaid: 0,
+                    pendingBalance: version.basePrice,
+                    reservationRequiredAmount: requiredAmount,
+                    pricingTermsAcceptedAt: now,
+                    pricingTermsVersion: version.version,
+                    confirmedAt: null,
+                    waiverAcceptedAt: null,
+                    waiverVersion: null,
+                  },
+                })
+              : await tx.travelReservation.create({
+                  data: {
+                    tripId,
+                    userId,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    status: "PENDING",
+                    basePrice: version.basePrice,
+                    extrasTotal: 0,
+                    totalPrice: version.basePrice,
+                    totalPaid: 0,
+                    pendingBalance: version.basePrice,
+                    reservationRequiredAmount: requiredAmount,
+                    pricingTermsAcceptedAt: now,
+                    pricingTermsVersion: version.version,
+                  },
+                });
+
+            const payment = await tx.travelPayment.create({
+              data: {
+                reservationId: reservation.id,
+                amount,
+                status: "REPORTED",
+                receiptUrl,
+                reportedAt: now,
+              },
+            });
+
+            return {
+              reservation,
+              payment,
+              requiredAmount,
+            };
+          },
+          { isolationLevel: "Serializable" }
+        );
+
+        break;
+      } catch (error: any) {
+        if (error?.code === "P2034" && attempt < maxRetries) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    if (!result) {
+      return res.status(409).json({
+        error: "Conflicto al registrar el pago. Intentá nuevamente.",
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Pago informado. Tu lugar quedó retenido mientras se verifica el comprobante.",
+      reservation: result.reservation,
+      payment: result.payment,
+      requiredAmount: result.requiredAmount,
+    });
+  } catch (error: any) {
+    if (typeof error?.httpStatus === "number") {
+      return res.status(error.httpStatus).json({
+        error: error.message,
+      });
+    }
+
+    console.error("Error informando pago de reserva:", error);
+
+    return res.status(500).json({
+      error: "No se pudo informar el pago.",
+    });
+  }
+});
+
+/* =========================================================
+   VIARANK VIAJES - REPORTAR PAGO DE SALDO
+========================================================= */
+app.post(
+  "/api/travel/trips/:tripId/reservations/me/balance-payments",
+  async (req, res) => {
+    try {
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autenticado.",
+        });
+      }
+
+      const tripId = String(req.params.tripId || "").trim();
+
+      const amount = Number(req.body?.amount);
+
+      const receiptUrl =
+        typeof req.body?.receiptUrl === "string"
+          ? req.body.receiptUrl.trim()
+          : "";
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({
+          error: "El importe debe ser mayor que cero.",
+        });
+      }
+
+      if (!receiptUrl) {
+        return res.status(400).json({
+          error: "El comprobante es obligatorio.",
+        });
+      }
+
+      let result: any = null;
+
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          result = await prisma.$transaction(
+            async (tx) => {
+              const trip = await tx.travelTrip.findUnique({
+          where: {
+            id: tripId,
+          },
+          select: {
+            id: true,
+            status: true,
+            company: {
+              select: {
+                accessStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        });
+
+        if (!trip) {
+          throw Object.assign(
+            new Error("Viaje no encontrado."),
+            { httpStatus: 404 }
+          );
+        }
+
+        if (trip.status !== "PUBLISHED") {
+          throw Object.assign(
+            new Error("El viaje no está publicado."),
+            { httpStatus: 409 }
+          );
+        }
+
+        if (!hasTravelCompanyOperationalAccess(trip.company)) {
+          throw Object.assign(
+            new Error("La empresa no tiene acceso operativo."),
+            { httpStatus: 403 }
+          );
+        }
+
+        const reservation = await tx.travelReservation.findUnique({
+          where: {
+            tripId_userId: {
+              tripId,
+              userId,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+            totalPrice: true,
+            totalPaid: true,
+            pendingBalance: true,
+          },
+        });
+
+        if (!reservation) {
+          throw Object.assign(
+            new Error("No tenés una reserva para este viaje."),
+            { httpStatus: 404 }
+          );
+        }
+
+        if (reservation.status !== "CONFIRMED") {
+          throw Object.assign(
+            new Error(
+              "La reserva debe estar confirmada antes de informar pagos de saldo."
+            ),
+            { httpStatus: 409 }
+          );
+        }
+
+        const pendingBalance =
+          reservation.pendingBalance ??
+          Math.max(
+            (reservation.totalPrice ?? 0) - reservation.totalPaid,
+            0
+          );
+
+        if (pendingBalance <= 0) {
+          throw Object.assign(
+            new Error("La reserva no tiene saldo pendiente."),
+            { httpStatus: 409 }
+          );
+        }
+
+        const activeReportedPayments =
+          await tx.travelPayment.aggregate({
+            where: {
+              reservationId: reservation.id,
+              status: "REPORTED",
+            },
+            _sum: {
+              amount: true,
+            },
+          });
+
+        const alreadyReported =
+          activeReportedPayments._sum.amount ?? 0;
+
+        const availableToReport =
+          Math.round(
+            (
+              Math.max(
+                pendingBalance - alreadyReported,
+                0
+              ) + Number.EPSILON
+            ) * 100
+          ) / 100;
+
+        if (availableToReport <= 0) {
+          throw Object.assign(
+            new Error(
+              "Ya hay pagos informados pendientes de verificación que cubren el saldo."
+            ),
+            { httpStatus: 409 }
+          );
+        }
+
+        if (amount > availableToReport) {
+          throw Object.assign(
+            new Error(
+              `El importe supera el saldo disponible para informar (${availableToReport}).`
+            ),
+            { httpStatus: 400 }
+          );
+        }
+
+        const now = new Date();
+
+        const payment = await tx.travelPayment.create({
+          data: {
+            reservationId: reservation.id,
+            amount:
+              Math.round(
+                (amount + Number.EPSILON) * 100
+              ) / 100,
+            status: "REPORTED",
+            receiptUrl,
+            reportedAt: now,
+          },
+        });
+
+        return {
+          reservation,
+          payment,
+          pendingBalance,
+          availableToReport,
+        };
+            },
+            {
+              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            }
+          );
+
+          break;
+        } catch (error: any) {
+          if (error?.code === "P2034" && attempt < 4) {
+            continue;
+          }
+
+          throw error;
+        }
+      }
+
+      if (!result) {
+        throw new Error(
+          "No se pudo completar el pago de saldo."
+        );
+      }
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Pago informado. Quedó pendiente de verificación por la empresa.",
+        reservationId: result.reservation.id,
+        payment: result.payment,
+        pendingBalance: result.pendingBalance,
+        availableToReport: result.availableToReport,
+      });
+    } catch (error: any) {
+      if (typeof error?.httpStatus === "number") {
+        return res.status(error.httpStatus).json({
+          error: error.message,
+        });
+      }
+
+      console.error(
+        "Error informando pago de saldo:",
+        error
+      );
+
+      return res.status(500).json({
+        error: "No se pudo informar el pago de saldo.",
+      });
+    }
+  }
+);
+/* =========================================================
+   VIARANK VIAJES - VERIFICAR PAGO
+========================================================= */
+app.post(
+  "/api/travel/trips/:tripId/payments/:paymentId/verify",
+  async (req, res) => {
+    try {
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autenticado.",
+        });
+      }
+
+      const tripId = String(req.params.tripId || "").trim();
+      const paymentId = String(req.params.paymentId || "").trim();
+
+      const access = await getTravelTripAccess(tripId, userId);
+
+      if (!access) {
+        return res.status(404).json({
+          error: "Viaje no encontrado.",
+        });
+      }
+
+      if (!hasTravelCompanyOperationalAccess(access.trip.company)) {
+        return res.status(403).json({
+          error: "La empresa no tiene acceso operativo.",
+        });
+      }
+
+      if (!hasTravelTripPermission(access, "manageFinancials")) {
+        return res.status(403).json({
+          error: "No tenés permiso para administrar pagos.",
+        });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const payment = await tx.travelPayment.findUnique({
+          where: { id: paymentId },
+          include: {
+            reservation: {
+              select: {
+                id: true,
+                tripId: true,
+                status: true,
+                totalPrice: true,
+                pendingBalance: true,
+                reservationRequiredAmount: true,
+                confirmedAt: true,
+              },
+            },
+          },
+        });
+
+        if (!payment || payment.reservation.tripId !== tripId) {
+          throw Object.assign(
+            new Error("Pago no encontrado."),
+            { httpStatus: 404 }
+          );
+        }
+
+        if (payment.status !== "REPORTED") {
+          throw Object.assign(
+            new Error("El pago ya fue procesado."),
+            { httpStatus: 409 }
+          );
+        }
+
+        if (payment.reservation.status === "CANCELLED") {
+          throw Object.assign(
+            new Error("La reserva está cancelada."),
+            { httpStatus: 409 }
+          );
+        }
+
+        const now = new Date();
+
+        const verifiedUpdate = await tx.travelPayment.updateMany({
+          where: {
+            id: payment.id,
+            status: "REPORTED",
+          },
+          data: {
+            status: "VERIFIED",
+            verifiedAt: now,
+            rejectedAt: null,
+          },
+        });
+
+        if (verifiedUpdate.count !== 1) {
+          throw Object.assign(
+            new Error("El pago ya fue procesado."),
+            { httpStatus: 409 }
+          );
+        }
+
+        const verifiedPayment = await tx.travelPayment.findUnique({
+          where: { id: payment.id },
+        });
+
+        if (!verifiedPayment) {
+          throw Object.assign(
+            new Error("Pago no encontrado."),
+            { httpStatus: 404 }
+          );
+        }
+
+        const totals = await tx.travelPayment.aggregate({
+          where: {
+            reservationId: payment.reservation.id,
+            status: "VERIFIED",
+          },
+          _sum: {
+            amount: true,
+          },
+        });
+
+        const totalPaid =
+          Math.round(
+            (((totals._sum.amount ?? 0) + Number.EPSILON) * 100)
+          ) / 100;
+
+        const totalPrice = payment.reservation.totalPrice ?? 0;
+
+        const pendingBalance =
+          Math.round(
+            ((Math.max(totalPrice - totalPaid, 0) + Number.EPSILON) * 100)
+          ) / 100;
+
+        const required =
+          payment.reservation.reservationRequiredAmount ?? 0;
+
+        const shouldConfirm =
+          required > 0 && totalPaid >= required;
+
+        const previousBalance =
+          payment.reservation.pendingBalance ?? totalPrice;
+
+        const reservation = await tx.travelReservation.update({
+          where: {
+            id: payment.reservation.id,
+          },
+          data: {
+            totalPaid,
+            pendingBalance,
+            status: shouldConfirm ? "CONFIRMED" : "PENDING",
+            confirmedAt: shouldConfirm
+              ? (payment.reservation.confirmedAt ?? now)
+              : null,
+          },
+          select: {
+            id: true,
+            status: true,
+            totalPrice: true,
+            totalPaid: true,
+            pendingBalance: true,
+            reservationRequiredAmount: true,
+            confirmedAt: true,
+          },
+        });
+
+        if (previousBalance !== pendingBalance) {
+          await tx.travelBalanceAdjustment.create({
+            data: {
+              reservationId: reservation.id,
+              previousBalance,
+              newBalance: pendingBalance,
+              reason: `Pago verificado: ${payment.id}`,
+            },
+          });
+        }
+
+        return {
+          payment: verifiedPayment,
+          reservation,
+        };
+      });
+
+      return res.json({
+        success: true,
+        message:
+          result.reservation.status === "CONFIRMED"
+            ? "Pago verificado y reserva confirmada."
+            : "Pago verificado.",
+        ...result,
+      });
+    } catch (error: any) {
+      if (typeof error?.httpStatus === "number") {
+        return res.status(error.httpStatus).json({
+          error: error.message,
+        });
+      }
+
+      console.error("Error verificando pago:", error);
+
+      return res.status(500).json({
+        error: "No se pudo verificar el pago.",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   VIARANK VIAJES - RECHAZAR PAGO
+========================================================= */
+app.post(
+  "/api/travel/trips/:tripId/payments/:paymentId/reject",
+  async (req, res) => {
+    try {
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({
+          error: "No autenticado.",
+        });
+      }
+
+      const tripId = String(req.params.tripId || "").trim();
+      const paymentId = String(req.params.paymentId || "").trim();
+
+      const notes =
+        typeof req.body?.notes === "string"
+          ? req.body.notes.trim() || null
+          : null;
+
+      const access = await getTravelTripAccess(tripId, userId);
+
+      if (!access) {
+        return res.status(404).json({
+          error: "Viaje no encontrado.",
+        });
+      }
+
+      if (!hasTravelCompanyOperationalAccess(access.trip.company)) {
+        return res.status(403).json({
+          error: "La empresa no tiene acceso operativo.",
+        });
+      }
+
+      if (!hasTravelTripPermission(access, "manageFinancials")) {
+        return res.status(403).json({
+          error: "No tenés permiso para administrar pagos.",
+        });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const payment = await tx.travelPayment.findUnique({
+          where: { id: paymentId },
+          include: {
+            reservation: {
+              select: {
+                id: true,
+                tripId: true,
+                status: true,
+              },
+            },
+          },
+        });
+
+        if (!payment || payment.reservation.tripId !== tripId) {
+          throw Object.assign(
+            new Error("Pago no encontrado."),
+            { httpStatus: 404 }
+          );
+        }
+
+        if (payment.status !== "REPORTED") {
+          throw Object.assign(
+            new Error("El pago ya fue procesado."),
+            { httpStatus: 409 }
+          );
+        }
+
+        if (payment.reservation.status === "CANCELLED") {
+          throw Object.assign(
+            new Error("La reserva está cancelada."),
+            { httpStatus: 409 }
+          );
+        }
+
+        const rejectedUpdate = await tx.travelPayment.updateMany({
+          where: {
+            id: payment.id,
+            status: "REPORTED",
+          },
+          data: {
+            status: "REJECTED",
+            rejectedAt: new Date(),
+            verifiedAt: null,
+            notes,
+          },
+        });
+
+        if (rejectedUpdate.count !== 1) {
+          throw Object.assign(
+            new Error("El pago ya fue procesado."),
+            { httpStatus: 409 }
+          );
+        }
+
+        const rejectedPayment = await tx.travelPayment.findUnique({
+          where: { id: payment.id },
+        });
+
+        if (!rejectedPayment) {
+          throw Object.assign(
+            new Error("Pago no encontrado."),
+            { httpStatus: 404 }
+          );
+        }
+
+        const activePayments = await tx.travelPayment.count({
+          where: {
+            reservationId: payment.reservation.id,
+            status: {
+              in: ["REPORTED", "VERIFIED"],
+            },
+          },
+        });
+
+        return {
+          payment: rejectedPayment,
+          placeReleased:
+            payment.reservation.status === "PENDING" &&
+            activePayments === 0,
+        };
+      });
+
+      return res.json({
+        success: true,
+        message: result.placeReleased
+          ? "Pago rechazado. La plaza quedó liberada."
+          : "Pago rechazado.",
+        ...result,
+      });
+    } catch (error: any) {
+      if (typeof error?.httpStatus === "number") {
+        return res.status(error.httpStatus).json({
+          error: error.message,
+        });
+      }
+
+      console.error("Error rechazando pago:", error);
+
+      return res.status(500).json({
+        error: "No se pudo rechazar el pago.",
       });
     }
   }

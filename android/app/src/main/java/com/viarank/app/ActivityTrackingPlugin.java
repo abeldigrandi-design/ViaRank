@@ -41,6 +41,8 @@ public void stopTracking(PluginCall call) {
     float distanciaMetros =
             storage.getFloat("distanciaMetros", 0f);
 
+    long tiempoMovimientoMs = storage.getLong("tiempoMovimientoMs", 0L);
+
     long horaInicio =
             storage.getLong("horaInicio", 0L);
 
@@ -65,6 +67,7 @@ public void stopTracking(PluginCall call) {
     result.put("stopped", stopped);
     result.put("distance", distanciaMetros);
     result.put("startTime", horaInicio);
+    result.put("movingTime", tiempoMovimientoMs / 1000);
     result.put("endTime", horaFin);
     result.put("duration", duracionSegundos);
 
@@ -81,12 +84,15 @@ public void getTrackingStatus(PluginCall call) {
     float distanciaMetros =
             storage.getFloat("distanciaMetros", 0f);
 
+    long tiempoMovimientoMs = storage.getLong("tiempoMovimientoMs", 0L);
+
     long horaInicio =
             storage.getLong("horaInicio", 0L);
 
     JSObject result = new JSObject();
     result.put("distance", distanciaMetros);
     result.put("startTime", horaInicio);
+    result.put("movingTime", tiempoMovimientoMs / 1000);
 
     call.resolve(result);
 }

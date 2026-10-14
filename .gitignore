@@ -31,3 +31,6 @@ server/.env
 *.backup-*
 *.before-*
 server_viejo/
+/android/key.properties
+
+/.env.production
