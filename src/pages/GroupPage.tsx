@@ -582,6 +582,51 @@ export default function GroupPage({
           </div>
         </section>
 
+        {canApplyPenalty && group.joinCode && (
+          <div
+            style={{
+              background: "#103353",
+              border: "1px solid #148cff",
+              borderRadius: "10px",
+              padding: "12px",
+              marginBottom: "14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "10px",
+            }}
+          >
+            <div>
+              <div style={{ color: "#9fb5cc", fontSize: "11px" }}>
+                Código del grupo
+              </div>
+              <strong style={{ fontSize: "17px", letterSpacing: "2px" }}>
+                {group.joinCode}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(group.joinCode)
+                  .then(() => window.alert("Código copiado"))
+                  .catch(() => window.prompt("Copiá el código:", group.joinCode));
+              }}
+              style={{
+                background: "#148cff",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                padding: "10px",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Copiar código
+            </button>
+          </div>
+        )}
+
         <nav
           style={{
             display: "grid",

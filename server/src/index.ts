@@ -4199,6 +4199,10 @@ if (isSuperAdmin) {
 
       const groupsWithMembership = groups.map((group) => ({
         ...group,
+        joinCode:
+          isSuperAdmin || group.administratorId === requesterId
+            ? group.joinCode
+            : undefined,
         isMember:
           group.administratorId === requesterId ||
           group.members.length > 0,
@@ -4405,6 +4409,17 @@ sex: true,
         return res.status(404).json({
           error:
             "Grupo no encontrado",
+        });
+      }
+
+      const requester = await prisma.user.findUnique({
+        where: { id: requesterId },
+        select: { role: true },
+      });
+
+      if (!requester) {
+        return res.status(404).json({
+          error: "Usuario no encontrado",
         });
       }
 
@@ -4773,7 +4788,10 @@ penalty: (() => {
           sport: group.sport,
           visibility: group.visibility,
           joinCode:
-            group.joinCode,
+            group.administratorId === requesterId ||
+            requester?.role === "SUPER_ADMIN"
+              ? group.joinCode
+              : undefined,
           administrator:
             group.administrator,
           members:
