@@ -4510,6 +4510,22 @@ if (period === "year") {
           },
         });
       // ---------------------------------------------------------
+      const speedReviews = await prisma.groupActivityReview.findMany({
+        where: {
+          groupId,
+          needsReview: true,
+          activityId: {
+            in: activities.map((activity) => activity.id),
+          },
+        },
+        select: {
+          activityId: true,
+        },
+      });
+
+      const speedReviewActivityIds = new Set(
+        speedReviews.map((review) => review.activityId)
+      );
       // DETECTAR ACTIVIDADES SUPERPUESTAS POR ATLETA
       // ---------------------------------------------------------
 
@@ -4739,6 +4755,11 @@ hasOverlap: activities.some(
   (activity) =>
     activity.userId === athlete.userId &&
     overlappingActivityIds.has(activity.id)
+),
+hasSpeedReview: activities.some(
+  (activity) =>
+    activity.userId === athlete.userId &&
+    speedReviewActivityIds.has(activity.id)
 ),
 hasPendingVar: activities.some(
   (activity) =>

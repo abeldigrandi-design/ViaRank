@@ -102,7 +102,7 @@ public void onLocationChanged(Location location) {
             distanciaMetros += metros;
             if (ultimaPosicionTimestamp > 0) {
                 long intervaloMs = timestampActual - ultimaPosicionTimestamp;
-                if (intervaloMs > 0 && intervaloMs <= 5000) {
+                if (intervaloMs > 0 && intervaloMs <= 10000) {
                     tiempoMovimientoMs += intervaloMs;
                 }
             }

@@ -9,6 +9,7 @@ getTrackingStatus(): Promise<{
   distance: number;
   startTime: number;
   movingTime: number;
+  duration: number;
 }>;
   stopTracking(): Promise<{
   stopped: boolean;

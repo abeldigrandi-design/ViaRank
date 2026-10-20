@@ -13,6 +13,7 @@ type RankingAthlete = {
   distanceKm: number;
   hours: number;
   hasOverlap?: boolean;
+  hasSpeedReview?: boolean;
   hasPendingVar?: boolean;
   hasPenalty?: boolean;
   penalty?: {
@@ -803,7 +804,7 @@ export default function GroupPage({
                           {athlete.firstName} {athlete.lastName}
                         </strong>
 
-                        {athlete.hasOverlap && (
+                        {(athlete.hasOverlap || athlete.hasSpeedReview) && (
                           <span
                             style={{
                               display: "inline-flex",
@@ -813,7 +814,13 @@ export default function GroupPage({
                             }}
                           >
                             <span
-                              title="Posible superposición de actividades"
+                              title={
+                                 athlete.hasOverlap && athlete.hasSpeedReview
+                                   ? "Posible superposición y alerta de velocidad"
+                                   : athlete.hasSpeedReview
+                                     ? "Actividad pendiente de revisión por velocidad"
+                                     : "Posible superposición de actividades"
+                               }
                               style={{
                                 display: "inline-flex",
                                 width: "15px",
@@ -991,6 +998,10 @@ export default function GroupPage({
                                 )}
                                 {" · "}
                                 {activity.distanceKm.toLocaleString("es-AR")} km
+                                {" · "}
+                                {Math.floor(activity.movingTime / 3600).toString().padStart(2, "0")}:{Math.floor((activity.movingTime % 3600) / 60).toString().padStart(2, "0")}:{Math.floor(activity.movingTime % 60).toString().padStart(2, "0")}
+                                {" · "}
+                                {activity.averageSpeed != null ? `${(activity.averageSpeed * 3.6).toLocaleString("es-AR", { maximumFractionDigits: 1 })} km/h` : "Velocidad no disponible"}
                                 {" · "}
                                 {activity.source}
                               </div>

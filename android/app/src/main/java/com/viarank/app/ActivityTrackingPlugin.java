@@ -93,6 +93,9 @@ public void getTrackingStatus(PluginCall call) {
     result.put("distance", distanciaMetros);
     result.put("startTime", horaInicio);
     result.put("movingTime", tiempoMovimientoMs / 1000);
+    result.put("duration", horaInicio > 0
+            ? Math.max(0L, (System.currentTimeMillis() - horaInicio) / 1000)
+            : 0L);
 
     call.resolve(result);
 }
