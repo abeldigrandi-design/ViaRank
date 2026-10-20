@@ -37,6 +37,7 @@ type ActivityHistoryItem = {
   distanceKm: number;
   endDate: string;
   hasOverlap?: boolean;
+  hasSpeedReview?: boolean;
   overlappingActivityIds?: string[];
   pendingOverlapActivityIds?: string[];
   hasPendingVar?: boolean;
@@ -934,13 +935,13 @@ export default function GroupPage({
                                   {activity.name}
                                 </strong>
 
-                                {activity.hasOverlap && (
+                                {(activity.hasOverlap || activity.hasSpeedReview) && (
                                   <button
                                     type="button"
                                     title={
                                       activity.isPenalized
                                         ? "Ver penalización aplicada"
-                                        : "Actividad con posible superposición"
+                                        : activity.hasOverlap && activity.hasSpeedReview ? "Posible superposición y alerta de velocidad" : activity.hasSpeedReview ? "Actividad pendiente de revisión por velocidad" : "Actividad con posible superposición"
                                     }
                                     onClick={(event) => {
                                       event.stopPropagation();

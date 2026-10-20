@@ -3418,6 +3418,25 @@ const canView =
             startDate: true,
           },
         });
+const speedReviewsForHistory =
+  groupId
+    ? await prisma.groupActivityReview.findMany({
+        where: {
+          groupId,
+          needsReview: true,
+          activityId: {
+            in: activities.map((activity) => activity.id),
+          },
+        },
+        select: {
+          activityId: true,
+        },
+      })
+    : [];
+
+const speedReviewIdsForHistory = new Set(
+  speedReviewsForHistory.map((review) => review.activityId)
+);
 const activePenalties =
   groupId
     ? await prisma.groupActivityPenalty.findMany({
@@ -3559,6 +3578,7 @@ for (let i = 0; i < activities.length; i++) {
           (activity) => ({
             ...activity,
 hasOverlap: overlappingActivityIds.has(activity.id),
+            hasSpeedReview: speedReviewIdsForHistory.has(activity.id),
             overlappingActivityIds:
               Array.from(
                 overlapPartnersByActivityId.get(activity.id) ?? []
