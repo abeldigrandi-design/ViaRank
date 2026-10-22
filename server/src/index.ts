@@ -237,7 +237,7 @@ promoteConfiguredUser().catch((error) => {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 const pinLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -754,7 +754,7 @@ app.post(
           email: user.email,
           sex: user.sex,
           role: user.role,
-          profilePicture: user.profilePicture,
+          profilePicture: user.customProfilePicture || user.profilePicture,
           city: user.city,
           country: user.country,
         },
@@ -1114,6 +1114,7 @@ app.get("/api/profile", async (req, res) => {
         email: true,
         sex: true,
         profilePicture: true,
+        customProfilePicture: true,
         birthDay: true,
         birthMonth: true,
         city: true,
@@ -1134,7 +1135,7 @@ app.get("/api/profile", async (req, res) => {
       lastName: user.lastName,
       email: user.email,
       sex: user.sex,
-      profilePicture: user.profilePicture,
+      profilePicture: user.customProfilePicture || user.profilePicture,
       birthDay: user.birthDay,
       birthMonth: user.birthMonth,
       city: user.city,
@@ -1270,6 +1271,7 @@ app.patch("/api/profile", async (req, res) => {
         email: true,
         sex: true,
         profilePicture: true,
+        customProfilePicture: true,
         birthDay: true,
         birthMonth: true,
         city: true,
@@ -1287,7 +1289,7 @@ app.patch("/api/profile", async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         sex: user.sex,
-        profilePicture: user.profilePicture,
+        profilePicture: user.customProfilePicture || user.profilePicture,
       birthDay: user.birthDay,
       birthMonth: user.birthMonth,
         city: user.city,
@@ -1301,6 +1303,62 @@ app.patch("/api/profile", async (req, res) => {
 
     return res.status(500).json({
       error: "No se pudo actualizar el perfil",
+    });
+  }
+});
+/* VIARANK_CUSTOM_PROFILE_PICTURE */
+app.patch("/api/profile/picture", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Usuario no autenticado" });
+    }
+
+    const picture = req.body?.picture;
+
+    if (typeof picture !== "string") {
+      return res.status(400).json({ error: "Fotografía inválida" });
+    }
+
+    const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(picture);
+
+    if (!match || match[1].length > 400000) {
+      return res.status(400).json({
+        error: "La fotografía debe ser JPEG y pesar menos de 300 KB",
+      });
+    }
+
+    const bytes = Buffer.from(match[1], "base64");
+
+    if (
+      bytes.length > 300000 ||
+      bytes.length < 100 ||
+      bytes[0] !== 0xff ||
+      bytes[1] !== 0xd8 ||
+      bytes[2] !== 0xff
+    ) {
+      return res.status(400).json({
+        error: "La fotografía no es válida o supera el tamaño permitido",
+      });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { customProfilePicture: picture },
+      select: {
+        customProfilePicture: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      profilePicture: user.customProfilePicture,
+    });
+  } catch (error) {
+    console.error("Error guardando fotografía:", error);
+    return res.status(500).json({
+      error: "No se pudo guardar la fotografía",
     });
   }
 });
@@ -1481,7 +1539,7 @@ app.get(
             stravaId: true,
             firstName: true,
             lastName: true,
-            profilePicture: true,
+            profilePicture: true, customProfilePicture: true,
             role: true,
             accessToken: true,
             refreshToken: true,
@@ -1509,7 +1567,7 @@ app.get(
           firstName: user.firstName,
           lastName: user.lastName,
           profilePicture:
-            user.profilePicture,
+            user.customProfilePicture || user.profilePicture,
           role: user.role,
         },
 

@@ -97,6 +97,88 @@ export default function ProfilePage() {
     void loadProfile();
   }, []);
 
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+
+  async function changeProfilePicture(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setMessage("Seleccioná una imagen válida.");
+      return;
+    }
+
+    const token = localStorage.getItem("viarank_auth_token");
+
+    if (!token) {
+      setMessage("Necesitás iniciar sesión.");
+      return;
+    }
+
+    setUploadingPicture(true);
+    setMessage("");
+
+    try {
+      const image = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      let picture: string;
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          image.onload = () => resolve();
+          image.onerror = () => reject(new Error("No se pudo abrir la imagen"));
+          image.src = objectUrl;
+        });
+
+        const canvas = document.createElement("canvas");
+        const maxSize = 500;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+          throw new Error("No se pudo procesar la imagen");
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        picture = canvas.toDataURL("image/jpeg", 0.75);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+
+      if (picture.length > 400000) {
+        throw new Error("La imagen es demasiado grande");
+      }
+
+      const response = await fetch(`${API_URL}/api/profile/picture`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ picture }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo guardar la fotografía");
+      }
+
+      setProfile((current) =>
+        current ? { ...current, profilePicture: data.profilePicture } : current
+      );
+
+      setMessage("Fotografía actualizada correctamente.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "No se pudo cambiar la fotografía"
+      );
+    } finally {
+      setUploadingPicture(false);
+    }
+  }
   async function saveProfile() {
     setMessage("");
 
@@ -227,7 +309,7 @@ export default function ProfilePage() {
           }}
         >
           <button
-            onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user } })}
+            onClick={() => navigate("/", { state: { internalReturn: true, user: profile ? { ...location.state?.user, ...profile } : location.state?.user } })}
             style={{
               justifySelf: "start",
               border: 0,
@@ -366,9 +448,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <button
-              type="button"
-              disabled
+            <label
               style={{
                 marginTop: "10px",
                 padding: "9px 20px",
@@ -377,21 +457,23 @@ export default function ProfilePage() {
                 background: "transparent",
                 color: "#8fcaff",
                 fontWeight: 800,
-                opacity: 0.65,
+                cursor: uploadingPicture ? "wait" : "pointer",
+                opacity: uploadingPicture ? 0.65 : 1,
               }}
             >
-              Cambiar foto
-            </button>
-
-            <span
-              style={{
-                marginTop: "5px",
-                color: "#7896b4",
-                fontSize: "11px",
-              }}
-            >
-              Próximamente
-            </span>
+              {uploadingPicture ? "Guardando foto..." : "Cambiar foto"}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploadingPicture}
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void changeProfilePicture(file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
           </div>
 
           <div
