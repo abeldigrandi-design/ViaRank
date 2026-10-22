@@ -11,6 +11,8 @@ type ProfileData = {
   email: string | null;
   sex: "MALE" | "FEMALE" | null;
   profilePicture: string | null;
+  birthDay: number | null;
+  birthMonth: number | null;
   hasPin: boolean;
 };
 
@@ -42,6 +44,8 @@ export default function ProfilePage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [sex, setSex] = useState<"MALE" | "FEMALE" | "">("");
+  const [birthDay, setBirthDay] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
   const [newPin, setNewPin] = useState("");
   const [repeatPin, setRepeatPin] = useState("");
   const [loading, setLoading] = useState(true);
@@ -77,6 +81,8 @@ export default function ProfilePage() {
         setLastName(data.lastName || "");
         setEmail(data.email || "");
         setSex(data.sex || "");
+        setBirthDay(data.birthDay == null ? "" : String(data.birthDay));
+        setBirthMonth(data.birthMonth == null ? "" : String(data.birthMonth));
       } catch (error) {
         setMessage(
           error instanceof Error
@@ -138,6 +144,8 @@ export default function ProfilePage() {
           email: email.trim(),
           sex,
           newPin,
+          birthDay: birthDay ? Number(birthDay) : null,
+          birthMonth: birthMonth ? Number(birthMonth) : null,
         }),
       });
 
@@ -445,6 +453,38 @@ export default function ProfilePage() {
             }}
           />
 
+          <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+            <h2 style={{ fontSize: "19px", margin: "0 0 6px" }}>
+              Cumpleaños
+            </h2>
+            <p style={{ color: "#9fb9d3", fontSize: "13px" }}>
+              Opcional. No es necesario indicar el año de nacimiento.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <label>
+                <span style={labelStyle}>Día</span>
+                <select value={birthDay} onChange={(e) => setBirthDay(e.target.value)} style={fieldStyle}>
+                  <option value="">Día</option>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <option key={day} value={day}>{day}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span style={labelStyle}>Mes</span>
+                <select value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)} style={fieldStyle}>
+                  <option value="">Mes</option>
+                  {[
+                    "Enero", "Febrero", "Marzo", "Abril",
+                    "Mayo", "Junio", "Julio", "Agosto",
+                    "Septiembre", "Octubre", "Noviembre", "Diciembre"
+                  ].map((month, index) => (
+                    <option key={month} value={index + 1}>{month}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
           <h2
             style={{
               margin: "0 0 5px",

@@ -1114,6 +1114,8 @@ app.get("/api/profile", async (req, res) => {
         email: true,
         sex: true,
         profilePicture: true,
+        birthDay: true,
+        birthMonth: true,
         city: true,
         country: true,
         pinHash: true,
@@ -1133,6 +1135,8 @@ app.get("/api/profile", async (req, res) => {
       email: user.email,
       sex: user.sex,
       profilePicture: user.profilePicture,
+      birthDay: user.birthDay,
+      birthMonth: user.birthMonth,
       city: user.city,
       country: user.country,
       hasPin: Boolean(user.pinHash),
@@ -1172,6 +1176,34 @@ app.patch("/api/profile", async (req, res) => {
         .trim()
         .toUpperCase();
 
+    const hasBirthday =
+      Object.prototype.hasOwnProperty.call(req.body, "birthDay") ||
+      Object.prototype.hasOwnProperty.call(req.body, "birthMonth");
+
+    const birthDay = req.body.birthDay == null || req.body.birthDay === ""
+      ? null
+      : Number(req.body.birthDay);
+
+    const birthMonth = req.body.birthMonth == null || req.body.birthMonth === ""
+      ? null
+      : Number(req.body.birthMonth);
+
+    if (hasBirthday) {
+      const bothEmpty = birthDay === null && birthMonth === null;
+      const validDate =
+        birthDay !== null && Number.isInteger(birthDay) &&
+        birthMonth !== null && Number.isInteger(birthMonth) &&
+        birthMonth >= 1 &&
+        birthMonth <= 12 &&
+        birthDay >= 1 &&
+        birthDay <= new Date(2024, birthMonth, 0).getDate();
+
+      if (!bothEmpty && !validDate) {
+        return res.status(400).json({
+          error: "Ingresá un día y mes de cumpleaños válidos",
+        });
+      }
+    }
     const newPin =
       String(req.body.newPin || "").trim();
 
@@ -1229,6 +1261,7 @@ app.patch("/api/profile", async (req, res) => {
             ? "MALE"
             : "FEMALE",
         ...(pinHash ? { pinHash } : {}),
+        ...(hasBirthday ? { birthDay, birthMonth } : {}),
       },
       select: {
         id: true,
@@ -1237,6 +1270,8 @@ app.patch("/api/profile", async (req, res) => {
         email: true,
         sex: true,
         profilePicture: true,
+        birthDay: true,
+        birthMonth: true,
         city: true,
         country: true,
         role: true,
@@ -1253,6 +1288,8 @@ app.patch("/api/profile", async (req, res) => {
         email: user.email,
         sex: user.sex,
         profilePicture: user.profilePicture,
+      birthDay: user.birthDay,
+      birthMonth: user.birthMonth,
         city: user.city,
         country: user.country,
         role: user.role,

@@ -55,6 +55,8 @@ model User {
   pinHash       String?
 
   profilePicture String?
+  birthDay       Int?
+  birthMonth     Int?
   city           String?
   country        String?
 
