@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SportPage from "./pages/SportPage";
 import GroupPage from "./pages/GroupPage";
@@ -204,6 +204,7 @@ const [groups, setGroups] = useState<
 
 const [groupsLoading, setGroupsLoading] =
   useState(false);
+const groupsRequestId = useRef(0);
 
 const [groupSportFilter, setGroupSportFilter] =
   useState("");
@@ -453,7 +454,7 @@ useEffect(() => {
 useEffect(() => {
   if (connected) {
     loadMyActivityBySport();
-    loadGroups();
+    loadGroups(sport);
 
     if (isSuperAdmin) {
       loadAdminUsers();
@@ -883,21 +884,21 @@ async function loadMyActivityBySport() {
 ===================================================== */
 
 async function loadGroups(selectedSport?: string) {
+  const sportToLoad =
+    selectedSport !== undefined
+      ? selectedSport
+      : sport;
+
+  if (!sportToLoad) {
+    return;
+  }
+
+  const requestId = ++groupsRequestId.current;
+
   try {
     setGroupsLoading(true);
 
-    const params =
-      new URLSearchParams();
-
-   const sportToLoad =
-  selectedSport !== undefined
-    ? selectedSport
-    : groupSportFilter;
-
-if (!sportToLoad) {
-  setGroups([]);
-  return;
-}
+    const params = new URLSearchParams();
 
 params.set(
   "sport",
@@ -926,16 +927,20 @@ params.set(
       );
     }
 
-    setGroups(
-      data.groups || []
-    );
+    if (requestId === groupsRequestId.current) {
+      setGroups(
+        data.groups || []
+      );
+    }
   } catch (err) {
     console.error(
       "Error cargando grupos:",
       err
     );
   } finally {
-    setGroupsLoading(false);
+    if (requestId === groupsRequestId.current) {
+      setGroupsLoading(false);
+    }
   }
 }
 /* =====================================================
