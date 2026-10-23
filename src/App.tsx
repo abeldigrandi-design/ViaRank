@@ -454,13 +454,18 @@ useEffect(() => {
 useEffect(() => {
   if (connected) {
     loadMyActivityBySport();
-    loadGroups(sport);
 
     if (isSuperAdmin) {
       loadAdminUsers();
     }
   }
 }, [connected, sport, isSuperAdmin]);
+
+useEffect(() => {
+  if (user?.id && sport && !sessionRestoring) {
+    void loadGroups(sport);
+  }
+}, [user?.id, sport, sessionRestoring, isSuperAdmin]);
 
 
 useEffect(() => {
@@ -2431,7 +2436,6 @@ disabled={emailLoading}
           onOpenSport={(nextSport) => {
             setSport(nextSport);
             setSportPage(nextSport);
-            loadGroups(nextSport);
           }}
           onOpenGroup={(groupId) => {
             window.scrollTo(0, 0);
@@ -2904,7 +2908,6 @@ disabled={emailLoading}
                 onClick={() => {
                   setSport(value);
                   setSportPage(value);
-                  loadGroups(value);
                 }}
                 style={{
                   width: isMobile ? "82px" : "94px",
