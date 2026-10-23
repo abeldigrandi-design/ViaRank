@@ -4504,6 +4504,7 @@ const sex =
         firstName: true,
         lastName: true,
         profilePicture: true,
+                customProfilePicture: true,
 sex: true,
       },
     },
@@ -4620,6 +4621,7 @@ if (period === "year") {
                 firstName: true,
                 lastName: true,
                 profilePicture: true,
+                customProfilePicture: true,
               },
             },
           },
@@ -4774,7 +4776,7 @@ if (period === "year") {
       firstName: member.user.firstName,
       lastName: member.user.lastName,
       profilePicture:
-        member.user.profilePicture,
+        member.user.customProfilePicture || member.user.profilePicture,
       activities: 0,
       distance: 0,
       movingTime: 0,
@@ -4802,7 +4804,7 @@ if (period === "year") {
                 activity.user.lastName,
 
               profilePicture:
-                activity.user.profilePicture,
+                activity.user.customProfilePicture || activity.user.profilePicture,
 
               activities: 1,
 
