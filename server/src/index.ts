@@ -5694,6 +5694,7 @@ app.post(
             });
 
       const canCreateEvent =
+        user.role === "SUPER_ADMIN" ||
         group.administratorId === userId ||
         membership?.canCreateEvents === true;
 
@@ -5749,6 +5750,135 @@ app.post(
     }
   }
 );
+
+/* =========================================================
+   SALIDAS HABITUALES DEL GRUPO
+========================================================= */
+
+app.get("/api/groups/:groupId/event-templates", async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Usuario no autenticado" });
+    }
+
+    const group = await prisma.sportGroup.findUnique({
+      where: { id: groupId },
+      select: { administratorId: true },
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: "Grupo no encontrado" });
+    }
+
+    const membership = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId, groupId } },
+    });
+
+    if (group.administratorId !== userId && !membership) {
+      return res.status(403).json({ error: "No pertenecés a este grupo" });
+    }
+
+    const templates = await prisma.groupEventTemplate.findMany({
+      where: { groupId },
+      orderBy: { title: "asc" },
+    });
+
+    return res.json({ success: true, templates });
+  } catch (error) {
+    console.error("Error consultando salidas guardadas:", error);
+    return res.status(500).json({
+      error: "No se pudieron obtener las salidas guardadas",
+    });
+  }
+});
+
+app.post("/api/groups/:groupId/event-templates", async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Usuario no autenticado" });
+    }
+
+    const group = await prisma.sportGroup.findUnique({
+      where: { id: groupId },
+      select: { administratorId: true },
+    });
+
+    if (!group) {
+      return res.status(404).json({ error: "Grupo no encontrado" });
+    }
+
+    const membership =
+      group.administratorId === userId
+        ? null
+        : await prisma.groupMember.findUnique({
+            where: { userId_groupId: { userId, groupId } },
+            select: { canCreateEvents: true },
+          });
+
+    const requester = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    const authorized =
+      requester?.role === "SUPER_ADMIN" ||
+      group.administratorId === userId ||
+      membership?.canCreateEvents === true;
+
+    if (!authorized) {
+      return res.status(403).json({
+        error: "No tenés permiso para guardar salidas habituales",
+      });
+    }
+
+    const {
+      title,
+      meetingPlace,
+      destination,
+      departureTime,
+      estimatedReturn,
+      plannedSpeed,
+      rules,
+    } = req.body ?? {};
+
+    if (typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({
+        error: "El nombre de la salida es obligatorio",
+      });
+    }
+
+    const optionalText = (value: unknown) =>
+      typeof value === "string" && value.trim()
+        ? value.trim()
+        : null;
+
+    const template = await prisma.groupEventTemplate.create({
+      data: {
+        groupId,
+        title: title.trim(),
+        meetingPlace: optionalText(meetingPlace),
+        destination: optionalText(destination),
+        departureTime: optionalText(departureTime),
+        estimatedReturn: optionalText(estimatedReturn),
+        plannedSpeed: optionalText(plannedSpeed),
+        rules: optionalText(rules),
+      },
+    });
+
+    return res.status(201).json({ success: true, template });
+  } catch (error) {
+    console.error("Error guardando salida habitual:", error);
+    return res.status(500).json({
+      error: "No se pudo guardar la salida habitual",
+    });
+  }
+});
 
 /* =========================================================
    ELIMINAR GRUPO

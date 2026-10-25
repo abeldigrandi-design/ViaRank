@@ -147,6 +147,7 @@ model SportGroup {
 
   members           GroupMember[]
   events            GroupEvent[]
+  eventTemplates    GroupEventTemplate[]
   activityReviews   GroupActivityReview[]
   activityPenalties GroupActivityPenalty[]
   varResolutions    GroupActivityVarResolution[]
@@ -172,6 +173,26 @@ model GroupMember {
   @@unique([userId, groupId])
   @@index([groupId])
   @@index([userId])
+}
+
+
+model GroupEventTemplate {
+  id      String     @id @default(cuid())
+  groupId String
+  group   SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  title           String
+  meetingPlace    String?
+  destination     String?
+  departureTime   String?
+  estimatedReturn String?
+  plannedSpeed    String?
+  rules           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
 }
 
 model GroupEvent {

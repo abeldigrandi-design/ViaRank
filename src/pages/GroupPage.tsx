@@ -151,6 +151,17 @@ export default function GroupPage({
   const [estimatedReturn, setEstimatedReturn] = useState("");
   const [plannedSpeed, setPlannedSpeed] = useState("");
   const [eventRules, setEventRules] = useState("");
+  const [eventTemplates, setEventTemplates] = useState<Array<{
+    id: string;
+    title: string;
+    meetingPlace: string | null;
+    destination: string | null;
+    departureTime: string | null;
+    estimatedReturn: string | null;
+    plannedSpeed: string | null;
+    rules: string | null;
+  }>>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   function togglePenaltyActivity(activityId: string) {
     setSelectedPenaltyActivities((current) =>
@@ -238,6 +249,96 @@ export default function GroupPage({
     }
   }
 
+  async function saveEventTemplate() {
+    if (!eventTitle.trim()) {
+      setEventMessage("Escribí un nombre para guardar la salida habitual.");
+      return;
+    }
+
+    const token = localStorage.getItem("viarank_auth_token");
+
+    if (!token) {
+      setEventMessage("Iniciá sesión para guardar una salida habitual.");
+      return;
+    }
+
+    try {
+      setTemplatesLoading(true);
+      setEventMessage("");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/groups/${group.id}/event-templates`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: eventTitle,
+            meetingPlace,
+            destination,
+            departureTime,
+            estimatedReturn,
+            plannedSpeed,
+            rules: eventRules,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo guardar la salida habitual.");
+      }
+
+      await fetchEventTemplates();
+      setEventMessage("Salida habitual guardada correctamente.");
+    } catch (error) {
+      setEventMessage(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la salida habitual."
+      );
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }
+  async function loadEventTemplates() {
+    setTemplatesLoading(true);
+    try {
+      await fetchEventTemplates();
+    } catch (error) {
+      console.error("Error cargando salidas guardadas:", error);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }
+
+  async function fetchEventTemplates() {
+    const token = localStorage.getItem("viarank_auth_token");
+
+    if (!token) {
+      throw new Error("Iniciá sesión para consultar las salidas guardadas.");
+    }
+
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/groups/${group.id}/event-templates`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudieron cargar las salidas guardadas.");
+    }
+
+    setEventTemplates(data.templates || []);
+  }
   async function loadEvents() {
     try {
       setEventsLoading(true);
@@ -266,6 +367,7 @@ export default function GroupPage({
 
   useEffect(() => {
     loadEvents();
+    void loadEventTemplates();
   }, [group.id]);
   const upcomingEvent = events.find((event) => {
     const eventDay = new Date(`${event.eventDate.slice(0, 10)}T23:59:59`);
@@ -1212,6 +1314,70 @@ export default function GroupPage({
                   Crear evento
                 </h3>
 
+                <div style={{ marginBottom: "14px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginBottom: "7px",
+                    }}
+                  >
+                    <span style={{ fontSize: "13px", fontWeight: 800 }}>
+                      Elegir salida guardada
+                    </span>
+                    <button
+                      type="button"
+                      title="Recupera los datos de una salida habitual para crear un nuevo evento."
+                      aria-label="Ayuda sobre salidas guardadas"
+                      style={{
+                        border: "1px solid #2584c5",
+                        borderRadius: "50%",
+                        background: "#123b60",
+                        color: "#fff",
+                        width: "22px",
+                        height: "22px",
+                        cursor: "help",
+                      }}
+                    >
+                      ?
+                    </button>
+                  </div>
+                  <select
+                    defaultValue=""
+                    disabled={templatesLoading || eventTemplates.length === 0}
+                    onChange={(e) => {
+                      const template = eventTemplates.find(
+                        (item) => item.id === e.target.value
+                      );
+
+                      if (!template) return;
+
+                      setEventTitle(template.title);
+                      setMeetingPlace(template.meetingPlace || "");
+                      setDestination(template.destination || "");
+                      setDepartureTime(template.departureTime || "");
+                      setEstimatedReturn(template.estimatedReturn || "");
+                      setPlannedSpeed(template.plannedSpeed || "");
+                      setEventRules(template.rules || "");
+                    }}
+                    style={{ ...eventInputStyle, width: "100%" }}
+                  >
+                    <option value="">
+                      {templatesLoading
+                        ? "Cargando salidas..."
+                        : eventTemplates.length === 0
+                          ? "Todavía no hay salidas guardadas"
+                          : "Seleccionar salida habitual"}
+                    </option>
+                    {eventTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div style={{ display: "grid", gap: "11px" }}>
                   <input
                     value={eventTitle}
@@ -1292,6 +1458,27 @@ export default function GroupPage({
                       resize: "vertical",
                     }}
                   />
+
+                  <button
+                    type="button"
+                    disabled={templatesLoading || !eventTitle.trim()}
+                    onClick={() => void saveEventTemplate()}
+                    style={{
+                      width: "100%",
+                      padding: "11px",
+                      borderRadius: "10px",
+                      border: "1px solid #2584c5",
+                      background: "#123b60",
+                      color: "#fff",
+                      fontWeight: 800,
+                      cursor: templatesLoading ? "wait" : "pointer",
+                      opacity: templatesLoading ? 0.6 : 1,
+                    }}
+                  >
+                    {templatesLoading
+                      ? "Guardando salida..."
+                      : "Guardar como salida habitual"}
+                  </button>
 
                   <div
                     style={{
