@@ -74,6 +74,11 @@ type GroupEvent = {
   estimatedReturn?: string | null;
   plannedSpeed?: string | null;
   rules?: string | null;
+  organizer?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  } | null;
 };
 type Props = {
   group: Group;
@@ -113,6 +118,11 @@ type Props = {
 };
 
 import { useEffect, useState } from "react";
+import { Geolocation } from "@capacitor/geolocation";
+import {
+  getEventWeatherForecast,
+  type EventWeatherForecast,
+} from "../services/eventWeather";
 
 export default function GroupPage({
   group,
@@ -151,6 +161,38 @@ export default function GroupPage({
   const [estimatedReturn, setEstimatedReturn] = useState("");
   const [plannedSpeed, setPlannedSpeed] = useState("");
   const [eventRules, setEventRules] = useState("");
+  const [eventWeather, setEventWeather] = useState<EventWeatherForecast | null>(null);
+  const [eventWeatherLoading, setEventWeatherLoading] = useState(false);
+  const [eventWeatherMessage, setEventWeatherMessage] = useState("");
+
+  const [eventWeatherCoordinates, setEventWeatherCoordinates] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
+  async function requestEventWeatherLocation() {
+    setEventWeatherLoading(true);
+    setEventWeatherMessage("");
+
+    try {
+      const position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: false,
+        timeout: 15000,
+      });
+
+      setEventWeatherCoordinates({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    } catch {
+      setEventWeatherCoordinates(null);
+      setEventWeatherMessage(
+        "No se pudo obtener la ubicación. Revisá los permisos del dispositivo."
+      );
+    } finally {
+      setEventWeatherLoading(false);
+    }
+  }
   const [eventTemplates, setEventTemplates] = useState<Array<{
     id: string;
     title: string;
@@ -163,6 +205,56 @@ export default function GroupPage({
   }>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
+  useEffect(() => {
+    if (!showEventForm) return;
+
+    void requestEventWeatherLocation();
+  }, [showEventForm]);
+
+  useEffect(() => {
+    if (!showEventForm || !eventWeatherCoordinates || !eventDate || !departureTime) {
+      setEventWeather(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadEventWeather() {
+      setEventWeatherLoading(true);
+      setEventWeatherMessage("");
+      setEventWeather(null);
+
+      try {
+        const forecast = await getEventWeatherForecast(
+          eventWeatherCoordinates!,
+          eventDate,
+          departureTime
+        );
+
+        if (cancelled) return;
+
+        setEventWeather(forecast);
+
+        if (!forecast) {
+          setEventWeatherMessage("Pronóstico todavía no disponible para esa fecha.");
+        }
+      } catch {
+        if (!cancelled) {
+          setEventWeatherMessage("No se pudo consultar el pronóstico.");
+        }
+      } finally {
+        if (!cancelled) {
+          setEventWeatherLoading(false);
+        }
+      }
+    }
+
+    void loadEventWeather();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showEventForm, eventWeatherCoordinates, eventDate, departureTime]);
   function togglePenaltyActivity(activityId: string) {
     setSelectedPenaltyActivities((current) =>
       current.includes(activityId)
@@ -1255,6 +1347,18 @@ export default function GroupPage({
 
                     <div
                       style={{
+                        color: "#8fcaff",
+                        fontSize: "12px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      Organizador: {event.organizer
+                        ? `${event.organizer.firstName} ${event.organizer.lastName}`
+                        : "Organizador no registrado"}
+                    </div>
+
+                    <div
+                      style={{
                         display: "grid",
                         gap: "6px",
                         color: "#b9d0e3",
@@ -1310,9 +1414,68 @@ export default function GroupPage({
               </button>
             ) : (
               <div style={{ ...card, padding: "16px" }}>
-                <h3 style={{ margin: "0 0 14px", fontSize: "17px" }}>
-                  Crear evento
-                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    marginBottom: "16px",
+                    paddingBottom: "12px",
+                    borderBottom: "1px solid #2584c5",
+                  }}
+                >
+                  <div>
+                    <img
+                      src={viarankHeaderLogo}
+                      alt="ViaRank"
+                      style={{
+                        width: "120px",
+                        height: "38px",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
+                    <h3 style={{ margin: "6px 0 0", fontSize: "17px" }}>
+                      Crear evento
+                    </h3>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span
+                      title="Evento confirmado"
+                      aria-label="Semáforo verde: evento confirmado"
+                      style={{
+                        width: "13px",
+                        height: "13px",
+                        borderRadius: "50%",
+                        background: "#22c55e",
+                        boxShadow: "0 0 9px #22c55e",
+                        display: "inline-block",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      title="Ver significado del semáforo"
+                      onClick={() =>
+                        window.alert(
+                          "Semáforo ViaRank:\nVerde: confirmado.\nAmarillo: en evaluación.\nRojo: suspendido."
+                        )
+                      }
+                      style={{
+                        width: "23px",
+                        height: "23px",
+                        borderRadius: "50%",
+                        border: "1px solid #2584c5",
+                        background: "#123b60",
+                        color: "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
 
                 <div style={{ marginBottom: "14px" }}>
                   <div
@@ -1379,6 +1542,7 @@ export default function GroupPage({
                 </div>
 
                 <div style={{ display: "grid", gap: "11px" }}>
+                  <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Título de la salida *</div>
                   <input
                     value={eventTitle}
                     onChange={(e) => setEventTitle(e.target.value)}
@@ -1393,20 +1557,27 @@ export default function GroupPage({
                       gap: "9px",
                     }}
                   >
-                    <input
+                    <div>
+                      <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Fecha de salida *</div>
+                      <input
                       type="date"
                       value={eventDate}
                       onChange={(e) => setEventDate(e.target.value)}
                       style={eventInputStyle}
                     />
-
-                    <input
+                    </div>
+                    <div>
+                      <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Hora de salida *</div>
+                      <input
                       type="time"
                       value={departureTime}
                       onChange={(e) => setDepartureTime(e.target.value)}
                       style={eventInputStyle}
                     />
+                    </div>
                   </div>
+
+                  <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Lugar de encuentro *</div>
 
                   <input
                     value={meetingPlace}
@@ -1414,6 +1585,61 @@ export default function GroupPage({
                     placeholder="Lugar de encuentro"
                     style={eventInputStyle}
                   />
+
+                  <div style={{
+                    background: "#102e49",
+                    border: "1px solid #2584c5",
+                    borderRadius: "12px",
+                    padding: "13px",
+                    display: "grid",
+                    gap: "9px",
+                  }}>
+                    <div style={{
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      color: "#fff",
+                    }}>
+                      Pronóstico para la salida
+                    </div>
+
+                    <div style={{fontSize:"11px",color:"#a9c5d9"}}>
+                      Según ubicación del organizador
+                    </div>
+
+                    {eventWeatherLoading ? (
+                      <div style={{fontSize:"12px",color:"#b9d0e3"}}>
+                        Consultando pronóstico...
+                      </div>
+                    ) : eventWeather ? (
+                      <>
+                        <div style={{
+                          fontSize:"23px",
+                          fontWeight:700,
+                          color:"#fff",
+                        }}>
+                          {Math.round(eventWeather.temperature)} °C
+                        </div>
+                        <div style={{fontSize:"12px",color:"#d5e8f5"}}>
+                          Probabilidad de lluvia: {eventWeather.precipitationProbability} %
+                        </div>
+                        <div style={{fontSize:"12px",color:"#d5e8f5"}}>
+                          Precipitación prevista: {eventWeather.precipitation} mm
+                        </div>
+                        <div style={{fontSize:"12px",color:"#d5e8f5"}}>
+                          Viento: {eventWeather.windSpeed} km/h
+                        </div>
+                        <div style={{fontSize:"12px",color:"#d5e8f5"}}>
+                          Ráfagas: {eventWeather.windGusts} km/h
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{fontSize:"12px",color:"#b9d0e3"}}>
+                        {eventWeatherMessage ||
+                          "Seleccioná fecha y hora para consultar el pronóstico."}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Destino</div>
 
                   <input
                     value={destination}
@@ -1441,12 +1667,16 @@ export default function GroupPage({
                     />
                   </div>
 
+                  <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Velocidad prevista</div>
+
                   <input
                     value={plannedSpeed}
                     onChange={(e) => setPlannedSpeed(e.target.value)}
                     placeholder="Velocidad prevista"
                     style={eventInputStyle}
                   />
+
+                  <div style={{ color: "#b9d0e3", fontSize: "12px", fontWeight: 700, marginBottom: "5px" }}>Reglas y observaciones</div>
 
                   <textarea
                     value={eventRules}

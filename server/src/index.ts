@@ -5610,6 +5610,15 @@ app.get(
       const events = await prisma.groupEvent.findMany({
         where: { groupId },
         orderBy: { eventDate: "asc" },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
       });
 
       return res.json({
@@ -5722,6 +5731,7 @@ app.post(
       const event = await prisma.groupEvent.create({
         data: {
           groupId,
+          organizerId: userId,
           title: String(title).trim(),
           eventDate: parsedDate,
           departureTime: String(departureTime).trim(),

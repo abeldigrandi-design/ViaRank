@@ -72,6 +72,7 @@ model User {
   activities                   Activity[]
   groupMemberships             GroupMember[]
   administeredGroups           SportGroup[]                 @relation("GroupAdministrator")
+  organizedEvents              GroupEvent[] @relation("EventOrganizer")
   sessions                     UserSession[]
   travelCompanyAdministrations TravelCompanyAdministrator[]
   travelReservations           TravelReservation[]
@@ -200,6 +201,8 @@ model GroupEvent {
   groupId String
   group   SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
+  organizerId     String?
+  organizer       User? @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)
   title           String
   eventDate       DateTime
   departureTime   String
