@@ -3940,43 +3940,30 @@ app.get(
         | Date
         | undefined;
 
-      const now =
-        new Date();
+      const now = new Date();
+
+      // Los periodos deportivos se calculan en hora argentina (UTC-3).
+      // Se construyen instantes UTC para evitar depender de la zona del servidor.
+      const argentinaDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+      const year = argentinaDate.getUTCFullYear();
+      const month = argentinaDate.getUTCMonth();
+      const dayOfMonth = argentinaDate.getUTCDate();
+      const dayOfWeek = argentinaDate.getUTCDay();
 
       if (period === "week") {
-  startDate = new Date(now);
+        const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        startDate = new Date(
+          Date.UTC(year, month, dayOfMonth - daysSinceMonday, 3, 0, 0)
+        );
+      }
 
-  const day = startDate.getDay();
+      if (period === "month") {
+        startDate = new Date(Date.UTC(year, month, 1, 3, 0, 0));
+      }
 
-  const diffToMonday =
-    day === 0 ? 6 : day - 1;
-
-  startDate.setDate(
-    startDate.getDate() - diffToMonday
-  );
-
-  startDate.setHours(0, 0, 0, 0);
-}
-
-if (period === "month") {
-  startDate = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1
-  );
-
-  startDate.setHours(0, 0, 0, 0);
-}
-
-if (period === "year") {
-  startDate = new Date(
-    now.getFullYear(),
-    0,
-    1
-  );
-
-  startDate.setHours(0, 0, 0, 0);
-}
+      if (period === "year") {
+        startDate = new Date(Date.UTC(year, 0, 1, 3, 0, 0));
+      }
 
       const where: any = {};
 
@@ -4751,43 +4738,30 @@ const memberIds =
         | Date
         | undefined;
 
-      const now =
-        new Date();
+      const now = new Date();
+
+      // Los periodos deportivos se calculan en hora argentina (UTC-3).
+      // Se construyen instantes UTC para evitar depender de la zona del servidor.
+      const argentinaDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+      const year = argentinaDate.getUTCFullYear();
+      const month = argentinaDate.getUTCMonth();
+      const dayOfMonth = argentinaDate.getUTCDate();
+      const dayOfWeek = argentinaDate.getUTCDay();
 
       if (period === "week") {
-  startDate = new Date(now);
+        const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        startDate = new Date(
+          Date.UTC(year, month, dayOfMonth - daysSinceMonday, 3, 0, 0)
+        );
+      }
 
-  const day = startDate.getDay();
+      if (period === "month") {
+        startDate = new Date(Date.UTC(year, month, 1, 3, 0, 0));
+      }
 
-  const diffToMonday =
-    day === 0 ? 6 : day - 1;
-
-  startDate.setDate(
-    startDate.getDate() - diffToMonday
-  );
-
-  startDate.setHours(0, 0, 0, 0);
-}
-
-if (period === "month") {
-  startDate = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1
-  );
-
-  startDate.setHours(0, 0, 0, 0);
-}
-
-if (period === "year") {
-  startDate = new Date(
-    now.getFullYear(),
-    0,
-    1
-  );
-
-  startDate.setHours(0, 0, 0, 0);
-}
+      if (period === "year") {
+        startDate = new Date(Date.UTC(year, 0, 1, 3, 0, 0));
+      }
 
       const where: any = {
         userId: {
