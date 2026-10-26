@@ -2767,7 +2767,7 @@ function calculateContinuousSpeedLimits(
         ? false
         : previous.moving === true && current.moving === true
           ? true
-          : previous.speedKmh >= 3 && current.speedKmh >= 3;
+          : previous.speedKmh >= 0.5 && current.speedKmh >= 0.5;
 
     if (!moving) {
       aboveCurrent = 0;
