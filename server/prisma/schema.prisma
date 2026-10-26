@@ -141,6 +141,7 @@ model SportGroup {
   visibility GroupVisibility @default(PUBLIC)
 
   activityControlSpeed   Float?
+  activityControlMinSpeed Float?
   activityControlMinutes Int?
 
   administratorId String
@@ -276,7 +277,12 @@ model GroupActivityReview {
   referenceSpeed       Float
   maximumMinutes       Int
   maxContinuousSeconds Int
+  minContinuousSeconds Int?
+  referenceMinSpeed     Float?
+  reviewReason          String?
   needsReview          Boolean @default(false)
+  resolvedAt           DateTime?
+  resolvedById         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

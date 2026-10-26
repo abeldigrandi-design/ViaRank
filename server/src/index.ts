@@ -2557,6 +2557,7 @@ async function getValidStravaAccessToken(
 type StravaSpeedPoint = {
   time: number;
   speedKmh: number | null;
+  moving?: boolean;
 };
 
 async function getStravaSpeedStream(
@@ -2565,7 +2566,7 @@ async function getStravaSpeedStream(
 ): Promise<StravaSpeedPoint[] | null> {
   try {
     const response = await fetch(
-      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,velocity_smooth&key_by_type=true`,
+      `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,velocity_smooth,moving&key_by_type=true`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -2585,6 +2586,7 @@ async function getStravaSpeedStream(
 
     const times = streams?.time?.data;
     const velocities = streams?.velocity_smooth?.data;
+    const movements = streams?.moving?.data;
 
     if (
       !Array.isArray(times) ||
@@ -2614,6 +2616,10 @@ async function getStravaSpeedStream(
       points.push({
         time,
         speedKmh: Number.isFinite(speedKmh) ? speedKmh : null,
+        moving: Array.isArray(movements) &&
+          typeof movements[index] === "boolean"
+            ? movements[index]
+            : undefined,
       });
     }
 
@@ -2721,6 +2727,78 @@ function getViaRankMaxContinuousSecondsAboveSpeed(
   }
 
   return Math.floor(maxContinuousSeconds);
+}
+type SpeedLimitResult = {
+  aboveSeconds: number;
+  belowSeconds: number;
+};
+
+function calculateContinuousSpeedLimits(
+  samples: { time: number; speedKmh: number | null; moving?: boolean }[],
+  minSpeed: number | null,
+  maxSpeed: number | null
+): SpeedLimitResult {
+  let aboveCurrent = 0;
+  let belowCurrent = 0;
+  let aboveSeconds = 0;
+  let belowSeconds = 0;
+
+  for (let i = 1; i < samples.length; i++) {
+    const previous = samples[i - 1];
+    const current = samples[i];
+    const seconds = current.time - previous.time;
+
+    if (
+      !Number.isFinite(seconds) ||
+      seconds <= 0 ||
+      seconds > 10 ||
+      previous.speedKmh === null ||
+      current.speedKmh === null ||
+      !Number.isFinite(current.speedKmh) ||
+      !Number.isFinite(previous.speedKmh)
+    ) {
+      aboveCurrent = 0;
+      belowCurrent = 0;
+      continue;
+    }
+
+    const moving =
+      previous.moving === false || current.moving === false
+        ? false
+        : previous.moving === true && current.moving === true
+          ? true
+          : previous.speedKmh >= 3 && current.speedKmh >= 3;
+
+    if (!moving) {
+      aboveCurrent = 0;
+      belowCurrent = 0;
+      continue;
+    }
+
+    if (
+      maxSpeed !== null &&
+      current.speedKmh > maxSpeed &&
+      previous.speedKmh > maxSpeed
+    ) {
+      aboveCurrent += seconds;
+      aboveSeconds = Math.max(aboveSeconds, aboveCurrent);
+    } else {
+      aboveCurrent = 0;
+    }
+
+    if (
+      minSpeed !== null &&
+      current.speedKmh < minSpeed &&
+      previous.speedKmh < minSpeed
+    ) {
+      belowCurrent += seconds;
+      belowSeconds = Math.max(belowSeconds, belowCurrent);
+    } else {
+      belowCurrent = 0;
+    }
+  }
+
+  return { aboveSeconds, belowSeconds };
 }
 /* =========================================================
    IMPORTAR TODAS LAS ACTIVIDADES DESDE STRAVA
@@ -3058,12 +3136,11 @@ case "Wheelchair":
                   userId: user.id,
                   group: {
                     sport: type,
-                    activityControlSpeed: {
-                      not: null,
-                    },
-                    activityControlMinutes: {
-                      not: null,
-                    },
+                    OR: [
+                      { activityControlSpeed: { not: null } },
+                      { activityControlMinSpeed: { not: null } },
+                    ],
+                    activityControlMinutes: { not: null },
                   },
                 },
                 select: {
@@ -3071,6 +3148,7 @@ case "Wheelchair":
                     select: {
                       id: true,
                       activityControlSpeed: true,
+                      activityControlMinSpeed: true,
                       activityControlMinutes: true,
                     },
                   },
@@ -3088,23 +3166,59 @@ case "Wheelchair":
                 for (const membership of memberships) {
                   const referenceSpeed =
                     membership.group.activityControlSpeed;
+                  const referenceMinSpeed =
+                    membership.group.activityControlMinSpeed;
                   const maximumMinutes =
                     membership.group.activityControlMinutes;
 
                   if (
-                    referenceSpeed === null ||
-                    maximumMinutes === null
+                    maximumMinutes === null ||
+                    (referenceSpeed === null && referenceMinSpeed === null)
                   ) {
                     continue;
                   }
 
-                  const maxContinuousSeconds =
-                    getMaxContinuousSecondsAboveSpeed(
-                      points,
-                      referenceSpeed
-                    );
+                  const speedResult = calculateContinuousSpeedLimits(
+                    points,
+                    referenceMinSpeed,
+                    referenceSpeed
+                  );
 
-                  await prisma.groupActivityReview.upsert({
+                  const maxContinuousSeconds = speedResult.aboveSeconds;
+                  const minContinuousSeconds = speedResult.belowSeconds;
+
+                  const aboveLimit =
+                    referenceSpeed !== null &&
+                    maxContinuousSeconds > maximumMinutes * 60;
+
+                  const belowLimit =
+                    referenceMinSpeed !== null &&
+                    minContinuousSeconds > maximumMinutes * 60;
+
+                  const reviewReason =
+                    aboveLimit && belowLimit
+                      ? "BOTH"
+                      : aboveLimit
+                        ? "MAX_SPEED"
+                        : belowLimit
+                          ? "MIN_SPEED"
+                          : null;
+
+                  const existingSpeedReview = await prisma.groupActivityReview.findUnique({
+              where: {
+                groupId_activityId: {
+                  groupId: membership.group.id,
+                  activityId: savedActivity.id,
+                },
+              },
+              select: { resolvedAt: true },
+            });
+
+            if (existingSpeedReview?.resolvedAt) {
+              continue;
+            }
+
+            await prisma.groupActivityReview.upsert({
                     where: {
                       groupId_activityId: {
                         groupId: membership.group.id,
@@ -3112,22 +3226,24 @@ case "Wheelchair":
                       },
                     },
                     update: {
-                      referenceSpeed,
+                      referenceSpeed: referenceSpeed ?? 0,
                       maximumMinutes,
                       maxContinuousSeconds,
-                      needsReview:
-                        maxContinuousSeconds >
-                        maximumMinutes * 60,
+                      minContinuousSeconds,
+                      referenceMinSpeed,
+                      reviewReason,
+                      needsReview: aboveLimit || belowLimit,
                     },
                     create: {
                       groupId: membership.group.id,
                       activityId: savedActivity.id,
-                      referenceSpeed,
+                      referenceSpeed: referenceSpeed ?? 0,
                       maximumMinutes,
                       maxContinuousSeconds,
-                      needsReview:
-                        maxContinuousSeconds >
-                        maximumMinutes * 60,
+                      minContinuousSeconds,
+                      referenceMinSpeed,
+                      reviewReason,
+                      needsReview: aboveLimit || belowLimit,
                     },
                   });
                 }
@@ -3295,12 +3411,11 @@ app.post(
                 userId,
                 group: {
                   sport: type,
-                  activityControlSpeed: {
-                    not: null,
-                  },
-                  activityControlMinutes: {
-                    not: null,
-                  },
+                  OR: [
+                    { activityControlSpeed: { not: null } },
+                    { activityControlMinSpeed: { not: null } },
+                  ],
+                  activityControlMinutes: { not: null },
                 },
               },
               select: {
@@ -3308,6 +3423,7 @@ app.post(
                   select: {
                     id: true,
                     activityControlSpeed: true,
+                    activityControlMinSpeed: true,
                     activityControlMinutes: true,
                   },
                 },
@@ -3317,21 +3433,97 @@ app.post(
           for (const membership of memberships) {
             const referenceSpeed =
               membership.group.activityControlSpeed;
+            const referenceMinSpeed =
+              membership.group.activityControlMinSpeed;
             const maximumMinutes =
               membership.group.activityControlMinutes;
 
             if (
-              referenceSpeed === null ||
-              maximumMinutes === null
+              maximumMinutes === null ||
+              (referenceSpeed === null && referenceMinSpeed === null)
             ) {
               continue;
             }
 
-            const maxContinuousSeconds =
-              getViaRankMaxContinuousSecondsAboveSpeed(
-                validGpsPoints,
-                referenceSpeed
-              );
+            const gpsSpeedSamples = validGpsPoints.map((point, index) => {
+              if (index === 0) {
+                return {
+                  time: point.timestamp / 1000,
+                  speedKmh: null as number | null,
+                };
+              }
+
+              const previous = validGpsPoints[index - 1];
+              const seconds =
+                (point.timestamp - previous.timestamp) / 1000;
+
+              const lat1 = previous.latitude * Math.PI / 180;
+              const lat2 = point.latitude * Math.PI / 180;
+              const dLat =
+                (point.latitude - previous.latitude) * Math.PI / 180;
+              const dLon =
+                (point.longitude - previous.longitude) * Math.PI / 180;
+
+              const h =
+                Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1) *
+                  Math.cos(lat2) *
+                  Math.sin(dLon / 2) ** 2;
+
+              const distanceMeters =
+                2 * 6371000 * Math.asin(Math.sqrt(h));
+
+              return {
+                time: point.timestamp / 1000,
+                speedKmh:
+                  seconds > 0 &&
+                  Number.isFinite(seconds) &&
+                  Number.isFinite(distanceMeters) &&
+                  (distanceMeters / seconds) * 3.6 <= 150
+                    ? (distanceMeters / seconds) * 3.6
+                    : null,
+              };
+            });
+
+            const speedResult = calculateContinuousSpeedLimits(
+              gpsSpeedSamples,
+              referenceMinSpeed,
+              referenceSpeed
+            );
+
+            const maxContinuousSeconds = speedResult.aboveSeconds;
+            const minContinuousSeconds = speedResult.belowSeconds;
+
+            const aboveLimit =
+              referenceSpeed !== null &&
+              maxContinuousSeconds > maximumMinutes * 60;
+
+            const belowLimit =
+              referenceMinSpeed !== null &&
+              minContinuousSeconds > maximumMinutes * 60;
+
+            const reviewReason =
+              aboveLimit && belowLimit
+                ? "BOTH"
+                : aboveLimit
+                  ? "MAX_SPEED"
+                  : belowLimit
+                    ? "MIN_SPEED"
+                    : null;
+
+            const existingSpeedReview = await prisma.groupActivityReview.findUnique({
+              where: {
+                groupId_activityId: {
+                  groupId: membership.group.id,
+                  activityId: activity.id,
+                },
+              },
+              select: { resolvedAt: true },
+            });
+
+            if (existingSpeedReview?.resolvedAt) {
+              continue;
+            }
 
             await prisma.groupActivityReview.upsert({
               where: {
@@ -3341,22 +3533,24 @@ app.post(
                 },
               },
               update: {
-                referenceSpeed,
+                referenceSpeed: referenceSpeed ?? 0,
+                referenceMinSpeed,
                 maximumMinutes,
                 maxContinuousSeconds,
-                needsReview:
-                  maxContinuousSeconds >
-                  maximumMinutes * 60,
+                minContinuousSeconds,
+                reviewReason,
+                needsReview: aboveLimit || belowLimit,
               },
               create: {
                 groupId: membership.group.id,
                 activityId: activity.id,
-                referenceSpeed,
+                referenceSpeed: referenceSpeed ?? 0,
+                referenceMinSpeed,
                 maximumMinutes,
                 maxContinuousSeconds,
-                needsReview:
-                  maxContinuousSeconds >
-                  maximumMinutes * 60,
+                minContinuousSeconds,
+                reviewReason,
+                needsReview: aboveLimit || belowLimit,
               },
             });
           }
@@ -3683,7 +3877,7 @@ hasOverlap: overlappingActivityIds.has(activity.id),
                 pendingOverlapPartnersByActivityId.get(activity.id) ?? []
               ),
             hasPendingVar:
-              pendingVarActivityIds.has(activity.id),
+              pendingVarActivityIds.has(activity.id) || speedReviewIdsForHistory.has(activity.id),
             isPenalized:
               penaltyByActivityId.has(activity.id),
             penalty:
@@ -4881,7 +5075,7 @@ hasSpeedReview: activities.some(
 hasPendingVar: activities.some(
   (activity) =>
     activity.userId === athlete.userId &&
-    pendingGroupVarActivityIds.has(activity.id)
+    (pendingGroupVarActivityIds.has(activity.id) || speedReviewActivityIds.has(activity.id))
 ),
 hasPenalty: activities.some(
   (activity) =>
@@ -4966,6 +5160,7 @@ app.patch(
       const {
         visibility,
         activityControlSpeed,
+        activityControlMinSpeed,
         activityControlMinutes,
       } = req.body;
 
@@ -5026,6 +5221,7 @@ app.patch(
       const updateData: {
         visibility?: "PUBLIC" | "PRIVATE";
         activityControlSpeed?: number | null;
+        activityControlMinSpeed?: number | null;
         activityControlMinutes?: number | null;
       } = {};
 
@@ -5061,6 +5257,23 @@ app.patch(
           activityControlSpeed;
       }
 
+      if (activityControlMinSpeed !== undefined) {
+        if (
+          activityControlMinSpeed !== null &&
+          (
+            typeof activityControlMinSpeed !== "number" ||
+            !Number.isFinite(activityControlMinSpeed) ||
+            activityControlMinSpeed < 0
+          )
+        ) {
+          return res.status(400).json({
+            error: "Velocidad mínima inválida",
+          });
+        }
+
+        updateData.activityControlMinSpeed = activityControlMinSpeed;
+      }
+
       if (activityControlMinutes !== undefined) {
         if (
           activityControlMinutes !== null &&
@@ -5078,6 +5291,31 @@ app.patch(
           activityControlMinutes;
       }
 
+      const effectiveMaxSpeed =
+        activityControlSpeed !== undefined
+          ? activityControlSpeed
+          : (await prisma.sportGroup.findUnique({
+              where: { id: groupId },
+              select: { activityControlSpeed: true },
+            }))?.activityControlSpeed ?? null;
+
+      const effectiveMinSpeed =
+        activityControlMinSpeed !== undefined
+          ? activityControlMinSpeed
+          : (await prisma.sportGroup.findUnique({
+              where: { id: groupId },
+              select: { activityControlMinSpeed: true },
+            }))?.activityControlMinSpeed ?? null;
+
+      if (
+        effectiveMinSpeed !== null &&
+        effectiveMaxSpeed !== null &&
+        effectiveMinSpeed >= effectiveMaxSpeed
+      ) {
+        return res.status(400).json({
+          error: "La velocidad mínima debe ser menor que la máxima.",
+        });
+      }
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({
           error: "No hay cambios para guardar",
@@ -5988,6 +6226,76 @@ if (!administratorId) {
    CONTROL DE ACTIVIDAD - CONSULTAR REVISIONES
 --------------------------------------------------------- */
 
+app.patch(
+  "/api/groups/:groupId/activity-reviews/:reviewId/resolve",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const { groupId, reviewId } = req.params;
+
+      const group = await prisma.sportGroup.findUnique({
+        where: { id: groupId },
+        select: { administratorId: true },
+      });
+
+      if (!group) {
+        return res.status(404).json({
+          error: "Grupo no encontrado",
+        });
+      }
+
+      const requester = await prisma.user.findUnique({
+        where: { id: requesterId },
+        select: { role: true },
+      });
+
+      if (
+        requester?.role !== "SUPER_ADMIN" &&
+        group.administratorId !== requesterId
+      ) {
+        return res.status(403).json({
+          error: "No tienes permiso para resolver esta alerta",
+        });
+      }
+
+      const review = await prisma.groupActivityReview.findFirst({
+        where: { id: reviewId, groupId },
+      });
+
+      if (!review) {
+        return res.status(404).json({
+          error: "Alerta no encontrada",
+        });
+      }
+
+      const updated = await prisma.groupActivityReview.update({
+        where: { id: review.id },
+        data: {
+          needsReview: false,
+          resolvedAt: review.resolvedAt ?? new Date(),
+          resolvedById: review.resolvedById ?? requesterId,
+        },
+      });
+
+      return res.json({
+        success: true,
+        review: updated,
+      });
+    } catch (error) {
+      console.error("Error resolviendo alerta de velocidad:", error);
+      return res.status(500).json({
+        error: "No se pudo resolver la alerta",
+      });
+    }
+  }
+);
 app.get(
   "/api/groups/:groupId/activity-reviews",
   async (req, res) => {
@@ -6051,8 +6359,11 @@ app.get(
         select: {
           id: true,
           referenceSpeed: true,
+          referenceMinSpeed: true,
           maximumMinutes: true,
           maxContinuousSeconds: true,
+          minContinuousSeconds: true,
+          reviewReason: true,
           needsReview: true,
           createdAt: true,
           activity: {

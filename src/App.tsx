@@ -1538,67 +1538,32 @@ async function loadGroupMembers(
 async function removeGroupMember(
   memberUserId: string,
   memberName: string
-) {
+): Promise<void> {
   if (!adminGroup || !user?.id) {
-    return;
+    throw new Error("No hay un grupo seleccionado.");
   }
 
-  const confirmed =
-    window.confirm(
-      `¿Seguro que querés quitar a "${memberName}" del grupo "${adminGroup.name}"?`
-    );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      `${API_URL}/api/groups/${adminGroup.id}/members/${memberUserId}`,
-      {
-        method: "DELETE",
-
-     headers: {
-  "Content-Type":
-    "application/json",
-
-  Authorization:
-    `Bearer ${localStorage.getItem(
-      "viarank_auth_token"
-    )}`,
-},
-      }
-    );
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-          "No se pudo quitar al atleta"
-      );
+  const response = await fetch(
+    `${API_URL}/api/groups/${encodeURIComponent(adminGroup.id)}/members/${encodeURIComponent(memberUserId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+      },
     }
+  );
 
-    await loadGroupMembers(
-      adminGroup
-    );
+  const data = await response.json();
 
-    await loadGroups();
-
-    alert(
-      "Atleta quitado del grupo correctamente."
-    );
-  } catch (err) {
-    console.error(
-      "Error quitando atleta:",
-      err
-    );
-
-    alert(
-      "No se pudo quitar al atleta del grupo."
+  if (!response.ok) {
+    throw new Error(
+      data.error || `No se pudo quitar a ${memberName} del grupo.`
     );
   }
+
+  await loadGroupMembers(adminGroup);
+  await loadGroups();
 }
   /* =====================================================
      ACTUALIZAR ACTIVIDADES DESDE STRAVA
@@ -2345,6 +2310,7 @@ disabled={emailLoading}
         groupMembers={groupMembers}
         groupMembersLoading={groupMembersLoading}
         onOpenGroup={loadGroupMembers}
+        onRemoveGroupMember={removeGroupMember}
       />
     );
   }

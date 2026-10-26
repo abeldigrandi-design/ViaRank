@@ -18,6 +18,7 @@ type AdminGroup = {
   joinCode: string;
   visibility: "PUBLIC" | "PRIVATE";
   activityControlSpeed?: number | null;
+  activityControlMinSpeed?: number | null;
   activityControlMinutes?: number | null;
   administrator: {
     id: string;
@@ -47,8 +48,11 @@ type GroupMember = {
 type ActivityReview = {
   id: string;
   referenceSpeed: number;
+  referenceMinSpeed: number | null;
   maximumMinutes: number;
   maxContinuousSeconds: number;
+  minContinuousSeconds: number | null;
+  reviewReason: string | null;
   needsReview: boolean;
   createdAt: string;
   activity: {
@@ -94,6 +98,7 @@ type Props = {
   groupMembers: GroupMember[];
   groupMembersLoading: boolean;
   onOpenGroup: (group: AdminGroup) => Promise<void>;
+  onRemoveGroupMember: (userId: string, name: string) => Promise<void>;
 };
 
 const sportNames: Record<string, string> = {
@@ -119,6 +124,7 @@ export default function SuperAdminPage({
   groupMembers,
   groupMembersLoading,
   onOpenGroup,
+  onRemoveGroupMember,
 }: Props) {
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -206,9 +212,13 @@ export default function SuperAdminPage({
       setUpdatingUsers(false);
     }
   };
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [deletingGroups, setDeletingGroups] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<AdminGroup | null>(null);
+  const [showAdminHelp, setShowAdminHelp] = useState(false);
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
   const [activityControlSpeed, setActivityControlSpeed] = useState("");
+  const [activityControlMinSpeed, setActivityControlMinSpeed] = useState("");
   const [activityControlMinutes, setActivityControlMinutes] = useState("");
   const [savingActivityControl, setSavingActivityControl] = useState(false);
   const [activityControlMessage, setActivityControlMessage] = useState("");
@@ -260,6 +270,90 @@ export default function SuperAdminPage({
     );
   });
 
+  function toggleGroupSelection(groupId: string) {
+    setSelectedGroups((current) =>
+      current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId]
+    );
+  }
+
+  async function deleteSelectedGroups() {
+    if (!isSuperAdmin || deletingGroups) return;
+
+    const targets = administeredGroups.filter((group) =>
+      selectedGroups.includes(group.id)
+    );
+
+    if (targets.length === 0) return;
+
+    const names = targets.map((group) => group.name).join("\n");
+
+    if (!window.confirm(
+      `Vas a eliminar definitivamente ${targets.length} grupo(s):\n\n${names}\n\n¿Querés continuar?`
+    )) return;
+
+    const confirmation = window.prompt(
+      "Para confirmar, escribí ELIMINAR:"
+    );
+
+    if (confirmation !== "ELIMINAR") return;
+
+    const token = localStorage.getItem("viarank_auth_token");
+
+    if (!token) {
+      window.alert("Tu sesión no está disponible.");
+      return;
+    }
+
+    setDeletingGroups(true);
+
+    const deleted: string[] = [];
+    const errors: string[] = [];
+
+    try {
+      for (const group of targets) {
+        try {
+          const response = await fetch(
+            `${API_URL}/api/groups/${encodeURIComponent(group.id)}`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || "No se pudo eliminar");
+          }
+
+          deleted.push(group.name);
+        } catch (error) {
+          errors.push(
+            `${group.name}: ${
+              error instanceof Error ? error.message : "Error desconocido"
+            }`
+          );
+        }
+      }
+
+      window.alert(
+        `${deleted.length} grupo(s) eliminado(s).` +
+        (errors.length
+          ? `\n\nNo eliminados:\n${errors.join("\n")}`
+          : "")
+      );
+
+      if (deleted.length > 0) {
+        window.location.reload();
+      }
+    } finally {
+      setDeletingGroups(false);
+    }
+  }
   function toggleUser(userId: string) {
     setSelectedUsers((current) =>
       current.includes(userId)
@@ -274,6 +368,37 @@ export default function SuperAdminPage({
       .map((group) => group.name);
   }
 
+  async function resolveActivityReview(groupId: string, reviewId: string) {
+    const confirmed = window.confirm(
+      "¿Resolver esta alerta de velocidad sin penalización?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/groups/${groupId}/activity-reviews/${reviewId}/resolve`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        window.alert(data.error || "No se pudo resolver la alerta.");
+        return;
+      }
+
+      await loadActivityReviews(groupId);
+    } catch (error) {
+      console.error("Error resolviendo alerta:", error);
+      window.alert("No se pudo resolver la alerta.");
+    }
+  }
   async function loadActivityReviews(groupId: string) {
     setActivityReviewsLoading(true);
     setActivityReviewsMessage("");
@@ -321,6 +446,67 @@ export default function SuperAdminPage({
     }
   }
 
+  const [removingGroupMembers, setRemovingGroupMembers] = useState(false);
+
+  async function removeSelectedGroupMembers() {
+    if (!selectedGroup || removingGroupMembers) return;
+
+    const targets = groupMembers.filter(
+      (member) =>
+        selectedGroupMembers.includes(member.user.id) &&
+        !member.user.isGroupAdministrator
+    );
+
+    if (targets.length === 0) {
+      alert("No podés quitar al administrador principal del grupo.");
+      return;
+    }
+
+    const names = targets.map(
+      (member) => `${member.user.firstName} ${member.user.lastName}`
+    );
+
+    const confirmed = window.confirm(
+      `¿Querés quitar del grupo "${selectedGroup.name}" a:\n\n` +
+      names.join("\n") +
+      "\n\nSus cuentas y actividades de ViaRank se conservarán."
+    );
+
+    if (!confirmed) return;
+
+    setRemovingGroupMembers(true);
+
+    try {
+      for (const member of targets) {
+        await onRemoveGroupMember(
+          member.user.id,
+          `${member.user.firstName} ${member.user.lastName}`
+        );
+      }
+
+      setSelectedGroupMembers([]);
+      await onOpenGroup(selectedGroup);
+      alert("Integrantes quitados del grupo correctamente.");
+    } catch (error) {
+      console.error("Error quitando integrantes del grupo:", error);
+
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : "No se pudo completar la eliminación.";
+
+      alert(
+        "No se pudo completar la operación.\n\n" +
+        mensaje +
+        "\n\nRevisá la lista de integrantes antes de volver a intentar."
+      );
+
+      await onOpenGroup(selectedGroup).catch(console.error);
+      setSelectedGroupMembers([]);
+    } finally {
+      setRemovingGroupMembers(false);
+    }
+  }
   async function openGroup(group: AdminGroup) {
     setSelectedGroup(group);
     setSelectedGroupMembers([]);
@@ -329,6 +515,7 @@ export default function SuperAdminPage({
         ? String(group.activityControlSpeed)
         : ""
     );
+    setActivityControlMinSpeed(group.activityControlMinSpeed != null ? String(group.activityControlMinSpeed) : "");
     setActivityControlMinutes(
       group.activityControlMinutes != null
         ? String(group.activityControlMinutes)
@@ -345,6 +532,7 @@ export default function SuperAdminPage({
     setSelectedGroup(null);
     setSelectedGroupMembers([]);
     setActivityControlSpeed("");
+    setActivityControlMinSpeed("");
     setActivityControlMinutes("");
     setActivityControlMessage("");
     setActivityReviews([]);
@@ -360,6 +548,27 @@ export default function SuperAdminPage({
       activityControlSpeed.trim() === ""
         ? null
         : Number(activityControlSpeed);
+
+    const minSpeed = activityControlMinSpeed.trim() === "" ? null : Number(activityControlMinSpeed);
+
+    if (
+      minSpeed !== null &&
+      (!Number.isFinite(minSpeed) || minSpeed < 0)
+    ) {
+      setActivityControlMessage("Ingresá una velocidad mínima válida.");
+      return;
+    }
+
+    if (
+      minSpeed !== null &&
+      speed !== null &&
+      minSpeed >= speed
+    ) {
+      setActivityControlMessage(
+        "La velocidad mínima debe ser menor que la máxima."
+      );
+      return;
+    }
 
     const minutes =
       activityControlMinutes.trim() === ""
@@ -402,6 +611,7 @@ export default function SuperAdminPage({
           },
           body: JSON.stringify({
             activityControlSpeed: speed,
+            activityControlMinSpeed: minSpeed,
             activityControlMinutes: minutes,
           }),
         }
@@ -423,6 +633,7 @@ export default function SuperAdminPage({
               ...current,
               activityControlSpeed:
                 data.group.activityControlSpeed,
+              activityControlMinSpeed: data.group.activityControlMinSpeed,
               activityControlMinutes:
                 data.group.activityControlMinutes,
             }
@@ -781,7 +992,102 @@ export default function SuperAdminPage({
                 </span>
               </div>
 
+                            {(isSuperAdmin || selectedGroup.administrator.id === user?.id) && (
+                <div
+                  style={{
+                    marginBottom: "12px",
+                    padding: "10px",
+                    borderRadius: "9px",
+                    background: "#082845",
+                    border: "1px solid rgba(20,140,255,0.45)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#ffffff",
+                      fontWeight: 800,
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Sos administrador del grupo {selectedGroup.name}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminHelp((current) => !current)}
+                    aria-expanded={showAdminHelp}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "transparent",
+                      border: "none",
+                      color: "#38bdf8",
+                      padding: 0,
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      textAlign: "left",
+                    }}
+                  >
+                    <span style={{ fontSize: "17px" }}>ⓘ</span>
+                    ¿Qué podés hacer como administrador?
+                    <span>{showAdminHelp ? "⌃" : "⌄"}</span>
+                  </button>
+
+                  {showAdminHelp && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        fontSize: "12px",
+                        lineHeight: 1.6,
+                        color: "#dbeafe",
+                      }}
+                    >
+                      <div>Podés eliminar una persona del grupo.</div>
+                      <div>Podés nombrar un administrador.</div>
+                      <div>Podés nombrar un colaborador.</div>
+
+                      <div style={{ marginTop: "8px", fontWeight: 800 }}>
+                        ¿Cómo se hace?
+                      </div>
+
+                      <div>
+                        Seleccioná la casilla de verificación junto al nombre
+                        del atleta y presioná el botón correspondiente.
+                        ViaRank te pedirá confirmación antes de realizar
+                        cualquier cambio.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {selectedGroupMembers.length > 0 &&
+                (isSuperAdmin || selectedGroup.administrator.id === user?.id) && (
+                  <div style={{ marginBottom: "10px" }}>
+                    <button
+                      type="button"
+                      disabled={removingGroupMembers}
+                      onClick={() => void removeSelectedGroupMembers()}
+                      style={{
+                        border: "1px solid #ef4444",
+                        borderRadius: "7px",
+                        background: "#7f1d1d",
+                        color: "#ffffff",
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                        fontWeight: 800,
+                        cursor: removingGroupMembers ? "wait" : "pointer",
+                      }}
+                    >
+                      {removingGroupMembers
+                        ? "Quitando integrantes..."
+                        : "Eliminar del grupo"}
+                    </button>
+                  </div>
+                )}
+{selectedGroupMembers.length > 0 &&
                 selectedGroup?.administrator.id === user?.id && (
                   <div
                     style={{
@@ -864,7 +1170,7 @@ export default function SuperAdminPage({
                       fontSize: "10px",
                     }}
                   >
-                    Velocidad de referencia
+                    Velocidad máxima
                     <div
                       style={{
                         display: "flex",
@@ -916,7 +1222,46 @@ export default function SuperAdminPage({
                       fontSize: "10px",
                     }}
                   >
-                    Tiempo máximo
+                    Velocidad mínima
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="0"
+                        value={activityControlMinSpeed}
+                        onChange={(e) => {
+                          setActivityControlMinSpeed(e.target.value);
+                          setActivityControlMessage("");
+                        }}
+                        style={{
+                          width: "100%",
+                          minWidth: 0,
+                          boxSizing: "border-box",
+                          border: "1px solid rgba(20,140,255,0.55)",
+                          borderRadius: "7px",
+                          background: "#082845",
+                          color: "#ffffff",
+                          padding: "6px 7px",
+                          fontSize: "11px",
+                          outline: "none",
+                        }}
+                      />
+                      <span style={{ color: "#9fb5cc", fontSize: "10px", whiteSpace: "nowrap" }}>
+                        km/h
+                      </span>
+                    </div>
+                  </label>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                      color: "#9fb5cc",
+                      fontSize: "10px",
+                    }}
+                  >
+                    Tiempo de referencia
                     <div
                       style={{
                         display: "flex",
@@ -1115,10 +1460,45 @@ export default function SuperAdminPage({
                             marginTop: "3px",
                           }}
                         >
-                          Superó {review.referenceSpeed} km/h durante{" "}
-                          {review.maxContinuousSeconds} s · máximo configurado{" "}
-                          {review.maximumMinutes} min
+                          {(review.reviewReason === "MAX_SPEED" ||
+                            review.reviewReason === "BOTH") && (
+                            <div>
+                              Velocidad máxima superada: {review.referenceSpeed} km/h
+                              durante {review.maxContinuousSeconds} segundos.
+                            </div>
+                          )}
+                          {(review.reviewReason === "MIN_SPEED" ||
+                            review.reviewReason === "BOTH") && (
+                            <div>
+                              Velocidad inferior al mínimo de{" "}
+                              {review.referenceMinSpeed} km/h durante{" "}
+                              {review.minContinuousSeconds ?? 0} segundos.
+                            </div>
+                          )}
+                          <div>
+                            Tiempo de referencia: {review.maximumMinutes} minutos.
+                          </div>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            resolveActivityReview(selectedGroup.id, review.id)
+                          }
+                          style={{
+                            marginTop: "8px",
+                            padding: "7px 10px",
+                            borderRadius: "6px",
+                            border: "1px solid #29b67a",
+                            background: "#123e35",
+                            color: "#b9ffe1",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Resolver sin penalización
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1268,128 +1648,110 @@ export default function SuperAdminPage({
                     gap: "3px",
                   }}
                 >
-                  {administeredGroups.map((group) => (
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                     <button
+                  {isSuperAdmin && selectedGroups.length > 0 && (
+                    <button
                       type="button"
-                      key={group.id}
-                      onClick={() => void openGroup(group)}
+                      disabled={deletingGroups}
+                      onClick={() => void deleteSelectedGroups()}
                       style={{
-                        width: "100%",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "5px 8px",
-                        borderRadius: "7px",
-                        border: "1px solid rgba(20,140,255,0.48)",
-                        background: "#082845",
+                        alignSelf: "flex-start",
+                        background: "#8b1e2d",
                         color: "#ffffff",
-                        cursor: "pointer",
-                        textAlign: "left",
+                        border: "1px solid #ef4444",
+                        borderRadius: "7px",
+                        padding: "7px 10px",
+                        fontSize: "11px",
+                        fontWeight: 800,
+                        cursor: deletingGroups ? "default" : "pointer",
+                        marginBottom: "8px",
                       }}
                     >
-                      <span
+                      {deletingGroups
+                        ? "Eliminando..."
+                        : `Eliminar ${selectedGroups.length} seleccionado(s)`}
+                    </button>
+                  )}
+
+                  {administeredGroups.map((group) => (
+                    <div
+                      key={group.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        minWidth: 0,
+                      }}
+                    >
+                      {isSuperAdmin && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Seleccionar grupo ${group.name}`}
+                          checked={selectedGroups.includes(group.id)}
+                          disabled={deletingGroups}
+                          onChange={() => toggleGroupSelection(group.id)}
+                          style={{
+                            width: "17px",
+                            height: "17px",
+                            flexShrink: 0,
+                            accentColor: "#148cff",
+                          }}
+                        />
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => void openGroup(group)}
                         style={{
                           flex: 1,
                           minWidth: 0,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          fontSize: "12px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "7px 8px",
+                          borderRadius: "7px",
+                          border: "1px solid rgba(20,140,255,0.48)",
+                          background: "#082845",
+                          color: "#ffffff",
+                          cursor: "pointer",
+                          textAlign: "left",
                         }}
                       >
-                        <strong>{group.name}</strong>
-                        <span style={{ color: "#9fb5cc" }}>
-                          {" · "}
-                          {sportNames[group.sport] ?? group.sport}
-                          {" · "}
-                          {group.visibility === "PUBLIC"
-                            ? "Público"
-                            : "Privado"}
-                          {" · "}
-                          {group._count?.members ?? 0} atletas
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <strong>{group.name}</strong>
+                          <span style={{ color: "#9fb5cc" }}>
+                            {" · "}
+                            {sportNames[group.sport] ?? group.sport}
+                            {" · "}
+                            {group.visibility === "PUBLIC"
+                              ? "Público"
+                              : "Privado"}
+                            {" · "}
+                            {group._count?.members ?? 0} atletas
+                          </span>
                         </span>
-                      </span>
 
-                      <span
-                        style={{
-                          color: "#38bdf8",
-                          fontWeight: 900,
-                          flexShrink: 0,
-                        }}
-                      >
-                        ›
-                      </span>
-                                         </button>
-                     {isSuperAdmin && (
-                       <button
-                         /* VIARANK_DELETE_GROUP_BUTTON */
-                         type="button"
-                         onClick={async () => {
-                           if (!window.confirm(
-                             `¿Querés eliminar definitivamente el grupo "${group.name}"?`
-                           )) return;
-
-                           const nombre = window.prompt(
-                             `Para confirmar, escribí exactamente: ${group.name}`
-                           );
-
-                           if (nombre !== group.name) {
-                             window.alert("El nombre no coincide. No se eliminó el grupo.");
-                             return;
-                           }
-
-                           const token = localStorage.getItem("viarank_auth_token");
-
-                           if (!token) {
-                             window.alert("Tu sesión no está disponible.");
-                             return;
-                           }
-
-                           try {
-                             const response = await fetch(
-                               `${API_URL}/api/groups/${encodeURIComponent(group.id)}`,
-                               {
-                                 method: "DELETE",
-                                 headers: {
-                                   Authorization: `Bearer ${token}`,
-                                 },
-                               }
-                             );
-
-                             const result = await response.json();
-
-                             if (!response.ok) {
-                               throw new Error(result.error || "No se pudo eliminar el grupo");
-                             }
-
-                             window.alert(`Grupo "${group.name}" eliminado correctamente.`);
-                             window.location.reload();
-                           } catch (error) {
-                             window.alert(
-                               error instanceof Error
-                                 ? error.message
-                                 : "Error al eliminar el grupo"
-                             );
-                           }
-                         }}
-                         style={{
-                           background: "#8b1e2d",
-                           color: "#ffffff",
-                           border: "1px solid #ef4444",
-                           borderRadius: "7px",
-                           padding: "6px 10px",
-                           fontSize: "11px",
-                           fontWeight: 800,
-                           cursor: "pointer",
-                           flexShrink: 0,
-                         }}
-                       >
-                         ELIMINAR
-                       </button>
-                     )}
-                   </div>                  ))}
+                        <span
+                          style={{
+                            color: "#38bdf8",
+                            fontWeight: 900,
+                            flexShrink: 0,
+                          }}
+                        >
+                          ›
+                        </span>
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
