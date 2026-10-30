@@ -538,6 +538,9 @@ app.post(
           .toUpperCase();
 
       const pin =
+      const termsAccepted = req.body.termsAccepted === true;
+      const isAdult = req.body.isAdult === true;
+      const termsAcceptedVersion = String(req.body.termsAcceptedVersion || "");
         String(req.body.pin || "").trim();
 
       if (!firstName || !lastName || !email || !sex || !pin) {
@@ -574,6 +577,12 @@ app.post(
       }
 
       const pinHash =
+      if (!termsAccepted || !isAdult || termsAcceptedVersion !== "2026-10-30") {
+        return res.status(400).json({
+          error: "Deb├®s aceptar los T├®rminos y Condiciones vigentes de ViaRank.",
+        });
+      }
+
         await bcrypt.hash(pin, 12);
 
       const existingUser =
@@ -597,6 +606,8 @@ app.post(
             emailVerified: false,
             pinHash,
             sex:
+            termsAcceptedAt: new Date(),
+            termsAcceptedVersion,
               sex === "MALE"
                 ? "MALE"
                 : "FEMALE",

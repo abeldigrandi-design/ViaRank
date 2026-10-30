@@ -51,6 +51,8 @@ model User {
   lastName      String
   sex           Sex?
   email         String? @unique
+  termsAcceptedAt      DateTime?
+  termsAcceptedVersion String?
   emailVerified Boolean @default(false)
   pinHash       String?
 
