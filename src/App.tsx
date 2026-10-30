@@ -596,9 +596,6 @@ setUser(data.user || null);
       );
 
       const data = await response.json();
-            termsAccepted,
-            isAdult: termsAccepted,
-            termsAcceptedVersion: "2026-10-30",
 
       if (!response.ok) {
         setEmailMessage(
@@ -2151,6 +2148,23 @@ color: "#ffffff",
       onClick={requestEmailCode}
       disabled={emailLoading}
       style={{
+        flex: "0 0 145px",
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        color: "#38bdf8",
+        fontSize: "13px",
+        fontWeight: 700,
+        lineHeight: 1.25,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ display: "block" }}>¿Todavía no tenés PIN?</span>
+      <span style={{ display: "block" }}>Ingresá solo con tu email</span>
+    </button>
+  </div>
+)}
 {emailMode === "register" && (
   <div style={{
     padding: "16px",
@@ -2225,23 +2239,7 @@ color: "#ffffff",
     </label>
   </div>
 )}
-        flex: "0 0 145px",
-        padding: 0,
-        border: "none",
-        background: "transparent",
-        color: "#38bdf8",
-        fontSize: "13px",
-        fontWeight: 700,
-        lineHeight: 1.25,
-        textAlign: "left",
-        cursor: "pointer",
-      }}
-    >
-      <span style={{ display: "block" }}>¿Todavía no tenés PIN?</span>
-      <span style={{ display: "block" }}>Ingresá solo con tu email</span>
-    </button>
-  </div>
-)}
+
               <button
                 
                 onClick={emailMode === "register" ? requestEmailCode : loginWithPin}
