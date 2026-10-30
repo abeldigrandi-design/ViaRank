@@ -537,10 +537,13 @@ app.post(
           .trim()
           .toUpperCase();
 
-      const pin =
       const termsAccepted = req.body.termsAccepted === true;
+
       const isAdult = req.body.isAdult === true;
+
       const termsAcceptedVersion = String(req.body.termsAcceptedVersion || "");
+
+      const pin =
         String(req.body.pin || "").trim();
 
       if (!firstName || !lastName || !email || !sex || !pin) {
@@ -575,13 +578,13 @@ app.post(
             "El PIN debe tener exactamente 4 números",
         });
       }
-
-      const pinHash =
       if (!termsAccepted || !isAdult || termsAcceptedVersion !== "2026-10-30") {
         return res.status(400).json({
           error: "Deb├®s aceptar los T├®rminos y Condiciones vigentes de ViaRank.",
         });
       }
+
+      const pinHash =
 
         await bcrypt.hash(pin, 12);
 
@@ -605,9 +608,9 @@ app.post(
             email,
             emailVerified: false,
             pinHash,
-            sex:
             termsAcceptedAt: new Date(),
             termsAcceptedVersion,
+            sex:
               sex === "MALE"
                 ? "MALE"
                 : "FEMALE",
