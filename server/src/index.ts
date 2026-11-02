@@ -5106,6 +5106,15 @@ penalty: (() => {
           id: group.id,
           name: group.name,
           sport: group.sport,
+          canCreateEvents:
+            requester?.role === "SUPER_ADMIN" ||
+            group.administratorId === requesterId ||
+            (await prisma.groupMember.findUnique({
+              where: {
+                userId_groupId: { userId: requesterId, groupId },
+              },
+              select: { canCreateEvents: true },
+            }))?.canCreateEvents === true,
           visibility: group.visibility,
           joinCode:
             group.administratorId === requesterId ||
