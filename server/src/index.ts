@@ -5964,6 +5964,65 @@ app.delete("/api/groups/:groupId/events/:eventId/registrations/me", async (req, 
 
 // === FIN INSCRIPCIONES A EVENTOS ===
 
+// === VIARANK: LISTA DE PARTICIPANTES DE EVENTOS ===
+
+app.get("/api/groups/:groupId/events/:eventId/registrations", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Debés iniciar sesión" });
+    }
+
+    const { groupId, eventId } = req.params;
+
+    const access = await verificarAccesoInscripcion(groupId, eventId, userId);
+
+    if ("error" in access) {
+      return res.status(access.code ?? 403).json({ error: access.error });
+    }
+
+    const registrations = await prisma.groupEventRegistration.findMany({
+      where: { eventId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profilePicture: true,
+            customProfilePicture: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      count: registrations.length,
+      participants: registrations.map((registration) => ({
+        id: registration.user.id,
+        firstName: registration.user.firstName,
+        lastName: registration.user.lastName,
+        profilePicture:
+          registration.user.customProfilePicture ??
+          registration.user.profilePicture,
+        registeredAt: registration.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Error consultando participantes:", error);
+    return res.status(500).json({
+      error: "No se pudo consultar la lista de participantes",
+    });
+  }
+});
+
+// === FIN LISTA DE PARTICIPANTES DE EVENTOS ===
+
+
 app.get(
   "/api/groups/:groupId/events",
   async (req, res) => {
