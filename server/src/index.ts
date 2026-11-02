@@ -5825,6 +5825,145 @@ app.post(
    EVENTOS DEL GRUPO
 ========================================================= */
 
+// === VIARANK: INSCRIPCIONES A EVENTOS ===
+
+async function verificarAccesoInscripcion(
+  groupId: string,
+  eventId: string,
+  userId: string
+) {
+  const group = await prisma.sportGroup.findUnique({
+    where: { id: groupId },
+    select: { administratorId: true },
+  });
+
+  if (!group) {
+    return { error: "Grupo no encontrado", code: 404 };
+  }
+
+  const membership = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId, groupId } },
+    select: { id: true },
+  });
+
+  if (group.administratorId !== userId && !membership) {
+    return { error: "No pertenecés a este grupo", code: 403 };
+  }
+
+  const event = await prisma.groupEvent.findFirst({
+    where: { id: eventId, groupId },
+    select: {
+      id: true,
+      status: true,
+      publicationStatus: true,
+      rules: true,
+    },
+  });
+
+  if (!event) {
+    return { error: "Evento no encontrado", code: 404 };
+  }
+
+  return { event };
+}
+
+app.get("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Debés iniciar sesión" });
+
+    const { groupId, eventId } = req.params;
+    const access = await verificarAccesoInscripcion(groupId, eventId, userId);
+
+    if ("error" in access) {
+      return res.status(access.code ?? 403).json({ error: access.error });
+    }
+
+    const registration = await prisma.groupEventRegistration.findUnique({
+      where: { eventId_userId: { eventId, userId } },
+      select: { id: true, createdAt: true },
+    });
+
+    return res.json({ registered: Boolean(registration), registration });
+  } catch (error) {
+    console.error("Error consultando inscripción:", error);
+    return res.status(500).json({ error: "No se pudo consultar la inscripción" });
+  }
+});
+
+app.post("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Debés iniciar sesión" });
+
+    const { groupId, eventId } = req.params;
+    const access = await verificarAccesoInscripcion(groupId, eventId, userId);
+
+    if ("error" in access) {
+      return res.status(access.code ?? 403).json({ error: access.error });
+    }
+
+    if (!access.event) {
+      return res.status(404).json({ error: "Evento no encontrado" });
+    }
+
+    if (access.event.publicationStatus !== "PUBLISHED") {
+      return res.status(400).json({ error: "El evento todavía no está publicado" });
+    }
+
+    if (access.event.status === "SUSPENDED") {
+      return res.status(400).json({ error: "No podés inscribirte en un evento suspendido" });
+    }
+
+    if (req.body?.acceptedTerms !== true) {
+      return res.status(400).json({ error: "Debés aceptar las condiciones del evento" });
+    }
+
+    const registration = await prisma.groupEventRegistration.upsert({
+      where: { eventId_userId: { eventId, userId } },
+      update: {},
+      create: {
+        eventId,
+        userId,
+        status: "ACTIVE",
+        acceptedTermsText: access.event.rules ?? "",
+        acceptedTermsAt: new Date(),
+      },
+      select: { id: true, createdAt: true },
+    });
+
+    return res.json({ registered: true, registration });
+  } catch (error) {
+    console.error("Error inscribiendo atleta:", error);
+    return res.status(500).json({ error: "No se pudo completar la inscripción" });
+  }
+});
+
+app.delete("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Debés iniciar sesión" });
+
+    const { groupId, eventId } = req.params;
+    const access = await verificarAccesoInscripcion(groupId, eventId, userId);
+
+    if ("error" in access) {
+      return res.status(access.code ?? 403).json({ error: access.error });
+    }
+
+    await prisma.groupEventRegistration.deleteMany({
+      where: { eventId, userId },
+    });
+
+    return res.json({ registered: false });
+  } catch (error) {
+    console.error("Error cancelando inscripción:", error);
+    return res.status(500).json({ error: "No se pudo cancelar la inscripción" });
+  }
+});
+
+// === FIN INSCRIPCIONES A EVENTOS ===
+
 app.get(
   "/api/groups/:groupId/events",
   async (req, res) => {
