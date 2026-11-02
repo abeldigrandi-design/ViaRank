@@ -5842,8 +5842,18 @@ app.get(
         });
       }
 
+      const userId = getAuthenticatedUserId(req);
+      let canManage = false;
+      if (userId) {
+        const [user, groupAccess, membership] = await Promise.all([
+          prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+          prisma.sportGroup.findUnique({ where: { id: groupId }, select: { administratorId: true } }),
+          prisma.groupMember.findUnique({ where: { userId_groupId: { userId, groupId } }, select: { canCreateEvents: true } }),
+        ]);
+        canManage = user?.role === "SUPER_ADMIN" || groupAccess?.administratorId === userId || membership?.canCreateEvents === true;
+      }
       const events = await prisma.groupEvent.findMany({
-        where: { groupId },
+        where: { groupId, ...(canManage ? {} : { publicationStatus: "PUBLISHED" }) },
         orderBy: { eventDate: "asc" },
         include: {
           organizer: {
@@ -5884,6 +5894,10 @@ app.post(
         estimatedReturn,
         plannedSpeed,
         rules,
+        weatherLatitude,
+        weatherLongitude,
+        details,
+        status,
       } = req.body;
 
       const userId = getAuthenticatedUserId(req);
@@ -5963,6 +5977,28 @@ app.post(
         });
       }
 
+      const validStatuses = ["CONFIRMED", "EVALUATING", "SUSPENDED"];
+      if (status !== undefined && !validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Estado del evento inválido" });
+      }
+      if (details != null && (typeof details !== "object" || Array.isArray(details))) {
+        return res.status(400).json({ error: "Datos del recorrido inválidos" });
+      }
+      const cleanDetails = details && typeof details === "object" ? {
+        routeDescription: typeof details.routeDescription === "string" ? details.routeDescription.slice(0, 3000) : "",
+        distance: typeof details.distance === "number" && Number.isFinite(details.distance) && details.distance >= 0 ? details.distance : null,
+        elevation: typeof details.elevation === "number" && Number.isFinite(details.elevation) && details.elevation >= 0 ? details.elevation : null,
+        surface: ["", "Asfalto", "Tierra", "Mixto"].includes(details.surface) ? details.surface : "",
+        difficulty: ["", "Baja", "Media", "Alta"].includes(details.difficulty) ? details.difficulty : "",
+        bicycleTypes: Array.isArray(details.bicycleTypes) ? details.bicycleTypes.filter((x: unknown) => typeof x === "string").slice(0, 10) : [],
+        food: Array.isArray(details.food) ? details.food.filter((x: unknown) => typeof x === "string").slice(0, 10) : [],
+        foodTime: typeof details.foodTime === "string" ? details.foodTime.slice(0, 5) : "",
+        bringFood: details.bringFood === true,
+        bringFoodOption: ["RECOMMENDED","NOT_PLANNED","OPTIONAL"].includes(details.bringFoodOption) ? details.bringFoodOption : (details.bringFood === true ? "OPTIONAL" : ""),
+        foodTimes: details.foodTimes && typeof details.foodTimes === "object" && !Array.isArray(details.foodTimes) ? Object.fromEntries(Object.entries(details.foodTimes).filter(([k,v]) => ["Desayuno","Almuerzo","Merienda","Cena"].includes(k) && typeof v === "string").map(([k,v])=>[k,String(v).slice(0,5)])) : {},
+        equipmentText: typeof details.equipmentText === "string" ? details.equipmentText.slice(0,4000) : "",
+        disclaimer: typeof details.disclaimer === "string" ? details.disclaimer.slice(0,5000) : "",
+      } : null;
       const event = await prisma.groupEvent.create({
         data: {
           groupId,
@@ -5979,6 +6015,23 @@ app.post(
             ? String(plannedSpeed).trim()
             : null,
           rules: rules ? String(rules).trim() : null,
+          details: cleanDetails ?? undefined,
+          status: status ?? "CONFIRMED",
+          publicationStatus: "DRAFT",
+          weatherLatitude:
+            typeof weatherLatitude === "number" &&
+            Number.isFinite(weatherLatitude) &&
+            weatherLatitude >= -90 &&
+            weatherLatitude <= 90
+              ? weatherLatitude
+              : null,
+          weatherLongitude:
+            typeof weatherLongitude === "number" &&
+            Number.isFinite(weatherLongitude) &&
+            weatherLongitude >= -180 &&
+            weatherLongitude <= 180
+              ? weatherLongitude
+              : null,
         },
       });
 
@@ -5995,6 +6048,148 @@ app.post(
     }
   }
 );
+
+/* Edición, publicación y eliminación de eventos: permisos verificados en el servidor. */
+async function canManageGroupEvents(groupId: string, userId: string, eventId?: string) {
+  const [group, user, membership] = await Promise.all([
+    prisma.sportGroup.findUnique({ where: { id: groupId }, select: { administratorId: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId, groupId } },
+      select: { canCreateEvents: true, isGroupAdmin: true },
+    }),
+  ]);
+
+  if (!group || !user) return false;
+
+  if (user.role === "SUPER_ADMIN") return true;
+
+  const isAdmin = group.administratorId === userId || membership?.isGroupAdmin === true;
+  const canCreate = isAdmin || membership?.canCreateEvents === true;
+
+  if (!canCreate) return false;
+  if (!eventId) return true;
+
+  const event = await prisma.groupEvent.findFirst({
+    where: { id: eventId, groupId },
+    select: { organizerId: true },
+  });
+
+  if (!event) return false;
+  if (event.organizerId === userId) return true;
+  if (!isAdmin || !event.organizerId) return false;
+
+  const organizerMembership = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId: event.organizerId, groupId } },
+    select: { isGroupAdmin: true },
+  });
+
+  const organizerIsAdmin =
+    event.organizerId === group.administratorId ||
+    organizerMembership?.isGroupAdmin === true;
+
+  return !organizerIsAdmin;
+}
+
+app.patch("/api/groups/:groupId/events/:eventId", async (req, res) => {
+  try {
+    const { groupId, eventId } = req.params;
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No tenés permiso para editar eventos" });
+    const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId } });
+    if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
+
+    const data: Prisma.GroupEventUpdateInput = {};
+    const stringFields = ["title", "departureTime", "meetingPlace", "destination", "estimatedReturn", "plannedSpeed", "rules"] as const;
+    for (const field of stringFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        const value = req.body[field];
+        if (value !== null && typeof value !== "string") return res.status(400).json({ error: `Campo ${field} inválido` });
+        if (["title", "departureTime", "meetingPlace"].includes(field) && (!value || !value.trim())) {
+          return res.status(400).json({ error: `Campo ${field} obligatorio` });
+        }
+        (data as Record<string, unknown>)[field] = value === null ? null : value.trim().slice(0, field === "rules" ? 5000 : 500);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "eventDate")) {
+      const parsed = new Date(req.body.eventDate);
+      if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: "Fecha inválida" });
+      data.eventDate = parsed;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
+      if (!["CONFIRMED", "EVALUATING", "SUSPENDED"].includes(req.body.status)) return res.status(400).json({ error: "Estado inválido" });
+      data.status = req.body.status;
+    }
+    for (const field of ["weatherLatitude", "weatherLongitude"] as const) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        const v = req.body[field];
+        const limit = field === "weatherLatitude" ? 90 : 180;
+        if (v !== null && (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit)) return res.status(400).json({ error: `Coordenada ${field} inválida` });
+        data[field] = v;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "details")) {
+      const details = req.body.details;
+      if (details !== null && (typeof details !== "object" || Array.isArray(details))) return res.status(400).json({ error: "Detalles inválidos" });
+      // Conservar las inscripciones: solo se actualizan los campos del evento.
+      data.details = details === null ? Prisma.DbNull : {
+        routeDescription: typeof details.routeDescription === "string" ? details.routeDescription.slice(0, 3000) : "",
+        distance: typeof details.distance === "number" && Number.isFinite(details.distance) && details.distance >= 0 ? details.distance : null,
+        elevation: typeof details.elevation === "number" && Number.isFinite(details.elevation) && details.elevation >= 0 ? details.elevation : null,
+        surface: ["", "Asfalto", "Tierra", "Mixto"].includes(details.surface) ? details.surface : "",
+        difficulty: ["", "Baja", "Media", "Alta"].includes(details.difficulty) ? details.difficulty : "",
+        bicycleTypes: Array.isArray(details.bicycleTypes) ? details.bicycleTypes.filter((x: unknown) => typeof x === "string").slice(0, 10) : [],
+        food: Array.isArray(details.food) ? details.food.filter((x: unknown) => typeof x === "string").slice(0, 10) : [],
+        foodTime: typeof details.foodTime === "string" ? details.foodTime.slice(0, 5) : "",
+        bringFood: details.bringFood === true,
+        bringFoodOption: ["RECOMMENDED","NOT_PLANNED","OPTIONAL"].includes(details.bringFoodOption) ? details.bringFoodOption : (details.bringFood === true ? "OPTIONAL" : ""),
+        foodTimes: details.foodTimes && typeof details.foodTimes === "object" && !Array.isArray(details.foodTimes) ? Object.fromEntries(Object.entries(details.foodTimes).filter(([k,v]) => ["Desayuno","Almuerzo","Merienda","Cena"].includes(k) && typeof v === "string").map(([k,v]) => [k, String(v).slice(0,5)])) : {},
+        equipmentText: typeof details.equipmentText === "string" ? details.equipmentText.slice(0,4000) : "",
+        disclaimer: typeof details.disclaimer === "string" ? details.disclaimer.slice(0,5000) : "",
+      };
+    }
+    if (Object.keys(data).length === 0) return res.status(400).json({ error: "No hay cambios para guardar" });
+    const event = await prisma.groupEvent.update({ where: { id: eventId }, data });
+    return res.json({ success: true, event });
+  } catch (error) {
+    console.error("Error editando evento:", error);
+    return res.status(500).json({ error: "No se pudo editar el evento" });
+  }
+});
+
+app.patch("/api/groups/:groupId/events/:eventId/publication", async (req, res) => {
+  try {
+    const { groupId, eventId } = req.params;
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No tenés permiso para publicar eventos" });
+    if (!["DRAFT", "PUBLISHED"].includes(req.body.publicationStatus)) return res.status(400).json({ error: "Publicación inválida" });
+    const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId }, select: { id: true } });
+    if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
+    const event = await prisma.groupEvent.update({ where: { id: eventId }, data: { publicationStatus: req.body.publicationStatus } });
+    return res.json({ success: true, event });
+  } catch (error) {
+    console.error("Error publicando evento:", error);
+    return res.status(500).json({ error: "No se pudo cambiar la publicación" });
+  }
+});
+
+app.delete("/api/groups/:groupId/events/:eventId", async (req, res) => {
+  try {
+    const { groupId, eventId } = req.params;
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No tenés permiso para eliminar eventos" });
+    const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId }, select: { id: true } });
+    if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
+    await prisma.groupEvent.delete({ where: { id: eventId } });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error eliminando evento:", error);
+    return res.status(500).json({ error: "No se pudo eliminar el evento" });
+  }
+});
 
 /* =========================================================
    SALIDAS HABITUALES DEL GRUPO

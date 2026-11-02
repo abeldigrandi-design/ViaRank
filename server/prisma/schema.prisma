@@ -75,6 +75,7 @@ model User {
   groupMemberships             GroupMember[]
   administeredGroups           SportGroup[]                 @relation("GroupAdministrator")
   organizedEvents              GroupEvent[] @relation("EventOrganizer")
+  eventRegistrations GroupEventRegistration[]
   sessions                     UserSession[]
   travelCompanyAdministrations TravelCompanyAdministrator[]
   travelReservations           TravelReservation[]
@@ -173,6 +174,7 @@ model GroupMember {
 
   joinedAt        DateTime @default(now())
   canCreateEvents Boolean  @default(false)
+  isGroupAdmin    Boolean  @default(false)
 
   @@unique([userId, groupId])
   @@index([groupId])
@@ -200,6 +202,7 @@ model GroupEventTemplate {
 }
 
 model GroupEvent {
+  registrations GroupEventRegistration[]
   id      String     @id @default(cuid())
   groupId String
   group   SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -210,10 +213,15 @@ model GroupEvent {
   eventDate       DateTime
   departureTime   String
   meetingPlace    String
+  weatherLatitude  Float?
+  weatherLongitude Float?
   destination     String?
   estimatedReturn String?
   plannedSpeed    String?
   rules           String?
+  details         Json?
+  status          String @default("CONFIRMED")
+  publicationStatus String @default("DRAFT")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1024,4 +1032,22 @@ model TravelBalanceAdjustment {
   createdAt DateTime @default(now())
 
   @@index([reservationId])
+}
+
+model GroupEventRegistration {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  status    String   @default("ACTIVE")
+  acceptedTermsText String?
+  acceptedTermsAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event GroupEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }
