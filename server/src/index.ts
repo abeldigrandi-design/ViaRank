@@ -1,3 +1,4 @@
+import { v2 as cloudinary } from "cloudinary";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import cors from "cors";
@@ -5168,6 +5169,112 @@ penalty: (() => {
 /* =========================================================
    ACTUALIZAR GRUPO
 ========================================================= */
+
+/* SUBIDA DE FOTOGRAFIAS DE GRUPOS A CLOUDINARY */
+app.post(
+  "/api/groups/:groupId/images",
+  express.raw({ type: "image/jpeg", limit: "3mb" }),
+  async (req, res) => {
+    try {
+      const userId = getAuthenticatedUserId(req);
+
+      if (!userId) {
+        return res.status(401).json({ error: "Usuario no autenticado" });
+      }
+
+      const group = await prisma.sportGroup.findUnique({
+        where: { id: req.params.groupId },
+        select: { administratorId: true },
+      });
+
+      if (!group) {
+        return res.status(404).json({ error: "Grupo no encontrado" });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+
+      if (
+        !user ||
+        (group.administratorId !== userId && user.role !== "SUPER_ADMIN")
+      ) {
+        return res.status(403).json({ error: "Sin permiso para cambiar imagenes" });
+      }
+
+      const kind = req.query.kind;
+
+      if (kind !== "cover" && kind !== "logo") {
+        return res.status(400).json({ error: "Tipo de imagen invalido" });
+      }
+
+      const buffer = req.body;
+
+      if (
+        !Buffer.isBuffer(buffer) ||
+        buffer.length < 4 ||
+        buffer.length > 3 * 1024 * 1024 ||
+        buffer[0] !== 0xff ||
+        buffer[1] !== 0xd8 ||
+        buffer[2] !== 0xff
+      ) {
+        return res.status(400).json({ error: "Se requiere una imagen JPEG valida" });
+      }
+
+      const cloudinaryUrl = process.env.CLOUDINARY_URL;
+
+      if (!cloudinaryUrl) {
+        return res.status(503).json({ error: "Cloudinary no esta configurado" });
+      }
+
+      const credentials = new URL(cloudinaryUrl);
+
+      if (credentials.protocol !== "cloudinary:") {
+        return res.status(503).json({ error: "Configuracion Cloudinary invalida" });
+      }
+
+      cloudinary.config({
+        cloud_name: credentials.hostname,
+        api_key: decodeURIComponent(credentials.username),
+        api_secret: decodeURIComponent(credentials.password),
+        secure: true,
+      });
+
+      const result = await new Promise<{ secure_url: string }>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: "viarank/groups",
+              resource_type: "image",
+              format: "jpg",
+            },
+            (error, uploaded) => {
+              if (error || !uploaded?.secure_url) {
+                reject(error || new Error("Cloudinary no devolvio la imagen"));
+              } else {
+                resolve({ secure_url: uploaded.secure_url });
+              }
+            }
+          );
+
+          stream.end(buffer);
+        }
+      );
+
+      return res.json({
+        success: true,
+        kind,
+        imageUrl: result.secure_url,
+      });
+    } catch (error) {
+      console.error("Error al subir imagen del grupo:", error);
+      return res.status(500).json({
+        error: "No se pudo subir la fotografia",
+      });
+    }
+  }
+);
 
 app.patch(
   "/api/groups/:groupId",
