@@ -137,6 +137,9 @@ model Activity {
 }
 
 model SportGroup {
+  description   String?
+  imageUrl      String?
+  coverImageUrl String?
   id         String          @id @default(cuid())
   name       String
   sport      ActivityType
