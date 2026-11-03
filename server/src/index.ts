@@ -4507,6 +4507,25 @@ if (isSuperAdmin) {
           },
         });
 
+      const ahora = new Date();
+
+      const eventos = await prisma.groupEvent.groupBy({
+        by: ["groupId"],
+        where: {
+          groupId: { in: groups.map((group) => group.id) },
+          eventDate: { gte: ahora },
+          publicationStatus: "PUBLISHED",
+          status: { not: "SUSPENDED" },
+        },
+        _count: { _all: true },
+      });
+
+      const upcomingEventCounts = new Map(
+        eventos.map((item) => [
+          item.groupId,
+          item._count?._all ?? 0,
+        ])
+      );
       const groupsWithMembership = groups.map((group) => ({
         ...group,
         joinCode:
@@ -4521,6 +4540,7 @@ if (isSuperAdmin) {
           group.events.length > 0
             ? group.events[0]
             : null,
+        upcomingEventsCount: upcomingEventCounts.get(group.id) ?? 0,
         events: undefined,
       }));
 
