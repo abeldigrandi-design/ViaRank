@@ -5126,6 +5126,9 @@ penalty: (() => {
         group: {
           id: group.id,
           name: group.name,
+          description: group.description,
+          imageUrl: group.imageUrl,
+          coverImageUrl: group.coverImageUrl,
           sport: group.sport,
           canCreateEvents:
             requester?.role === "SUPER_ADMIN" ||
@@ -5283,6 +5286,9 @@ app.patch(
       const { groupId } = req.params;
       const {
         visibility,
+        description,
+        imageUrl,
+        coverImageUrl,
         activityControlSpeed,
         activityControlMinSpeed,
         activityControlMinutes,
@@ -5344,6 +5350,9 @@ app.patch(
 
       const updateData: {
         visibility?: "PUBLIC" | "PRIVATE";
+        description?: string | null;
+        imageUrl?: string | null;
+        coverImageUrl?: string | null;
         activityControlSpeed?: number | null;
         activityControlMinSpeed?: number | null;
         activityControlMinutes?: number | null;
@@ -5439,6 +5448,51 @@ app.patch(
         return res.status(400).json({
           error: "La velocidad mínima debe ser menor que la máxima.",
         });
+      }
+      if (description !== undefined) {
+        if (
+          description !== null &&
+          (typeof description !== "string" || description.length > 1000)
+        ) {
+          return res.status(400).json({
+            error: "La descripcion debe tener como maximo 1000 caracteres",
+          });
+        }
+        updateData.description = description;
+      }
+
+      if (imageUrl !== undefined) {
+        if (
+          imageUrl !== null &&
+          (
+            typeof imageUrl !== "string" ||
+            imageUrl.length > 2048 ||
+            (imageUrl.trim() !== "" && !/^https:\/\/[^\s]+$/i.test(imageUrl))
+          )
+        ) {
+          return res.status(400).json({
+            error: "La imagen debe tener una direccion HTTPS valida",
+          });
+        }
+        updateData.imageUrl = imageUrl === "" ? null : imageUrl;
+      }
+
+      if (coverImageUrl !== undefined) {
+        if (
+          coverImageUrl !== null &&
+          (
+            typeof coverImageUrl !== "string" ||
+            coverImageUrl.length > 2048 ||
+            (coverImageUrl.trim() !== "" &&
+              !/^https:\/\/[^\s]+$/i.test(coverImageUrl))
+          )
+        ) {
+          return res.status(400).json({
+            error: "La portada debe tener una direccion HTTPS valida",
+          });
+        }
+        updateData.coverImageUrl =
+          coverImageUrl === "" ? null : coverImageUrl;
       }
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({
