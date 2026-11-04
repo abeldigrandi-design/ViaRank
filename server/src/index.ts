@@ -15387,6 +15387,46 @@ app.post(
     }
   }
 );
+// VIARANK_EVENT_CLEANUP_V1
+// Elimina automaticamente eventos publicados vencidos.
+async function revisarEventosVencidosViaRank() {
+  try {
+    const fechaArgentina = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    // eventDate se guarda como fecha de calendario a las 00:00 UTC.
+    // Comparar con el inicio UTC del dia actual en Argentina.
+    const inicioHoyArgentina = new Date(
+      `${fechaArgentina}T00:00:00.000Z`
+    );
+
+    const resultado = await prisma.groupEvent.deleteMany({
+      where: {
+        publicationStatus: "PUBLISHED",
+        eventDate: { lt: inicioHoyArgentina },
+      },
+    });
+
+    console.log(
+      `[ViaRank] Limpieza automatica: ${resultado.count} eventos publicados vencidos eliminados.`
+    );
+  } catch (error) {
+    console.error("[ViaRank] Error revisando eventos vencidos:", error);
+  }
+}
+// VIARANK_EVENT_CLEANUP_TEST_CALL
+void revisarEventosVencidosViaRank();
+// VIARANK_EVENT_CLEANUP_INTERVAL_V1
+// Revisa cada minuto mientras el servidor esta activo.
+// Limpieza automatica de eventos publicados vencidos.
+setInterval(() => {
+  void revisarEventosVencidosViaRank();
+}, 60 * 1000);
+
 app.listen(
   PORT,
   () => {
