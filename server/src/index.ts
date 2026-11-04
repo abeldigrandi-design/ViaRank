@@ -6479,6 +6479,24 @@ app.patch("/api/groups/:groupId/events/:eventId", async (req, res) => {
     const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId } });
     if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
 
+    // VIARANK: un evento publicado solo admite cambios de estado.
+    if (existing.publicationStatus === "PUBLISHED") {
+      const campos = Object.keys(req.body ?? {});
+      if (campos.length !== 1 || campos[0] !== "status") {
+        return res.status(409).json({
+          error: "El evento ya está publicado. Solo podés cambiar su estado. Para modificar la salida, suspendé el evento y creá uno nuevo."
+        });
+      }
+      if (!["CONFIRMED", "EVALUATING", "SUSPENDED"].includes(req.body.status)) {
+        return res.status(400).json({ error: "Estado inválido" });
+      }
+      const event = await prisma.groupEvent.update({
+        where: { id: eventId },
+        data: { status: req.body.status }
+      });
+      return res.json({ success: true, event });
+    }
+
     const data: Prisma.GroupEventUpdateInput = {};
     const stringFields = ["title", "departureTime", "meetingPlace", "destination", "estimatedReturn", "plannedSpeed", "rules"] as const;
     for (const field of stringFields) {
