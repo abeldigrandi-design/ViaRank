@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SportPage from "./pages/SportPage";
 import GroupPage from "./pages/GroupPage";
@@ -101,7 +101,11 @@ type GroupRankingResponse = {
   group: {
     id: string;
     name: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  coverImageUrl?: string | null;
     sport: string;
+    canCreateEvents?: boolean;
     joinCode: string;
   visibility: "PUBLIC" | "PRIVATE";
   isMember?: boolean;
@@ -122,6 +126,7 @@ type GroupMemberItem = {
   membershipId: string;
   joinedAt: string;
   canCreateEvents: boolean;
+  isGroupAdmin: boolean;
 
   user: {
     id: string;
@@ -151,13 +156,13 @@ const [emailAddress, setEmailAddress] = useState("");
 const [emailSex, setEmailSex] = useState<"MALE" | "FEMALE" | "">("");
 const [emailPin, setEmailPin] = useState("");
 const [emailPinConfirm, setEmailPinConfirm] = useState("");
+const [termsAccepted, setTermsAccepted] = useState(false);
+const [showTerms, setShowTerms] = useState(false);
 const [emailCode, setEmailCode] = useState("");
 const [emailStep, setEmailStep] = useState<"request" | "verify">("request");
 const [emailMode, setEmailMode] = useState<"register" | "login">("register");
 const [authScreen, setAuthScreen] = useState<"welcome" | "register" | "login">("welcome");
 const [emailLoading, setEmailLoading] = useState(false);
-const [termsAccepted, setTermsAccepted] = useState(false);
-const [showTerms, setShowTerms] = useState(false);
 const [emailMessage, setEmailMessage] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
@@ -525,15 +530,15 @@ setUser(data.user || null);
     setEmailMessage("");
 
     if (emailMode === "register") {
+      if (!termsAccepted) {
+        setEmailMessage("Debés aceptar los Términos y Condiciones para crear tu cuenta.");
+        return;
+      }
       const firstName = emailFirstName.trim();
       const lastName = emailLastName.trim();
       const email = emailAddress.trim().toLowerCase();
       const pin = emailPin.trim();
       const pinConfirm = emailPinConfirm.trim();
-      if (!termsAccepted) {
-        setEmailMessage("Deb├®s aceptar los T├®rminos y Condiciones para crear tu cuenta.");
-        return;
-      }
 
       if (!firstName || !lastName || !email || !emailSex || !pin || !pinConfirm) {
         setEmailMessage(
@@ -591,6 +596,9 @@ setUser(data.user || null);
             email,
             sex: emailSex,
             pin,
+            termsAccepted,
+            isAdult: termsAccepted,
+            termsAcceptedVersion: "2026-10-30",
           }),
         }
       );
@@ -1541,6 +1549,39 @@ async function loadGroupMembers(
    QUITAR MIEMBRO DEL GRUPO
 ===================================================== */
 
+async function updateGroupAdminPermission(
+  groupId: string,
+  memberUserId: string,
+  isGroupAdmin: boolean
+): Promise<void> {
+  const response = await fetch(
+    `${API_URL}/api/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(memberUserId)}/admin-permission`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+      },
+      body: JSON.stringify({ isGroupAdmin }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || "No se pudo actualizar el administrador."
+    );
+  }
+
+  setGroupMembers((previous) =>
+    previous.map((member) =>
+      member.user.id === memberUserId
+        ? { ...member, isGroupAdmin }
+        : member
+    )
+  );
+}
 async function removeGroupMember(
   memberUserId: string,
   memberName: string
@@ -1754,49 +1795,106 @@ localStorage.removeItem(
   ===================================================== */
 
   if (sessionRestoring) {
-    return (
-      <div
-        style={{
-          ...styles.page,
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "22px",
-        }}
-      >
-        <style>{`
-          @keyframes viarankSpin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+    const deportesInicio = [
+      ["Ciclismo", sportCiclismo],
+      ["Carrera", sportCarrera],
+      ["Natación", sportNatacion],
+      ["Senderismo", sportSenderismo],
+      ["Caminata", sportCaminata],
+      ["Silla de ruedas", sportSillaRuedas],
+      ["Kayak", sportKayak],
+      ["Remo", sportRemo],
+      ["Vela", sportVela],
+      ["Windsurf", sportWindsurf],
+    ];
 
+    return (
+      <div style={{
+        ...styles.page,
+        minHeight: "100dvh",
+        padding: "20px 14px",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "24px",
+      }}>
         <img
           src={viarankHeaderLogo}
           alt="ViaRank"
-          style={{ width: "220px", maxWidth: "72vw", height: "auto" }}
+          style={{ width: "min(290px, 75vw)", height: "auto" }}
         />
 
-        <div
-          style={{
-            width: "42px",
-            height: "42px",
-            borderRadius: "50%",
-            border: "4px solid rgba(56,189,248,0.22)",
-            borderTopColor: "#38bdf8",
-            animation: "viarankSpin 0.8s linear infinite",
-          }}
-        />
+        <div style={{
+          color: "#ffffff",
+          textAlign: "center",
+          fontSize: "clamp(24px, 5vw, 34px)",
+          fontWeight: 900,
+          lineHeight: 1.15,
+        }}>
+          Más que kilómetros,
+          <div style={{ color: "#ff4f00" }}>una comunidad</div>
+        </div>
 
-        <div style={{ color: "#ffffff", fontSize: "16px", fontWeight: 700 }}>
-          Iniciando ViaRank...
+        <div style={{
+          width: "100%",
+          maxWidth: "700px",
+          display: "flex",
+          gap: "9px",
+          overflowX: "auto",
+          padding: "8px 2px 14px",
+        }}>
+          {deportesInicio.map(([nombre, imagen]) => (
+            <div key={nombre} style={{
+              position: "relative",
+              width: "85px",
+              minWidth: "85px",
+              height: "115px",
+              borderRadius: "14px",
+              overflow: "hidden",
+              border: "2px solid rgba(255,255,255,0.65)",
+            }}>
+              <img
+                src={imagen}
+                alt={nombre}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
+              <div style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                padding: "7px 3px",
+                boxSizing: "border-box",
+                background: "linear-gradient(transparent 40%, rgba(0,0,0,0.85))",
+                color: "#ffffff",
+                fontSize: "11px",
+                fontWeight: 800,
+                textAlign: "center",
+              }}>
+                {nombre}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div role="status" style={{
+          color: "#7dd3fc",
+          fontSize: "14px",
+          fontWeight: 600,
+          textAlign: "center",
+        }}>
+          Preparando tu comunidad deportiva...
         </div>
       </div>
     );
   }
-
   if (!user) {
     return (
       <div
@@ -2110,6 +2208,80 @@ color: "#ffffff",
     />
   </>
 )}
+{emailMode === "register" && (
+  <div style={{
+    padding: "16px",
+    borderRadius: "14px",
+    border: "1px solid #38bdf8",
+    background: "#0b2949",
+    color: "#ffffff",
+    fontSize: "14px",
+    lineHeight: 1.5
+  }}>
+    <div style={{ fontWeight: 700, marginBottom: "8px" }}>
+      Términos y Condiciones de ViaRank
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setShowTerms(!showTerms)}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: "#7dd3fc",
+        textDecoration: "underline",
+        padding: 0,
+        cursor: "pointer",
+        fontWeight: 600
+      }}
+    >
+      {showTerms ? "Ocultar términos" : "Leer términos completos"}
+    </button>
+
+    {showTerms && (
+      <div style={{
+        marginTop: "12px",
+        padding: "12px",
+        maxHeight: "240px",
+        overflowY: "auto",
+        background: "#061c33",
+        borderRadius: "10px",
+        whiteSpace: "pre-line"
+      }}>
+        {"VIARANK — TÉRMINOS Y CONDICIONES DE USO\nVersión: 30 de octubre de 2026 (2026-10-30)\n\n1. ACEPTACIÓN\nAl crear una cuenta, el usuario declara ser mayor de 18 años, haber leído y aceptado estos Términos y Condiciones y haber tomado conocimiento de la Política de Privacidad. ViaRank registra la fecha, hora y versión de la aceptación.\n\n2. DESCRIPCIÓN DEL SERVICIO\nViaRank permite registrar actividades deportivas, consultar rankings, integrar fuentes externas, participar en grupos y gestionar eventos. Sus funcionalidades pueden cambiar por razones técnicas, operativas o de seguridad.\n\n3. REGISTRO Y SEGURIDAD\nEl usuario debe proporcionar información veraz y proteger su PIN. No está permitido suplantar identidades, crear cuentas fraudulentas ni utilizar datos ajenos sin autorización.\n\n4. ACTIVIDADES DEPORTIVAS\nLas actividades pueden registrarse mediante ViaRank o importarse desde servicios compatibles. Las mediciones de GPS, distancia, velocidad, tiempo y elevación pueden contener errores. ViaRank no garantiza su precisión absoluta.\n\n5. RANKINGS Y GRUPOS\nLos rankings muestran resultados según los datos disponibles, el deporte, el grupo y el período seleccionado. No constituyen certificaciones oficiales. Cada grupo puede establecer normas compatibles con las condiciones de ViaRank.\n\n6. INTEGRIDAD DEPORTIVA\nViaRank podrá detectar actividades duplicadas, superpuestas o inconsistentes. Una advertencia no implica necesariamente fraude. Podrán aplicarse medidas proporcionadas, considerando posibles errores técnicos y mecanismos de revisión.\n\n7. SALUD Y SEGURIDAD\nLa actividad deportiva implica riesgos. Cada participante debe evaluar su condición física, utilizar equipamiento adecuado, respetar las normas de seguridad y solicitar orientación profesional cuando corresponda. ViaRank no presta servicios médicos.\n\n8. EVENTOS ORGANIZADOS POR TERCEROS\nViaRank proporciona herramientas para publicar eventos y gestionar inscripciones. Salvo indicación expresa en contrario, no organiza, dirige ni supervisa presencialmente los eventos creados por terceros. El organizador debe comunicar las condiciones del evento y cada participante debe evaluar los riesgos.\n\n9. CONDICIONES PARTICULARES DE EVENTOS\nLos organizadores podrán establecer condiciones específicas compatibles con la legislación aplicable. Cuando se requiera una aceptación adicional, esta deberá presentarse separadamente. Aceptar estos términos generales no implica aceptar automáticamente las condiciones de todos los eventos.\n\n10. CLIMA E INFORMACIÓN EXTERNA\nLos pronósticos, mapas y otros datos externos son orientativos y pueden cambiar. Los estados de los eventos reflejan la información comunicada por sus responsables y no garantizan la seguridad de la actividad.\n\n11. SERVICIOS DE TERCEROS\nLas conexiones con Strava y otros servicios dependen de sus permisos, condiciones y disponibilidad. ViaRank no controla el funcionamiento permanente de esas plataformas.\n\n12. PRIVACIDAD Y DATOS PERSONALES\nViaRank trata información necesaria para gestionar cuentas, actividades, rankings, grupos y eventos. Algunas funciones pueden utilizar datos de ubicación y recorridos. Las finalidades, condiciones y derechos correspondientes se describen en la Política de Privacidad de ViaRank.\n\n13. VISIBILIDAD DE INFORMACIÓN\nLa información compartida dentro de un grupo puede ser visible para otros integrantes según los permisos disponibles. Los administradores deben utilizar los datos de los participantes únicamente para fines legítimos de gestión.\n\n14. CONDUCTAS PROHIBIDAS\nSe prohíben la falsificación deliberada de actividades, la manipulación fraudulenta de rankings, la suplantación de identidad, el acoso, la publicación de información engañosa, el acceso no autorizado y las conductas contrarias a la ley.\n\n15. MODERACIÓN Y SUSPENSIÓN\nAnte incumplimientos, ViaRank podrá adoptar medidas razonables y proporcionales, incluidas advertencias, restricciones, suspensión o eliminación de cuentas, respetando los derechos de los usuarios.\n\n16. DISPONIBILIDAD\nViaRank procurará mantener sus servicios operativos, pero pueden existir interrupciones por mantenimiento, fallas técnicas, conectividad o servicios externos.\n\n17. RESPONSABILIDAD\nViaRank ofrece herramientas digitales y no garantiza resultados deportivos, ausencia de lesiones, exactitud absoluta de mediciones ni seguridad de eventos de terceros. Ninguna disposición limita responsabilidades que legalmente no puedan excluirse ni derechos irrenunciables.\n\n18. MODIFICACIONES\nViaRank podrá actualizar estos términos. Cada versión tendrá una identificación y fecha. Ante cambios relevantes, podrá informar a los usuarios y solicitar una nueva aceptación cuando corresponda.\n\n19. BAJA DE CUENTA Y DERECHOS\nLos usuarios podrán solicitar la baja de su cuenta y ejercer sus derechos sobre los datos personales conforme a la legislación aplicable y la Política de Privacidad, considerando las obligaciones legales de conservación.\n\n20. LEGISLACIÓN APLICABLE\nEstos términos se interpretarán conforme a la legislación aplicable en la República Argentina, sin perjuicio de las normas imperativas de protección de usuarios y consumidores.\n\n21. CONTACTO\nLas consultas sobre los términos, el servicio y los derechos de los usuarios podrán realizarse mediante los canales oficiales de contacto publicados por ViaRank."}
+        <div style={{ marginTop: "14px" }}>
+          <a
+            href="/support"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#7dd3fc", textDecoration: "underline" }}
+          >
+            Consultar Política de Privacidad
+          </a>
+        </div>
+      </div>
+    )}
+    <label style={{
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "10px",
+      marginTop: "14px",
+      cursor: "pointer"
+    }}>
+      <input
+        type="checkbox"
+        checked={termsAccepted}
+        onChange={(e) => setTermsAccepted(e.target.checked)}
+        style={{ width: "20px", height: "20px", flexShrink: 0 }}
+      />
+      <span>
+        Declaro ser mayor de 18 años, haber leído y aceptado los Términos y
+        Condiciones de ViaRank y haber tomado conocimiento de su Política
+        de Privacidad.
+      </span>
+    </label>
+  </div>
+)}
 {emailMode === "login" && (
   <div
     style={{
@@ -2165,81 +2337,6 @@ color: "#ffffff",
     </button>
   </div>
 )}
-{emailMode === "register" && (
-  <div style={{
-    padding: "16px",
-    borderRadius: "14px",
-    border: "1px solid #38bdf8",
-    background: "#0b2949",
-    color: "#ffffff",
-    fontSize: "14px",
-    lineHeight: 1.5
-  }}>
-    <div style={{ fontWeight: 700, marginBottom: "8px" }}>
-      T├®rminos y Condiciones de ViaRank
-    </div>
-
-    <button
-      type="button"
-      onClick={() => setShowTerms(!showTerms)}
-      style={{
-        background: "transparent",
-        border: "none",
-        color: "#7dd3fc",
-        textDecoration: "underline",
-        padding: 0,
-        cursor: "pointer",
-        fontWeight: 600
-      }}
-    >
-      {showTerms ? "Ocultar t├®rminos" : "Leer t├®rminos completos"}
-    </button>
-
-    {showTerms && (
-      <div style={{
-        marginTop: "12px",
-        padding: "12px",
-        maxHeight: "240px",
-        overflowY: "auto",
-        background: "#061c33",
-        borderRadius: "10px",
-        whiteSpace: "pre-line"
-      }}>
-        {"VIARANK ÔÇö T├ëRMINOS Y CONDICIONES DE USO\nVersi├│n: 30 de octubre de 2026 (2026-10-30)\n\n1. ACEPTACI├ôN\nAl crear una cuenta, el usuario declara ser mayor de 18 a├▒os, haber le├¡do y aceptado estos T├®rminos y Condiciones y haber tomado conocimiento de la Pol├¡tica de Privacidad. ViaRank registra la fecha, hora y versi├│n de la aceptaci├│n.\n\n2. DESCRIPCI├ôN DEL SERVICIO\nViaRank permite registrar actividades deportivas, consultar rankings, integrar fuentes externas, participar en grupos y gestionar eventos. Sus funcionalidades pueden cambiar por razones t├®cnicas, operativas o de seguridad.\n\n3. REGISTRO Y SEGURIDAD\nEl usuario debe proporcionar informaci├│n veraz y proteger su PIN. No est├í permitido suplantar identidades, crear cuentas fraudulentas ni utilizar datos ajenos sin autorizaci├│n.\n\n4. ACTIVIDADES DEPORTIVAS\nLas actividades pueden registrarse mediante ViaRank o importarse desde servicios compatibles. Las mediciones de GPS, distancia, velocidad, tiempo y elevaci├│n pueden contener errores. ViaRank no garantiza su precisi├│n absoluta.\n\n5. RANKINGS Y GRUPOS\nLos rankings muestran resultados seg├║n los datos disponibles, el deporte, el grupo y el per├¡odo seleccionado. No constituyen certificaciones oficiales. Cada grupo puede establecer normas compatibles con las condiciones de ViaRank.\n\n6. INTEGRIDAD DEPORTIVA\nViaRank podr├í detectar actividades duplicadas, superpuestas o inconsistentes. Una advertencia no implica necesariamente fraude. Podr├ín aplicarse medidas proporcionadas, considerando posibles errores t├®cnicos y mecanismos de revisi├│n.\n\n7. SALUD Y SEGURIDAD\nLa actividad deportiva implica riesgos. Cada participante debe evaluar su condici├│n f├¡sica, utilizar equipamiento adecuado, respetar las normas de seguridad y solicitar orientaci├│n profesional cuando corresponda. ViaRank no presta servicios m├®dicos.\n\n8. EVENTOS ORGANIZADOS POR TERCEROS\nViaRank proporciona herramientas para publicar eventos y gestionar inscripciones. Salvo indicaci├│n expresa en contrario, no organiza, dirige ni supervisa presencialmente los eventos creados por terceros. El organizador debe comunicar las condiciones del evento y cada participante debe evaluar los riesgos.\n\n9. CONDICIONES PARTICULARES DE EVENTOS\nLos organizadores podr├ín establecer condiciones espec├¡ficas compatibles con la legislaci├│n aplicable. Cuando se requiera una aceptaci├│n adicional, esta deber├í presentarse separadamente. Aceptar estos t├®rminos generales no implica aceptar autom├íticamente las condiciones de todos los eventos.\n\n10. CLIMA E INFORMACI├ôN EXTERNA\nLos pron├│sticos, mapas y otros datos externos son orientativos y pueden cambiar. Los estados de los eventos reflejan la informaci├│n comunicada por sus responsables y no garantizan la seguridad de la actividad.\n\n11. SERVICIOS DE TERCEROS\nLas conexiones con Strava y otros servicios dependen de sus permisos, condiciones y disponibilidad. ViaRank no controla el funcionamiento permanente de esas plataformas.\n\n12. PRIVACIDAD Y DATOS PERSONALES\nViaRank trata informaci├│n necesaria para gestionar cuentas, actividades, rankings, grupos y eventos. Algunas funciones pueden utilizar datos de ubicaci├│n y recorridos. Las finalidades, condiciones y derechos correspondientes se describen en la Pol├¡tica de Privacidad de ViaRank.\n\n13. VISIBILIDAD DE INFORMACI├ôN\nLa informaci├│n compartida dentro de un grupo puede ser visible para otros integrantes seg├║n los permisos disponibles. Los administradores deben utilizar los datos de los participantes ├║nicamente para fines leg├¡timos de gesti├│n.\n\n14. CONDUCTAS PROHIBIDAS\nSe proh├¡ben la falsificaci├│n deliberada de actividades, la manipulaci├│n fraudulenta de rankings, la suplantaci├│n de identidad, el acoso, la publicaci├│n de informaci├│n enga├▒osa, el acceso no autorizado y las conductas contrarias a la ley.\n\n15. MODERACI├ôN Y SUSPENSI├ôN\nAnte incumplimientos, ViaRank podr├í adoptar medidas razonables y proporcionales, incluidas advertencias, restricciones, suspensi├│n o eliminaci├│n de cuentas, respetando los derechos de los usuarios.\n\n16. DISPONIBILIDAD\nViaRank procurar├í mantener sus servicios operativos, pero pueden existir interrupciones por mantenimiento, fallas t├®cnicas, conectividad o servicios externos.\n\n17. RESPONSABILIDAD\nViaRank ofrece herramientas digitales y no garantiza resultados deportivos, ausencia de lesiones, exactitud absoluta de mediciones ni seguridad de eventos de terceros. Ninguna disposici├│n limita responsabilidades que legalmente no puedan excluirse ni derechos irrenunciables.\n\n18. MODIFICACIONES\nViaRank podr├í actualizar estos t├®rminos. Cada versi├│n tendr├í una identificaci├│n y fecha. Ante cambios relevantes, podr├í informar a los usuarios y solicitar una nueva aceptaci├│n cuando corresponda.\n\n19. BAJA DE CUENTA Y DERECHOS\nLos usuarios podr├ín solicitar la baja de su cuenta y ejercer sus derechos sobre los datos personales conforme a la legislaci├│n aplicable y la Pol├¡tica de Privacidad, considerando las obligaciones legales de conservaci├│n.\n\n20. LEGISLACI├ôN APLICABLE\nEstos t├®rminos se interpretar├ín conforme a la legislaci├│n aplicable en la Rep├║blica Argentina, sin perjuicio de las normas imperativas de protecci├│n de usuarios y consumidores.\n\n21. CONTACTO\nLas consultas sobre los t├®rminos, el servicio y los derechos de los usuarios podr├ín realizarse mediante los canales oficiales de contacto publicados por ViaRank."}
-        <div style={{ marginTop: "14px" }}>
-          <a
-            href="/support"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#7dd3fc", textDecoration: "underline" }}
-          >
-            Consultar Pol├¡tica de Privacidad
-          </a>
-        </div>
-      </div>
-    )}
-    <label style={{
-      display: "flex",
-      alignItems: "flex-start",
-      gap: "10px",
-      marginTop: "14px",
-      cursor: "pointer"
-    }}>
-      <input
-        type="checkbox"
-        checked={termsAccepted}
-        onChange={(e) => setTermsAccepted(e.target.checked)}
-        style={{ width: "20px", height: "20px", flexShrink: 0 }}
-      />
-      <span>
-        Declaro ser mayor de 18 a├▒os, haber le├¡do y aceptado los T├®rminos y
-        Condiciones de ViaRank y haber tomado conocimiento de su Pol├¡tica
-        de Privacidad.
-      </span>
-    </label>
-  </div>
-)}
-
               <button
                 
                 onClick={emailMode === "register" ? requestEmailCode : loginWithPin}
@@ -2357,6 +2454,10 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
       estimatedReturn: string;
       plannedSpeed: string;
       rules: string;
+      weatherLatitude?: number | null;
+      weatherLongitude?: number | null;
+      details?: Record<string, unknown> | null;
+      status?: string;
     }
   ) {
     const response = await fetch(
@@ -2379,7 +2480,40 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
 
     return data.event;
   }
-  if (showSuperAdmin && (isSuperAdmin || groups.some((group) => group.administrator.id === user?.id))) {
+  async function updateGroupProfile(
+    groupId: string,
+    profile: { description: string | null; imageUrl: string | null; coverImageUrl: string | null }
+  ): Promise<void> {
+    const response = await fetch(
+      `${API_URL}/api/groups/${encodeURIComponent(groupId)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("viarank_auth_token")}`,
+        },
+        body: JSON.stringify(profile),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "No se pudo actualizar el perfil del grupo");
+    }
+
+    setSelectedGroup((previous) =>
+      previous?.id === groupId
+        ? {
+            ...previous,
+            description: data.group.description,
+            imageUrl: data.group.imageUrl,
+            coverImageUrl: data.group.coverImageUrl,
+          }
+        : previous
+    );
+  }
+  if (showSuperAdmin && isSuperAdmin) {
     return (
       <SuperAdminPage
         onBack={() => setShowSuperAdmin(false)}
@@ -2409,6 +2543,12 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
         activityHistoryAthlete={activityHistoryAthlete}
         canApplyPenalty={user?.role === "SUPER_ADMIN" || selectedGroup.administrator.id === user?.id}
         onApplyPenalty={applyActivityPenalty}
+        canCreateEvents={selectedGroup.canCreateEvents === true}
+        isSuperAdmin={isSuperAdmin}
+        currentUserId={user?.id ?? null}
+        apiUrl={API_URL}
+        onUpdateGroupProfile={updateGroupProfile}
+        onUpdateGroupAdminPermission={updateGroupAdminPermission}
         onCreateEvent={createGroupEvent}
         onPeriodChange={setPeriod}
         onSexFilterChange={setGroupSexFilter}
@@ -2457,10 +2597,7 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
           period={period}
           profilePicture={user?.profilePicture}
           user={user}
-          canAccessGroupAdmin={
-            isSuperAdmin ||
-            groups.some((group) => group.administrator.id === user?.id)
-          }
+          canAccessGroupAdmin={isSuperAdmin}
           isSuperAdmin={isSuperAdmin}
           onCreateGroup={() => {
             setSportPage(null);
@@ -3527,6 +3664,7 @@ const styles: {
 };
 
 export default App;
+
 
 
 

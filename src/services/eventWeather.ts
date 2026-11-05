@@ -38,11 +38,13 @@ export async function searchWeatherLocations(
 }
 
 export type EventWeatherForecast = {
+  weatherCode: number;
   temperature: number;
   precipitationProbability: number;
   precipitation: number;
   windSpeed: number;
   windGusts: number;
+  windDirection?: number;
   time: string;
 };
 
@@ -63,10 +65,12 @@ export async function getEventWeatherForecast(
     "hourly",
     [
       "temperature_2m",
+      "weather_code",
       "precipitation_probability",
       "precipitation",
       "wind_speed_10m",
       "wind_gusts_10m",
+      "wind_direction_10m",
     ].join(",")
   );
   url.searchParams.set("timezone", "auto");
@@ -90,6 +94,7 @@ export async function getEventWeatherForecast(
 
   const values = [
     hourly.temperature_2m?.[index],
+    hourly.weather_code?.[index],
     hourly.precipitation_probability?.[index],
     hourly.precipitation?.[index],
     hourly.wind_speed_10m?.[index],
@@ -102,10 +107,12 @@ export async function getEventWeatherForecast(
 
   return {
     temperature: values[0],
-    precipitationProbability: values[1],
-    precipitation: values[2],
-    windSpeed: values[3],
-    windGusts: values[4],
+    weatherCode: values[1],
+    precipitationProbability: values[2],
+    precipitation: values[3],
+    windSpeed: values[4],
+    windGusts: values[5],
+    windDirection: typeof hourly.wind_direction_10m?.[index] === "number" ? hourly.wind_direction_10m[index] : undefined,
     time: requestedTime,
   };
 }

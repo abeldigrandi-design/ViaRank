@@ -1,11 +1,21 @@
+import viarankHeaderLogo from "../assets/viarank-header-logo-clean.png";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Geolocation } from "@capacitor/geolocation";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 const API_URL = import.meta.env.VITE_API_URL;
+const FloatingIcon = registerPlugin<{
+  checkPermission(): Promise<{ granted: boolean }>;
+  requestPermission(): Promise<{ granted: boolean }>;
+  show(): Promise<{ requested: boolean }>;
+  hide(): Promise<{ stopped: boolean }>;
+}>("FloatingIcon");
 const ActivityTracking = registerPlugin<{
-  startTracking(): Promise<{ started: boolean }>;
+  startTracking(options: { sport: string }): Promise<{ started: boolean }>;
+  getRoutePoints(): Promise<{ points: PuntoGPS[] }>;
 getTrackingStatus(): Promise<{
+  trackingActivo: boolean;
+  sport: string;
   distance: number;
   startTime: number;
   movingTime: number;
@@ -81,7 +91,20 @@ function nombreDeporte(type: string) {
 export default function RecordActivity() {
   const navigate = useNavigate();
   const location = useLocation();
-const [deporte, setDeporte] = useState<"RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM" | "WHEELCHAIR" | "KAYAK" | "ROW" | "SAIL" | "WINDSURF">("RIDE");
+const tiposDeporte = [
+  "RIDE", "RUN", "WALK", "HIKE", "SWIM",
+  "WHEELCHAIR", "KAYAK", "ROW", "SAIL", "WINDSURF"
+] as const;
+
+type TipoDeporte = (typeof tiposDeporte)[number];
+
+const deporteOrigen = location.state?.returnSport;
+const deporteInicial: TipoDeporte =
+  tiposDeporte.includes(deporteOrigen as TipoDeporte)
+    ? deporteOrigen as TipoDeporte
+    : "RIDE";
+
+const [deporte, setDeporte] = useState<TipoDeporte>(deporteInicial);
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [distancia, setDistancia] = useState(0);
@@ -96,6 +119,51 @@ const [deporte, setDeporte] = useState<"RIDE" | "RUN" | "WALK" | "HIKE" | "SWIM"
   const inicioWeb = useRef<number | null>(null);
   const distanciaWeb = useRef(0);
   const esNativo = Capacitor.isNativePlatform();
+
+  // Recuperar una actividad GPS que sigue en curso.
+  useEffect(() => {
+    if (!esNativo) return;
+
+    let cancelado = false;
+
+    const recuperarActividad = async () => {
+      try {
+        const estado = await ActivityTracking.getTrackingStatus();
+
+        if (!cancelado && estado.trackingActivo && estado.startTime > 0) {
+          if (tiposDeporte.includes(estado.sport as TipoDeporte)) {
+            setDeporte(estado.sport as TipoDeporte);
+          }
+          setDistancia(estado.distance);
+          setTiempo(estado.movingTime);
+          setRegistrando(true);
+          setMensaje("Actividad en curso recuperada.");
+        }
+      } catch (error) {
+        console.warn("No se pudo consultar el estado GPS:", error);
+      }
+    };
+
+    void recuperarActividad();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [esNativo]);
+
+  const solicitarPermisoIconoFlotante = async () => {
+    if (!esNativo) return;
+
+    try {
+      const permiso = await FloatingIcon.checkPermission();
+
+      if (!permiso.granted) {
+        await FloatingIcon.requestPermission();
+      }
+    } catch (error) {
+      console.warn("No se pudo solicitar el permiso flotante:", error);
+    }
+  };
 
 useEffect(() => {
   if (!registrando) return;
@@ -136,7 +204,18 @@ useEffect(() => {
       setMensaje(`Registrando ${nombreDeporte(deporte)}...`);
 
       if (esNativo) {
-        await ActivityTracking.startTracking();
+        await ActivityTracking.startTracking({ sport: deporte });
+
+        // Icono flotante opcional: nunca debe interrumpir el GPS.
+        try {
+          const permisoFlotante = await FloatingIcon.checkPermission();
+
+          if (permisoFlotante.granted) {
+            await FloatingIcon.show();
+          }
+        } catch (errorFlotante) {
+          console.warn("Icono flotante no disponible:", errorFlotante);
+        }
       }
       watchId.current = await Geolocation.watchPosition(
         {
@@ -188,6 +267,13 @@ useEffect(() => {
     try {
       if (esNativo) {
         resultado = await ActivityTracking.stopTracking();
+
+        // Ocultar el icono flotante al finalizar el GPS.
+        try {
+          await FloatingIcon.hide();
+        } catch (errorFlotante) {
+          console.warn("No se pudo ocultar el icono flotante:", errorFlotante);
+        }
       } else {
         const startTime = inicioWeb.current ?? Date.now();
         const endTime = Date.now();
@@ -213,6 +299,18 @@ useEffect(() => {
 
       ultimoPunto.current = null;
       setRegistrando(false);
+      // Recuperar las coordenadas conservadas por Android.
+      if (esNativo) {
+        try {
+          const recorridoNativo = await ActivityTracking.getRoutePoints();
+          if (recorridoNativo.points.length > 0) {
+            puntosGPS.current = recorridoNativo.points;
+          }
+        } catch (errorRuta) {
+          console.warn("No se pudo recuperar el recorrido GPS:", errorRuta);
+        }
+      }
+
 
       const actividad: ActividadPendiente = {
         externalId: `viarank-${resultado.startTime}`,
@@ -293,126 +391,122 @@ useEffect(() => {
         minHeight: "100vh",
         background: "#071426",
         color: "#f8fafc",
-        padding: "24px",
+        padding: "10px 16px 16px",
         boxSizing: "border-box",
       }}
     >
       <div style={{ maxWidth: "520px", margin: "0 auto" }}>
-        <button
-          onClick={() => navigate("/", { state: { internalReturn: true, user: location.state?.user, returnSport: location.state?.returnSport } })}
-          disabled={registrando}
+        
+
+        <div
+  className="vr-encabezado-registro"
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
+    alignItems: "center",
+    gap: "8px",
+    padding: "4px 0 9px",
+    marginBottom: "8px",
+    borderBottom: "1px solid rgba(20,140,255,.55)",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => navigate(-1)}
+    style={{
+      justifySelf: "start",
+      border: 0,
+      background: "transparent",
+      color: "#36a9ff",
+      fontSize: "15px",
+      fontWeight: 800,
+      cursor: "pointer",
+      padding: "8px 0",
+    }}
+  >
+    ‹ Atrás
+  </button>
+
+  <img
+    src={viarankHeaderLogo}
+    alt="ViaRank"
+    style={{
+      width: "120px",
+      height: "38px",
+      objectFit: "contain",
+      display: "block",
+    }}
+  />
+
+  <div
+    style={{
+      justifySelf: "end",
+      position: "relative",
+      width: "43px",
+      height: "43px",
+    }}
+  >
+    <div
+      style={{
+        width: "43px",
+        height: "43px",
+        borderRadius: "50%",
+        overflow: "hidden",
+        border: "2px solid #1594ff",
+        background: "#153d60",
+        boxSizing: "border-box",
+      }}
+    >
+      {location.state?.user?.profilePicture && (
+        <img
+          src={location.state.user.profilePicture}
+          alt="Atleta conectado"
           style={{
-            border: "none",
-            background: "transparent",
-            color: "#148cff",
-            fontSize: "16px",
-            cursor: registrando ? "default" : "pointer",
-            padding: "8px 0",
-            opacity: registrando ? 0.5 : 1,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
           }}
-        >
-          ← Volver
-        </button>
+        />
+      )}
+    </div>
 
-        <h1 style={{ marginTop: "24px" }}>Registrar actividad</h1>
-
-        <div style={{ marginTop: "32px", position: "relative" }}>
-          {(() => {
-            const deportes = [
-              { type: "RIDE", nombre: "Ciclismo" },
-              { type: "RUN", nombre: "Carrera" },
-              { type: "WALK", nombre: "Caminata" },
-              { type: "HIKE", nombre: "Senderismo" },
-              { type: "SWIM", nombre: "Natación" },
-              { type: "WHEELCHAIR", nombre: "Silla de ruedas" },
-              { type: "KAYAK", nombre: "Kayak" },
-              { type: "ROW", nombre: "Remo" },
-              { type: "SAIL", nombre: "Vela" },
-              { type: "WINDSURF", nombre: "Windsurf" },
-            ] as const;
-
-            const deporteActual =
-              deportes.find((item) => item.type === deporte) ?? deportes[0];
-
-            return (
-              <>
-                <button
-                  type="button"
-                  disabled={registrando}
-                  onClick={() => setSelectorAbierto((abierto) => !abierto)}
-                  style={{
-                    width: "100%",
-                    padding: "15px 18px",
-                    border: "1px solid #148cff",
-                    borderRadius: "12px",
-                    background: "#0c2945",
-                    color: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    fontSize: "17px",
-                    fontWeight: 800,
-                    cursor: registrando ? "default" : "pointer",
-                    opacity: registrando ? 0.7 : 1,
-                  }}
-                >
-                  <span>{deporteActual.nombre}</span>
-                  <span style={{ color: "#38bdf8", fontSize: "18px" }}>
-                    {selectorAbierto ? "▲" : "▼"}
-                  </span>
-                </button>
-
-                {selectorAbierto && !registrando && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 6px)",
-                      left: 0,
-                      right: 0,
-                      zIndex: 20,
-                      maxHeight: "360px",
-                      overflowY: "auto",
-                      border: "1px solid #148cff",
-                      borderRadius: "12px",
-                      background: "#071b30",
-                      boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
-                    }}
-                  >
-                    {deportes.map((item) => (
-                      <button
-                        key={item.type}
-                        type="button"
-                        onClick={() => {
-                          setDeporte(item.type);
-                          setSelectorAbierto(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "13px 18px",
-                          border: "none",
-                          borderBottom: "1px solid #173b59",
-                          background:
-                            deporte === item.type ? "#148cff" : "transparent",
-                          color: "#ffffff",
-                          textAlign: "left",
-                          fontSize: "16px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {item.nombre}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
+    <span
+      style={{
+        position: "absolute",
+        right: "-1px",
+        bottom: "1px",
+        width: "11px",
+        height: "11px",
+        borderRadius: "50%",
+        background: "#19df66",
+        border: "2px solid #061a30",
+      }}
+    />
+  </div>
+</div>
+<h1 style={{ margin: "8px 0 10px", fontSize: "20px" }}>Registrar actividad</h1>
 
         <div
           style={{
-            marginTop: "28px",
+            marginTop: "8px",
+            padding: "6px 18px",
+            border: "1px solid #148cff",
+            borderRadius: "14px",
+            background: "linear-gradient(135deg, #10375b, #071b30)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,.12)",
+          }}
+        >
+          <div style={{ color: "#8acfff", fontSize: "12px", fontWeight: 700 }}>
+            ACTIVIDAD SELECCIONADA
+          </div>
+          <div style={{ marginTop: "5px", fontSize: "23px", fontWeight: 900 }}>
+            {nombreDeporte(deporte).charAt(0).toUpperCase() +
+              nombreDeporte(deporte).slice(1)}
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: "12px",
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: "12px",
@@ -420,7 +514,7 @@ useEffect(() => {
         >
           <div
             style={{
-              padding: "20px 10px",
+              padding: "11px 8px",
               border: "1px solid #148cff",
               borderRadius: "16px",
               textAlign: "center",
@@ -434,7 +528,7 @@ useEffect(() => {
 
           <div
             style={{
-              padding: "20px 10px",
+              padding: "11px 8px",
               border: "1px solid #148cff",
               borderRadius: "16px",
               textAlign: "center",
@@ -449,7 +543,7 @@ useEffect(() => {
 
           <div
             style={{
-              padding: "20px 10px",
+              padding: "11px 8px",
               border: "1px solid #148cff",
               borderRadius: "16px",
               textAlign: "center",
@@ -460,6 +554,42 @@ useEffect(() => {
               {velocidadPromedio.toFixed(1)}
             </div>
             <div style={{ color: "#94a3b8", fontSize: "14px" }}>km/h</div>
+          </div>
+          <div
+            aria-label={`Imagen de ${nombreDeporte(deporte)}`}
+            style={{
+              minHeight: "105px",
+              border: "1px solid #148cff",
+              borderRadius: "16px",
+              overflow: "hidden",
+              background: "linear-gradient(135deg, #12466d, #071426)",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "52px",
+                background: "radial-gradient(circle at 50% 35%, rgba(20,140,255,.25), transparent 75%)",
+              }}
+            >
+              {({
+                RIDE: "🚴",
+                RUN: "🏃",
+                WALK: "🚶",
+                HIKE: "🥾",
+                SWIM: "🏊",
+                WHEELCHAIR: "♿",
+                KAYAK: "🛶",
+                ROW: "🚣",
+                SAIL: "⛵",
+                WINDSURF: "🏄",
+              } as Record<TipoDeporte, string>)[deporte]}
+            </div>
           </div>
         </div>
 
@@ -514,39 +644,81 @@ useEffect(() => {
               </div>
             )}
             <button
-            onClick={iniciar}
-            style={{
-              width: "100%",
-              padding: "16px",
-              border: "1px solid #148cff",
-              borderRadius: "12px",
-              background: "#148cff",
-              color: "white",
-              fontSize: "18px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            INICIAR
-            </button>
+  onClick={iniciar}
+  style={{
+    width: "100%",
+    height: "54px",
+    padding: "0 12px",
+    border: "1px solid #9bffc4",
+    borderRadius: "13px",
+    background: "linear-gradient(180deg, #6affae 0%, #18c86b 19%, #078b48 58%, #03512d 100%)",
+    boxShadow: "0 5px 0 #003b22, 0 8px 16px rgba(0,0,0,.32), inset 0 2px 1px rgba(255,255,255,.55)",
+    color: "#ffffff",
+    fontSize: "16px",
+    fontWeight: 900,
+    letterSpacing: ".4px",
+    textShadow: "0 1px 2px rgba(0,0,0,.35)",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+    touchAction: "manipulation",
+  }}
+>
+  <span aria-hidden="true" style={{ fontSize: "19px" }}>▶</span>
+  <span>INICIAR ACTIVIDAD</span>
+</button>
+
+{esNativo && (
+  <button
+    type="button"
+    onClick={solicitarPermisoIconoFlotante}
+    style={{
+      display: "block",
+      margin: "18px auto 0",
+      padding: "9px 14px",
+      border: "1px solid rgba(56,189,248,.45)",
+      borderRadius: "10px",
+      background: "rgba(14,55,92,.65)",
+      color: "#bcecff",
+      fontSize: "13px",
+      fontWeight: 700,
+      cursor: "pointer",
+      touchAction: "manipulation",
+    }}
+  >
+    Activar ícono flotante
+  </button>
+)}
           </>
         ) : (
           <button
-            onClick={finalizar}
-            style={{
-              width: "100%",
-              padding: "16px",
-              border: "1px solid #ef4444",
-              borderRadius: "12px",
-              background: "#ef4444",
-              color: "white",
-              fontSize: "18px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            FINALIZAR
-          </button>
+  onClick={finalizar}
+  style={{
+    width: "100%",
+    height: "54px",
+    padding: "0 12px",
+    border: "1px solid #ffc0ba",
+    borderRadius: "13px",
+    background: "linear-gradient(180deg, #ffaaa0 0%, #f34a48 19%, #c82030 58%, #870d1c 100%)",
+    boxShadow: "0 5px 0 #650915, 0 8px 16px rgba(0,0,0,.32), inset 0 2px 1px rgba(255,255,255,.5)",
+    color: "#ffffff",
+    fontSize: "16px",
+    fontWeight: 900,
+    letterSpacing: ".4px",
+    textShadow: "0 1px 2px rgba(0,0,0,.35)",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+    touchAction: "manipulation",
+  }}
+>
+  <span aria-hidden="true" style={{ fontSize: "19px" }}>■</span>
+  <span>FINALIZAR ACTIVIDAD</span>
+</button>
         )}
       </div>
     </div>
