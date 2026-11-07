@@ -3,6 +3,8 @@ import { rateLimit } from "express-rate-limit";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Prisma, PrismaClient, TravelModuleType } from "@prisma/client";
+import { lockActivitiesForDuplicateDecision } from "./activityDuplicateLock.js";
+import { confirmActivityDuplicates } from "./activityDuplicateConfirm.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { randomBytes, randomInt } from "node:crypto";
@@ -3602,6 +3604,83 @@ app.post(
    HISTORIAL DE ACTIVIDADES
 --------------------------------------------------------- */
 
+app.post(
+  "/api/admin/activities/confirm-duplicates",
+  async (req, res) => {
+    try {
+      const requesterId = getAuthenticatedUserId(req);
+
+      if (!requesterId) {
+        return res.status(401).json({
+          error: "Usuario no autenticado",
+        });
+      }
+
+      const { activityIds, explicitConfirmation } = req.body ?? {};
+
+      if (
+        !Array.isArray(activityIds) ||
+        activityIds.length < 2 ||
+        activityIds.length > 20 ||
+        !activityIds.every(
+          (id: unknown) =>
+            typeof id === "string" &&
+            id.trim().length > 0 &&
+            id.length <= 128
+        ) ||
+        new Set(activityIds).size !== activityIds.length
+      ) {
+        return res.status(400).json({
+          error: "Se requieren entre 2 y 20 actividades diferentes",
+        });
+      }
+
+      if (explicitConfirmation !== true) {
+        return res.status(400).json({
+          error: "Se requiere confirmacion explicita",
+        });
+      }
+
+      const requester = await prisma.user.findUnique({
+        where: { id: requesterId },
+        select: {
+          role: true,
+          isActive: true,
+        },
+      });
+
+      if (
+        !requester ||
+        !requester.isActive ||
+        requester.role !== "SUPER_ADMIN"
+      ) {
+        return res.status(403).json({
+          error: "Operacion exclusiva del SUPER_ADMIN",
+        });
+      }
+
+      const result = await confirmActivityDuplicates(
+        prisma,
+        requesterId,
+        activityIds,
+        true
+      );
+
+      if (!result.confirmed) {
+        return res.status(409).json(result);
+      }
+
+      return res.json(result);
+    } catch (error) {
+      console.error("Error confirmando duplicados:", error);
+
+      return res.status(500).json({
+        error: "No se pudo confirmar los duplicados",
+      });
+    }
+  }
+);
+
 app.get(
   "/api/activities/history",
   async (req, res) => {
@@ -3695,6 +3774,7 @@ const canView =
 
       const where: any = {
         userId,
+        duplicateOfId: null,
       };
 
       if (sport) {
@@ -4007,7 +4087,7 @@ app.get(
 
       const activities =
         await prisma.activity.findMany({
-          where,
+          where: { ...where, duplicateOfId: null },
 
           include: {
             user: {
@@ -4784,6 +4864,7 @@ const memberIds =
 
         type:
           group.sport,
+        duplicateOfId: null,
       };
 
       if (startDate) {
@@ -5364,7 +5445,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "Debés indicar al menos una actividad",
+            "DebÃ©s indicar al menos una actividad",
         });
       }
 
@@ -5376,7 +5457,7 @@ app.post(
       if (uniqueActivityIds.length < 1) {
         return res.status(400).json({
           error:
-            "Debés indicar al menos una actividad",
+            "DebÃ©s indicar al menos una actividad",
         });
       }
 
@@ -5386,7 +5467,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "Debés resolver un solo caso VAR por vez",
+            "DebÃ©s resolver un solo caso VAR por vez",
         });
       }
 
@@ -5474,7 +5555,7 @@ app.post(
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenés permiso para administrar este grupo",
+            "No tenÃ©s permiso para administrar este grupo",
         });
       }
 
@@ -5486,7 +5567,8 @@ app.post(
             },
           },
           select: {
-            id: true,
+            duplicateOfId: true,
+              id: true,
             userId: true,
             type: true,
             distance: true,
@@ -5501,11 +5583,16 @@ app.post(
       ) {
         return res.status(404).json({
           error:
-            "Una o más actividades no fueron encontradas",
+            "Una o mÃ¡s actividades no fueron encontradas",
         });
       }
 
-      const athleteId =
+            if (activities.some((activity) => activity.duplicateOfId !== null)) {
+        return res.status(400).json({
+          error: "No se pueden penalizar actividades identificadas como duplicadas",
+        });
+      }
+const athleteId =
         activities[0].userId;
 
       const sameAthlete =
@@ -5552,6 +5639,7 @@ app.post(
           where: {
             userId: athleteId,
             type: group.sport,
+            duplicateOfId: null,
           },
           select: {
             id: true,
@@ -5616,7 +5704,8 @@ app.post(
             },
           },
           select: {
-            id: true,
+            duplicateOfId: true,
+              id: true,
             userId: true,
             type: true,
             movingTime: true,
@@ -5627,7 +5716,7 @@ app.post(
       if (resolutionPairActivities.length !== 2) {
         return res.status(404).json({
           error:
-            "Una o más actividades del caso VAR no fueron encontradas",
+            "Una o mÃ¡s actividades del caso VAR no fueron encontradas",
         });
       }
 
@@ -5645,6 +5734,11 @@ app.post(
         });
       }
 
+            if (resolutionPairActivities.some((activity) => activity.duplicateOfId !== null)) {
+        return res.status(400).json({
+          error: "El caso VAR contiene una actividad identificada como duplicada",
+        });
+      }
       const firstResolutionActivity =
         resolutionPairActivities.find(
           (activity) => activity.id === firstActivityId
@@ -5707,7 +5801,7 @@ app.post(
       if (existingActivePenalties.length > 0) {
         return res.status(409).json({
           error:
-            "La penalización ya fue aplicada",
+            "La penalizaciÃ³n ya fue aplicada",
         });
       }
 
@@ -5736,9 +5830,78 @@ app.post(
 
       const penalties = await prisma.$transaction(
         async (tx) => {
+          // Bloqueo compartido entre VAR y duplicados.
+          await lockActivitiesForDuplicateDecision(
+            tx,
+            [firstActivityId, secondActivityId]
+          );
+
+          const lockedActivities = await tx.activity.findMany({
+            where: {
+              id: { in: [firstActivityId, secondActivityId] },
+            },
+            select: {
+              id: true,
+              duplicateOfId: true,
+              userId: true,
+              type: true,
+              distance: true,
+            },
+          });
+
+          if (
+            lockedActivities.length !== 2 ||
+            lockedActivities.some(
+              (activity) =>
+                activity.duplicateOfId !== null ||
+                activity.userId !== athleteId ||
+                activity.type !== group.sport
+            )
+          ) {
+            throw new Error(
+              "Conflicto VAR: las actividades cambiaron"
+            );
+          }
+
+          const currentPenalties =
+            await tx.groupActivityPenalty.findMany({
+              where: {
+                groupId,
+                activityId: { in: uniqueActivityIds },
+                revertedAt: null,
+              },
+              select: { activityId: true },
+            });
+
+          if (currentPenalties.length > 0) {
+            throw new Error(
+              "Conflicto VAR: ya existe una penalizacion activa"
+            );
+          }
+
+          const currentResolution =
+            await tx.groupActivityVarResolution.findUnique({
+              where: {
+                groupId_firstActivityId_secondActivityId: {
+                  groupId,
+                  firstActivityId,
+                  secondActivityId,
+                },
+              },
+              select: { id: true },
+            });
+
+          if (currentResolution) {
+            throw new Error(
+              "Conflicto VAR: el caso ya fue resuelto"
+            );
+          }
+
           const createdPenalties = [];
 
-          for (const activity of activities) {
+          for (const activity of lockedActivities.filter(
+            (item) => uniqueActivityIds.includes(item.id)
+          )) {
             createdPenalties.push(
               await tx.groupActivityPenalty.upsert({
                 where: {
@@ -5789,7 +5952,7 @@ app.post(
       return res.json({
         success: true,
         message:
-          "Penalización aplicada",
+          "PenalizaciÃ³n aplicada",
         rankingDistanceKm: 0.01,
         appliedAt,
         activityIds:
@@ -5800,13 +5963,13 @@ app.post(
       });
     } catch (error) {
       console.error(
-        "Error aplicando penalización VAR:",
+        "Error aplicando penalizaciÃ³n VAR:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo aplicar la penalización",
+          "No se pudo aplicar la penalizaciÃ³n",
       });
     }
   }

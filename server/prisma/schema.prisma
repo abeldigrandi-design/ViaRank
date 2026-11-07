@@ -127,6 +127,9 @@ model Activity {
   startDate     DateTime
   createdAt     DateTime       @default(now())
 
+  duplicateOfId String?
+  duplicateOf   Activity?  @relation("ActivityDuplicates", fields: [duplicateOfId], references: [id])
+  duplicates    Activity[] @relation("ActivityDuplicates")
   groupActivityReviews   GroupActivityReview[]
   groupActivityPenalties GroupActivityPenalty[]
   varResolutionsAsFirst  GroupActivityVarResolution[] @relation("VarFirstActivity")
