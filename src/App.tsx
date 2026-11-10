@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SportPage from "./pages/SportPage";
 import GroupPage from "./pages/GroupPage";
@@ -1741,7 +1741,7 @@ localStorage.removeItem(
     return `${minutes} min`;
   }
 
-  
+
   /* =====================================================
      DEPORTE
   ===================================================== */
@@ -1788,7 +1788,7 @@ localStorage.removeItem(
      LOADING
   ===================================================== */
 
-  
+
 
   /* =====================================================
      PANTALLA SIN CONEXIÓN
@@ -2338,7 +2338,7 @@ color: "#ffffff",
   </div>
 )}
               <button
-                
+
                 onClick={emailMode === "register" ? requestEmailCode : loginWithPin}
 disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                 style={{
@@ -2738,21 +2738,21 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                 style={{
                   position: "relative",
                   zIndex: 102,
-                  width: "48px",
-                  height: "48px",
-                  borderRadius: "14px",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.08)",
-                  color: "white",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "0px",
+                  border: "none",
+                  background: "transparent",
+                  color: "#20baff",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   cursor: "pointer",
-                  fontSize: "24px",
+                  fontSize: "29px",
                   lineHeight: 1,
                 }}
               >
-                ☰
+                ⋮
               </button>
 
               {menuOpen && (
@@ -2770,11 +2770,11 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                     style={{
   position: "absolute",
   right: 0,
-  top: "58px",
-  width: "190px",
+  top: "46px",
+  width: "176px",
   background: "#071d38",
   borderRadius: "14px",
-  padding: "8px",
+  padding: "5px",
   boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
   border: "1px solid #148cff",
   zIndex: 103,
@@ -2797,14 +2797,14 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       }}
                       style={{
                         width: "100%",
-                        marginTop: "6px",
-                        padding: "10px 12px",
+                        marginTop: "2px",
+                        padding: "7px 10px",
                         border: "none",
                         background: "transparent",
                         borderRadius: "9px",
                         textAlign: "left",
                         cursor: "pointer",
-                        fontSize: "14px",
+                        fontSize: "12px",
                         fontWeight: 700,
                         color: "#f8fafc",
                       }}
@@ -2816,7 +2816,7 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       style={{
                         height: "1px",
                         background: "rgba(20,140,255,0.35)",
-                        margin: "4px 8px",
+                        margin: "2px 7px",
                       }}
                     />
                   <button
@@ -2826,44 +2826,53 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
   }}
   style={{
     width: "100%",
-    padding: "10px 12px",
+    padding: "7px 10px",
     border: "none",
     background: "transparent",
     borderRadius: "9px",
     textAlign: "left",
     cursor: "pointer",
-    fontSize: "14px",
+    fontSize: "12px",
     fontWeight: 600,
     color: "#f8fafc",
   }}
 >
   ViaRank Viajes
 </button>
-
-<div style={{ height: "1px", background: "rgba(20,140,255,0.35)", margin: "4px 8px" }} />
-
-                 <button
-  onClick={() => {
-    setMenuOpen(false);
-    navigate("/registrar-actividad", { state: { user } });
-  }}
+<div
   style={{
-    width: "100%",
-    padding: "10px 12px",
-    border: "none",
-    background: "transparent",
-    borderRadius: "9px",
-    textAlign: "left",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: 600,
-    color: "#f8fafc",
+    height: "1px",
+    background: "rgba(20,140,255,0.35)",
+    margin: "2px 7px",
   }}
->
-  Registrar actividad
-</button>
+/>
+{isSuperAdmin && (
+  <button
+    onClick={() => {
+      setMenuOpen(false);
+      void loadAdminGroups();
+      setShowSuperAdmin(true);
+    }}
+    style={{
+      width: "100%",
+      padding: "7px 10px",
+      border: "none",
+      background: "transparent",
+      borderRadius: "7px",
+      textAlign: "left",
+      cursor: "pointer",
+      fontSize: "12px",
+      fontWeight: 600,
+      color: "#f8fafc",
+    }}
+  >
+    Administración
+  </button>
+)}
 
-<div style={{ height: "1px", background: "rgba(20,140,255,0.35)", margin: "4px 8px" }} />
+<div style={{ height: "1px", background: "rgba(20,140,255,0.35)", margin: "2px 7px" }} />
+
+
                  <button
   onClick={() => {
     setMenuOpen(false);
@@ -2871,13 +2880,13 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
   }}
   style={{
     width: "100%",
-    padding: "10px 12px",
+    padding: "7px 10px",
     border: "none",
     background: "transparent",
     borderRadius: "9px",
     textAlign: "left",
     cursor: "pointer",
-    fontSize: "14px",
+    fontSize: "12px",
     fontWeight: 600,
     color: "#f8fafc",
   }}
@@ -2889,7 +2898,7 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
   style={{
     height: "1px",
     background: "rgba(20,140,255,0.35)",
-    margin: "4px 8px",
+    margin: "2px 7px",
   }}
 />
                     <button
@@ -2899,13 +2908,13 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       }}
                       style={{
                         width: "100%",
-                        padding: "10px 12px",
+                        padding: "7px 10px",
                         border: "none",
                         background: "transparent",
                         borderRadius: "9px",
                         textAlign: "left",
                         cursor: "pointer",
-                        fontSize: "14px",
+                        fontSize: "12px",
                         fontWeight: 600,
                         color: "#f8fafc",
                       }}
@@ -2917,7 +2926,7 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       style={{
                         height: "1px",
                         background: "rgba(20,140,255,0.35)",
-                        margin: "4px 8px",
+                        margin: "2px 7px",
                       }}
                     />
 
@@ -2928,13 +2937,13 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       }}
                       style={{
                         width: "100%",
-                        padding: "10px 12px",
+                        padding: "7px 10px",
                         border: "none",
                         background: "transparent",
                         borderRadius: "9px",
                         textAlign: "left",
                         cursor: "pointer",
-                        fontSize: "14px",
+                        fontSize: "12px",
                         fontWeight: 600,
                         color: "#f8fafc",
                       }}
@@ -2946,7 +2955,7 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       style={{
                         height: "1px",
                         background: "rgba(20,140,255,0.35)",
-                        margin: "4px 8px",
+                        margin: "2px 7px",
                       }}
                     />
 
@@ -2957,14 +2966,14 @@ disabled={emailLoading || (emailMode === "register" && !termsAccepted)}
                       }}
                       style={{
                         width: "100%",
-                        marginTop: "6px",
-                        padding: "10px 12px",
+                        marginTop: "2px",
+                        padding: "7px 10px",
                         border: "none",
                         background: "transparent",
                         borderRadius: "9px",
                         textAlign: "left",
                         cursor: "pointer",
-                        fontSize: "14px",
+                        fontSize: "12px",
                         fontWeight: 600,
                         color: "#f8fafc",
                       }}

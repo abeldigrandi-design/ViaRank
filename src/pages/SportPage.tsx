@@ -80,9 +80,7 @@ const menuItemStyle: CSSProperties = {
   background: "transparent",
   color: "#eaf4ff",
   textAlign: "left",
-  padding: "11px 10px",
-  borderRadius: "8px",
-  fontSize: "14px",
+  padding: "7px 10px", borderRadius: "7px", fontSize: "12px",
   fontWeight: 750,
   cursor: "pointer",
 };
@@ -247,11 +245,11 @@ export default function SportPage({
               style={{
                 width: "40px",
                 height: "40px",
-                borderRadius: "11px",
-                border: "1px solid rgba(20,140,255,.7)",
-                background: "#071d38",
-                color: "#ffffff",
-                fontSize: "22px",
+                borderRadius: "0px",
+                border: "none",
+                background: "transparent",
+                color: "#20baff",
+                fontSize: "29px",
                 fontWeight: 900,
                 cursor: "pointer",
                 display: "flex",
@@ -260,8 +258,8 @@ export default function SportPage({
                 padding: 0,
               }}
             >
-              ☰
-            </button>
+                ⋮
+              </button>
 
             {menuOpen && (
               <>
@@ -277,10 +275,7 @@ export default function SportPage({
               <div
                 style={{
                   position: "absolute",
-                  top: "49px",
-                  right: 0,
-                  width: "205px",
-                  padding: "7px",
+                  top: "46px", right: 0, width: "176px", padding: "5px",
                   borderRadius: "13px",
                   border: "1px solid rgba(20,140,255,.65)",
                   background: "#071d38",
@@ -297,6 +292,15 @@ export default function SportPage({
                 >
                   Crear grupo
                 </button>
+<button
+  onClick={() => {
+    setMenuOpen(false);
+    navigate("/viajes/empresa", { state: { user } });
+  }}
+  style={menuItemStyle}
+>
+  ViaRank Viajes
+</button>
 
                 {canAccessGroupAdmin && (
                   <button
@@ -310,15 +314,7 @@ export default function SportPage({
                   </button>
                 )}
 
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate("/registrar-actividad", { state: { user, returnSport: sport } });
-                  }}
-                  style={menuItemStyle}
-                >
-                  Registrar actividad
-                </button>
+
 
                 <button
                   onClick={() => {
@@ -355,10 +351,7 @@ export default function SportPage({
                     setMenuOpen(false);
                     onLogout();
                   }}
-                  style={{
-                    ...menuItemStyle,
-                    color: "#ff8b8b",
-                  }}
+                  style={menuItemStyle}
                 >
                   Cerrar sesión
                 </button>
@@ -534,7 +527,7 @@ export default function SportPage({
                 animation: none;
               }
             }
-          
+
             @keyframes vrDestellosVerdes2026 {
               0%, 14%, 27%, 49%, 73%, 100% {
                 opacity: .08;
@@ -581,7 +574,7 @@ export default function SportPage({
               Mi ranking
             </h2>
 
-            
+
             <button
               type="button"
               className="vr-boton-registrar-destello"
@@ -761,7 +754,7 @@ export default function SportPage({
 
           </div>
 
-          
+
 
           {athlete ? (
             <div
@@ -1130,7 +1123,7 @@ export default function SportPage({
           </div>
         </section>
 
-        
+
       </main>
     </div>
   );
