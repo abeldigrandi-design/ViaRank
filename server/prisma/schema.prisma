@@ -82,6 +82,8 @@ model User {
   travelTripTeamMemberships    TravelTripTeamMember[]
   rankingPenaltiesApplied      GroupActivityPenalty[]       @relation("PenaltyAppliedBy")
   varResolutionsApplied        GroupActivityVarResolution[] @relation("VarResolvedBy")
+  externalActivities GroupExternalActivity[] @relation("ExternalActivityAthlete")
+  externalActivitiesRegistered GroupExternalActivity[] @relation("ExternalActivityRegistrar")
 }
 
 model UserSession {
@@ -165,6 +167,7 @@ model SportGroup {
 
   @@index([sport])
   @@index([administratorId])
+  externalActivities GroupExternalActivity[]
 }
 
 model GroupMember {
@@ -182,6 +185,7 @@ model GroupMember {
   @@unique([userId, groupId])
   @@index([groupId])
   @@index([userId])
+  canValidateExternalKm Boolean @default(false)
 }
 
 
@@ -1053,4 +1057,27 @@ model GroupEventRegistration {
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
+}
+
+model GroupExternalActivity {
+  id String @id @default(cuid())
+
+  groupId String
+  userId String
+  registeredById String
+
+  group SportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user User @relation("ExternalActivityAthlete", fields: [userId], references: [id], onDelete: Cascade)
+  registeredBy User @relation("ExternalActivityRegistrar", fields: [registeredById], references: [id])
+
+  startDate DateTime
+  endDate DateTime
+  distance Float
+
+  notes String?
+  createdAt DateTime @default(now())
+
+  @@index([groupId, userId])
+  @@index([groupId, startDate])
+  @@unique([groupId, userId, startDate, endDate, distance], map: "GroupExternalActivity_no_duplicates_idx")
 }

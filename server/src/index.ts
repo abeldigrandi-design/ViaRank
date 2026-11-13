@@ -1,3 +1,4 @@
+import { registerGroupExternalActivities } from "./groupExternalActivities.js";
 import { v2 as cloudinary } from "cloudinary";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
@@ -3875,9 +3876,106 @@ for (let i = 0; i < activities.length; i++) {
     }
   }
 }
+      // VIARANK_ADMIN_KM_HISTORY_V1
+      // Actividades ADMIN visibles solo dentro del grupo autorizado.
+      const adminHistory: Array<{
+        id: string;
+        externalId: string;
+        source: "ADMIN";
+        type: string;
+        name: string;
+        distance: number;
+        movingTime: number;
+        elevationGain: number;
+        averageSpeed: number;
+        calories: number;
+        startDate: Date;
+        endDate: Date;
+        distanceKm: number;
+        hasOverlap: boolean;
+        hasSpeedReview: boolean;
+        overlappingActivityIds: string[];
+        pendingOverlapActivityIds: string[];
+        hasPendingVar: boolean;
+        isPenalized: boolean;
+        penalty: null;
+      }> = [];
+
+      if (groupId) {
+        const historyGroup = await prisma.sportGroup.findUnique({
+          where: { id: groupId },
+          select: {
+            sport: true,
+            administratorId: true,
+            members: { select: { userId: true } },
+          },
+        });
+
+        if (historyGroup) {
+          const requesterCanView =
+            requester.role === "SUPER_ADMIN" ||
+            historyGroup.administratorId === requesterId ||
+            historyGroup.members.some(
+              (member) => member.userId === requesterId
+            );
+
+          const athleteBelongs = historyGroup.members.some(
+            (member) => member.userId === userId
+          );
+
+          if (requesterCanView && athleteBelongs) {
+            const records = await prisma.groupExternalActivity.findMany({
+              where: {
+                groupId,
+                userId,
+                ...(sport && sport !== historyGroup.sport
+                  ? { id: "__NO_MATCH__" }
+                  : {}),
+              },
+              orderBy: { startDate: "desc" },
+            });
+
+            for (const record of records) {
+              const movingTime = Math.max(
+                0,
+                (record.endDate.getTime() -
+                  record.startDate.getTime()) / 1000
+              );
+
+              adminHistory.push({
+                id: record.id,
+                externalId: record.id,
+                source: "ADMIN",
+                type: historyGroup.sport,
+                name: "Actividad validada por administrador",
+                distance: record.distance,
+                movingTime,
+                elevationGain: 0,
+                averageSpeed:
+                  movingTime > 0
+                    ? record.distance / movingTime
+                    : 0,
+                calories: 0,
+                startDate: record.startDate,
+                endDate: record.endDate,
+                distanceKm: Number(
+                  (record.distance / 1000).toFixed(2)
+                ),
+                hasOverlap: false,
+                hasSpeedReview: false,
+                overlappingActivityIds: [],
+                pendingOverlapActivityIds: [],
+                hasPendingVar: false,
+                isPenalized: false,
+                penalty: null,
+              });
+            }
+          }
+        }
+      }
       return res.json({
         success: true,
-        count: activities.length,
+        count: activities.length + adminHistory.length,
         activities: activities.map(
           (activity) => ({
             ...activity,
@@ -3919,7 +4017,10 @@ hasOverlap: overlappingActivityIds.has(activity.id),
                 activity.movingTime * 1000
             ),
           })
-        ),
+        )
+          .map((activity) => ({ ...activity, source: String(activity.source), type: String(activity.type) }))
+          .concat(adminHistory)
+          .sort((a, b) => b.startDate.getTime() - a.startDate.getTime()),
       });
     } catch (error) {
       console.error(
@@ -5037,6 +5138,38 @@ const memberIds =
         }
       }
 
+      // VIARANK_ADMIN_KM_RANKING_V1
+      // Actividades ADMIN exclusivas de este grupo.
+      const adminActivities =
+        await prisma.groupExternalActivity.findMany({
+          where: {
+            groupId,
+            userId: { in: memberIds },
+            ...(startDate
+              ? { startDate: { gte: startDate } }
+              : {}),
+          },
+          select: {
+            userId: true,
+            distance: true,
+            startDate: true,
+            endDate: true,
+          },
+        });
+
+      for (const adminActivity of adminActivities) {
+        const athlete = rankingMap.get(adminActivity.userId);
+
+        if (!athlete) continue;
+
+        athlete.activities += 1;
+        athlete.distance += adminActivity.distance;
+        athlete.movingTime += Math.max(
+          0,
+          (adminActivity.endDate.getTime() -
+            adminActivity.startDate.getTime()) / 1000
+        );
+      }
       const ranking =
         Array.from(
           rankingMap.values()
@@ -15445,6 +15578,9 @@ setInterval(() => {
   void revisarEventosVencidosViaRank();
 }, 60 * 1000);
 
+
+// Registro de kilometros externos ADMIN
+registerGroupExternalActivities(app, prisma, getAuthenticatedUserId);
 app.listen(
   PORT,
   () => {
