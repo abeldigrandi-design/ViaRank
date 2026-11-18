@@ -3354,6 +3354,11 @@ app.post(
         "WALK",
         "HIKE",
         "SWIM",
+        "WHEELCHAIR",
+        "KAYAK",
+        "ROW",
+        "SAIL",
+        "WINDSURF",
       ];
 
       if (!tiposValidos.includes(type)) {
