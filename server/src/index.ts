@@ -11,6 +11,100 @@ import { randomBytes, randomInt } from "node:crypto";
 dotenv.config();
 
 const app = express();
+
+app.get("/.well-known/assetlinks.json", (_req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+
+  res.json([
+    {
+      relation: [
+        "delegate_permission/common.handle_all_urls"
+      ],
+      target: {
+        namespace: "android_app",
+        package_name: "com.viarank.app",
+        sha256_cert_fingerprints: [
+          "2E:88:0E:F0:E8:DD:69:A0:71:16:C3:EF:CE:B0:AF:D8:6C:CF:E9:93:25:F3:A7:A5:32:0F:A9:38:62:F1:97:69"
+        ]
+      }
+    }
+  ]);
+});
+app.get("/invitacion/:groupId/:eventId", (req, res) => {
+  const { groupId, eventId } = req.params;
+
+  if (!groupId || !eventId) {
+    return res.status(400).send("Invitación inválida");
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+
+  return res.send(`<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invitación deportiva - ViaRank</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      color: #ffffff;
+      background: linear-gradient(160deg, #071629, #123a63);
+    }
+    main {
+      width: 100%;
+      max-width: 420px;
+      padding: 36px 24px;
+      text-align: center;
+      border-radius: 20px;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(95,190,255,.25);
+    }
+    h1 { color: #ff942f; font-size: 38px; margin: 0 0 20px; }
+    p { font-size: 17px; line-height: 1.6; }
+    a {
+      display: block;
+      margin-top: 28px;
+      padding: 17px;
+      border-radius: 12px;
+      background: #1685d7;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    small {
+      display: block;
+      margin-top: 20px;
+      color: #c4d8e8;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ViaRank</h1>
+    <p>¡Recibiste una invitación para participar en un evento deportivo!</p>
+    <p>Instalá ViaRank para ingresar a tu grupo y consultar el evento.</p>
+    <a href="https://play.google.com/store/apps/details?id=com.viarank.app">
+      Instalar ViaRank desde Google Play
+    </a>
+    <small>Si ya tenés ViaRank instalado, abrí nuevamente la invitación desde WhatsApp.</small>
+  </main>
+</body>
+</html>`);
+});
 const PORT = Number(process.env.PORT) || 3001;
 
 const JWT_SECRET =
