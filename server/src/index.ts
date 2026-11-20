@@ -1,3 +1,4 @@
+import { ensureAgendaDeportivaTable } from "./agendaDeportivaMigration.js";
 import { createAgendaDeportivaRoutes } from "./agendaDeportivaRoutes.js";
 import { registerGroupExternalActivities } from "./groupExternalActivities.js";
 import { v2 as cloudinary } from "cloudinary";
@@ -336,7 +337,20 @@ promoteConfiguredUser().catch((error) => {
 app.use(cors());
 
 app.use(express.json({ limit: "1mb" }));
-app.use('/api/agenda-deportiva', createAgendaDeportivaRoutes(prisma, JWT_SECRET));
+const agendaDeportivaReady = ensureAgendaDeportivaTable(prisma)
+  .then(() => true)
+  .catch((error) => {
+    console.error("Error al preparar Agenda Deportiva:", error);
+    return false;
+  });
+
+app.use('/api/agenda-deportiva', async (_req, res, next) => {
+  if (!(await agendaDeportivaReady)) {
+    res.status(503).json({ error: "Agenda Deportiva temporalmente no disponible" });
+    return;
+  }
+  next();
+}, createAgendaDeportivaRoutes(prisma, JWT_SECRET));
 
 const pinLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
