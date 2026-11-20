@@ -1081,3 +1081,23 @@ model GroupExternalActivity {
   @@index([groupId, startDate])
   @@unique([groupId, userId, startDate, endDate, distance], map: "GroupExternalActivity_no_duplicates_idx")
 }
+
+
+model AgendaDeportivaEvento {
+  id          String   @id @default(cuid())
+  title       String
+  eventDate   DateTime
+  endDate     DateTime?
+  locality    String
+  description String   @default("")
+  organizer   String   @default("")
+  websiteUrl  String   @default("")
+  sports      ActivityType[]
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventDate])
+  @@index([isActive])
+}
+

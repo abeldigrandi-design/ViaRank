@@ -1,3 +1,4 @@
+import { createAgendaDeportivaRoutes } from "./agendaDeportivaRoutes.js";
 import { registerGroupExternalActivities } from "./groupExternalActivities.js";
 import { v2 as cloudinary } from "cloudinary";
 import express from "express";
@@ -35,7 +36,7 @@ app.get("/invitacion/:groupId/:eventId", (req, res) => {
   const { groupId, eventId } = req.params;
 
   if (!groupId || !eventId) {
-    return res.status(400).send("Invitación inválida");
+    return res.status(400).send("Invitaci├│n inv├ílida");
   }
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -48,7 +49,7 @@ app.get("/invitacion/:groupId/:eventId", (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Invitación deportiva - ViaRank</title>
+  <title>Invitaci├│n deportiva - ViaRank</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -95,12 +96,12 @@ app.get("/invitacion/:groupId/:eventId", (req, res) => {
 <body>
   <main>
     <h1>ViaRank</h1>
-    <p>¡Recibiste una invitación para participar en un evento deportivo!</p>
-    <p>Instalá ViaRank para ingresar a tu grupo y consultar el evento.</p>
+    <p>┬íRecibiste una invitaci├│n para participar en un evento deportivo!</p>
+    <p>Instal├í ViaRank para ingresar a tu grupo y consultar el evento.</p>
     <a href="https://play.google.com/store/apps/details?id=com.viarank.app">
       Instalar ViaRank desde Google Play
     </a>
-    <small>Si ya tenés ViaRank instalado, abrí nuevamente la invitación desde WhatsApp.</small>
+    <small>Si ya ten├®s ViaRank instalado, abr├¡ nuevamente la invitaci├│n desde WhatsApp.</small>
   </main>
 </body>
 </html>`);
@@ -333,7 +334,9 @@ promoteConfiguredUser().catch((error) => {
 });
 
 app.use(cors());
+
 app.use(express.json({ limit: "1mb" }));
+app.use('/api/agenda-deportiva', createAgendaDeportivaRoutes(prisma, JWT_SECRET));
 
 const pinLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -342,7 +345,7 @@ const pinLoginLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error:
-      "Demasiados intentos de ingreso. Esperá 15 minutos e intentá nuevamente.",
+      "Demasiados intentos de ingreso. Esper├í 15 minutos e intent├í nuevamente.",
   },
 });
 
@@ -407,7 +410,7 @@ app.use(async (req, res, next) => {
 
     if (!account || !account.isActive) {
       return res.status(403).json({
-        error: "Cuenta desactivada. Contactá al administrador de ViaRank.",
+        error: "Cuenta desactivada. Contact├í al administrador de ViaRank.",
       });
     }
 
@@ -474,7 +477,7 @@ app.post(
 
       if (!emailRegex.test(email)) {
         return res.status(400).json({
-          error: "El email no es válido",
+          error: "El email no es v├ílido",
         });
       }
 
@@ -484,7 +487,7 @@ app.post(
         sex !== "FEMALE"
       ) {
         return res.status(400).json({
-          error: "El sexo seleccionado no es válido",
+          error: "El sexo seleccionado no es v├ílido",
         });
       }
 
@@ -506,7 +509,7 @@ app.post(
       ) {
         return res.status(429).json({
           error:
-            "Esperá 60 segundos antes de solicitar otro código",
+            "Esper├í 60 segundos antes de solicitar otro c├│digo",
         });
       }
 
@@ -527,7 +530,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "Seleccioná sexo para completar tu perfil",
+            "Seleccion├í sexo para completar tu perfil",
         });
       }
 
@@ -592,23 +595,23 @@ app.post(
       });
 
       console.log(
-        `Código ViaRank para ${email}: ${code}`
+        `C├│digo ViaRank para ${email}: ${code}`
       );
 
       return res.json({
         success: true,
         message:
-          "Código de verificación generado",
+          "C├│digo de verificaci├│n generado",
       });
     } catch (error) {
       console.error(
-        "Error generando código de email:",
+        "Error generando c├│digo de email:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo generar el código de verificación",
+          "No se pudo generar el c├│digo de verificaci├│n",
       });
     }
   }
@@ -654,7 +657,7 @@ app.post(
 
       if (!emailRegex.test(email)) {
         return res.status(400).json({
-          error: "El email no es válido",
+          error: "El email no es v├ílido",
         });
       }
 
@@ -664,19 +667,19 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "El sexo seleccionado no es válido",
+            "El sexo seleccionado no es v├ílido",
         });
       }
 
       if (!/^\d{4}$/.test(pin)) {
         return res.status(400).json({
           error:
-            "El PIN debe tener exactamente 4 números",
+            "El PIN debe tener exactamente 4 n├║meros",
         });
       }
       if (!termsAccepted || !isAdult || termsAcceptedVersion !== "2026-10-30") {
         return res.status(400).json({
-          error: "Deb├®s aceptar los T├®rminos y Condiciones vigentes de ViaRank.",
+          error: "DebÔö£┬«s aceptar los TÔö£┬«rminos y Condiciones vigentes de ViaRank.",
         });
       }
 
@@ -795,7 +798,7 @@ app.post(
 
       if (!/^\d{4}$/.test(pin)) {
         return res.status(400).json({
-          error: "El PIN debe tener exactamente 4 números",
+          error: "El PIN debe tener exactamente 4 n├║meros",
         });
       }
 
@@ -805,7 +808,7 @@ app.post(
         });
       if (user && !user.isActive) {
         return res.status(403).json({
-          error: "Cuenta desactivada. Contactá al administrador.",
+          error: "Cuenta desactivada. Contact├í al administrador.",
         });
       }
 
@@ -894,7 +897,7 @@ app.post(
       if (!email || !code) {
         return res.status(400).json({
           error:
-            "Email y código son obligatorios",
+            "Email y c├│digo son obligatorios",
         });
       }
 
@@ -906,14 +909,14 @@ app.post(
       if (!pending) {
         return res.status(404).json({
           error:
-            "No hay una verificación pendiente para este email",
+            "No hay una verificaci├│n pendiente para este email",
         });
       }
 
       if (pending.attempts >= 5) {
         return res.status(429).json({
           error:
-            "Demasiados intentos. Solicitá un nuevo código",
+            "Demasiados intentos. Solicit├í un nuevo c├│digo",
         });
       }
 
@@ -932,7 +935,7 @@ app.post(
         });
 
         return res.status(400).json({
-          error: "Código incorrecto",
+          error: "C├│digo incorrecto",
         });
       }
 
@@ -941,7 +944,7 @@ app.post(
         new Date()
       ) {
         return res.status(400).json({
-          error: "El código venció",
+          error: "El c├│digo venci├│",
         });
       }
 
@@ -952,7 +955,7 @@ app.post(
 
       if (existingUser && !existingUser.isActive) {
         return res.status(403).json({
-          error: "Cuenta desactivada. Contactá al administrador.",
+          error: "Cuenta desactivada. Contact├í al administrador.",
         });
       }
       const verifiedUser =
@@ -1045,13 +1048,13 @@ await prisma.userSession.create({
       });
     } catch (error) {
       console.error(
-        "Error verificando código de email:",
+        "Error verificando c├│digo de email:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo verificar el código",
+          "No se pudo verificar el c├│digo",
       });
     }
   }
@@ -1085,13 +1088,13 @@ app.post(
       /* VIARANK_INACTIVE_AUTH_CHECK */
       if (session && !session.user.isActive) {
         return res.status(403).json({
-          error: "Cuenta desactivada. Contactá al administrador.",
+          error: "Cuenta desactivada. Contact├í al administrador.",
         });
       }
       if (!session) {
         return res.status(401).json({
           error:
-            "Sesión no válida",
+            "Sesi├│n no v├ílida",
         });
       }
 
@@ -1101,7 +1104,7 @@ app.post(
       ) {
         return res.status(401).json({
           error:
-            "Sesión no válida",
+            "Sesi├│n no v├ílida",
         });
       }
 
@@ -1136,13 +1139,13 @@ app.post(
       });
     } catch (error) {
       console.error(
-        "Error renovando sesión:",
+        "Error renovando sesi├│n:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo renovar la sesión",
+          "No se pudo renovar la sesi├│n",
       });
     }
   }
@@ -1190,13 +1193,13 @@ app.post(
       });
     } catch (error) {
       console.error(
-        "Error cerrando sesión:",
+        "Error cerrando sesi├│n:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo cerrar la sesión",
+          "No se pudo cerrar la sesi├│n",
       });
     }
   }
@@ -1311,7 +1314,7 @@ app.patch("/api/profile", async (req, res) => {
 
       if (!bothEmpty && !validDate) {
         return res.status(400).json({
-          error: "Ingresá un día y mes de cumpleaños válidos",
+          error: "Ingres├í un d├¡a y mes de cumplea├▒os v├ílidos",
         });
       }
     }
@@ -1329,19 +1332,19 @@ app.patch("/api/profile", async (req, res) => {
 
     if (!emailRegex.test(email)) {
       return res.status(400).json({
-        error: "Ingresá un email válido",
+        error: "Ingres├í un email v├ílido",
       });
     }
 
     if (sex !== "MALE" && sex !== "FEMALE") {
       return res.status(400).json({
-        error: "Seleccioná sexo",
+        error: "Seleccion├í sexo",
       });
     }
 
     if (newPin && !/^\d{4}$/.test(newPin)) {
       return res.status(400).json({
-        error: "El PIN debe tener exactamente 4 números",
+        error: "El PIN debe tener exactamente 4 n├║meros",
       });
     }
 
@@ -1353,7 +1356,7 @@ app.patch("/api/profile", async (req, res) => {
 
     if (emailOwner && emailOwner.id !== userId) {
       return res.status(409).json({
-        error: "Ese email ya está registrado",
+        error: "Ese email ya est├í registrado",
       });
     }
 
@@ -1428,14 +1431,14 @@ app.patch("/api/profile/picture", async (req, res) => {
     const picture = req.body?.picture;
 
     if (typeof picture !== "string") {
-      return res.status(400).json({ error: "Fotografía inválida" });
+      return res.status(400).json({ error: "Fotograf├¡a inv├ílida" });
     }
 
     const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(picture);
 
     if (!match || match[1].length > 400000) {
       return res.status(400).json({
-        error: "La fotografía debe ser JPEG y pesar menos de 300 KB",
+        error: "La fotograf├¡a debe ser JPEG y pesar menos de 300 KB",
       });
     }
 
@@ -1449,7 +1452,7 @@ app.patch("/api/profile/picture", async (req, res) => {
       bytes[2] !== 0xff
     ) {
       return res.status(400).json({
-        error: "La fotografía no es válida o supera el tamaño permitido",
+        error: "La fotograf├¡a no es v├ílida o supera el tama├▒o permitido",
       });
     }
 
@@ -1466,9 +1469,9 @@ app.patch("/api/profile/picture", async (req, res) => {
       profilePicture: user.customProfilePicture,
     });
   } catch (error) {
-    console.error("Error guardando fotografía:", error);
+    console.error("Error guardando fotograf├¡a:", error);
     return res.status(500).json({
-      error: "No se pudo guardar la fotografía",
+      error: "No se pudo guardar la fotograf├¡a",
     });
   }
 });
@@ -1501,7 +1504,7 @@ app.patch("/api/admin/users/:userId/status", async (req, res) => {
 
     if (userId === requesterId) {
       return res.status(403).json({
-        error: "No podés modificar tu propia cuenta",
+        error: "No pod├®s modificar tu propia cuenta",
       });
     }
 
@@ -1700,7 +1703,7 @@ app.get(
 
       return res.status(500).json({
         error:
-          "No se pudo comprobar la conexiÃ³n con Strava",
+          "No se pudo comprobar la conexi├â┬│n con Strava",
       });
     }
   }
@@ -1757,7 +1760,7 @@ app.get(
 );
 
 /* =========================================================
-   INTERCAMBIO DEL CÃ“DIGO DE STRAVA
+   INTERCAMBIO DEL C├âÔÇ£DIGO DE STRAVA
 ========================================================= */
 
 app.post(
@@ -1769,7 +1772,7 @@ app.post(
       if (!code) {
         return res.status(400).json({
           error:
-            "No se recibiÃ³ el cÃ³digo de Strava",
+            "No se recibi├â┬│ el c├â┬│digo de Strava",
         });
       }
 
@@ -1793,7 +1796,7 @@ app.post(
       }
 
       console.log(
-        "Intercambiando cÃ³digo con Strava..."
+        "Intercambiando c├â┬│digo con Strava..."
       );
 
       const response = await fetch(
@@ -1840,7 +1843,7 @@ app.post(
       if (!data.athlete) {
         return res.status(500).json({
           error:
-            "Strava no devolviÃ³ los datos del atleta",
+            "Strava no devolvi├â┬│ los datos del atleta",
         });
       }
 
@@ -2084,7 +2087,7 @@ app.get("/exchange_token", (req, res) => {
   const code = req.query.code;
 
   if (!code || typeof code !== "string") {
-    return res.status(400).send("No se recibió el código de Strava");
+    return res.status(400).send("No se recibi├│ el c├│digo de Strava");
   }
 
   return res.redirect(
@@ -2156,7 +2159,7 @@ app.post(
 
           return res.status(502).json({
             error:
-              "No se pudo revocar la autorizaciÃ³n en Strava",
+              "No se pudo revocar la autorizaci├â┬│n en Strava",
           });
         }
       }
@@ -2234,7 +2237,7 @@ app.delete(
       }
 
       // Intentar revocar el acceso de ViaRank en Strava.
-      // Si Strava falla, la eliminaciÃ³n local continÃºa.
+      // Si Strava falla, la eliminaci├â┬│n local contin├â┬║a.
       if (user.accessToken) {
         try {
           const credentials = Buffer.from(
@@ -2260,31 +2263,31 @@ const response = await fetch(
               await response.text();
 
             console.error(
-              "No se pudo revocar Strava durante la eliminaciÃ³n:",
+              "No se pudo revocar Strava durante la eliminaci├â┬│n:",
               data
             );
           }
         } catch (error) {
           console.error(
-            "Error comunicÃ¡ndose con Strava durante la eliminaciÃ³n:",
+            "Error comunic├â┬índose con Strava durante la eliminaci├â┬│n:",
             error
           );
         }
       }
 
       // Eliminar todos los datos de ViaRank
-      // dentro de una Ãºnica transacciÃ³n.
+      // dentro de una ├â┬║nica transacci├â┬│n.
       await prisma.$transaction(
         async (tx) => {
           // Grupos administrados por el usuario.
-          // Sus membresÃ­as se eliminan por Cascade.
+          // Sus membres├â┬¡as se eliminan por Cascade.
           await tx.sportGroup.deleteMany({
             where: {
               administratorId: userId,
             },
           });
 
-          // MembresÃ­as del usuario en otros grupos.
+          // Membres├â┬¡as del usuario en otros grupos.
           await tx.groupMember.deleteMany({
             where: {
               userId,
@@ -2373,7 +2376,7 @@ app.delete(
       if (requesterId === userId) {
         return res.status(400).json({
           error:
-            "No podÃ©s eliminar tu propia cuenta desde el panel de administraciÃ³n",
+            "No pod├â┬®s eliminar tu propia cuenta desde el panel de administraci├â┬│n",
         });
       }
 
@@ -2405,7 +2408,7 @@ app.delete(
       }
 
       // Intentar revocar el acceso del usuario en Strava.
-      // Si Strava falla, la eliminaciÃ³n local continÃºa.
+      // Si Strava falla, la eliminaci├â┬│n local contin├â┬║a.
       if (user.accessToken) {
         try {
           const credentials = Buffer.from(
@@ -2445,7 +2448,7 @@ const response = await fetch(
 
       await prisma.$transaction(
         async (tx) => {
-          // Si administra grupos, tambiÃ©n se eliminan.
+          // Si administra grupos, tambi├â┬®n se eliminan.
           const administeredGroups = await tx.sportGroup.count({
             where: { administratorId: userId },
           });
@@ -2454,7 +2457,7 @@ const response = await fetch(
             throw new Error("USER_ADMINISTERS_GROUPS");
           }
 
-          // Eliminar membresÃ­as.
+          // Eliminar membres├â┬¡as.
           await tx.groupMember.deleteMany({
             where: {
               userId,
@@ -2584,13 +2587,13 @@ async function refreshStravaToken(
     );
 
     throw new Error(
-      "Strava rechazÃ³ la renovaciÃ³n del token"
+      "Strava rechaz├â┬│ la renovaci├â┬│n del token"
     );
   }
 
   if (!data.access_token) {
     throw new Error(
-      "Strava no devolviÃ³ un nuevo access token"
+      "Strava no devolvi├â┬│ un nuevo access token"
     );
   }
 
@@ -2621,7 +2624,7 @@ async function refreshStravaToken(
 }
 
 /* =========================================================
-   OBTENER ACCESS TOKEN VÃLIDO
+   OBTENER ACCESS TOKEN V├â┬üLIDO
 ========================================================= */
 
 async function getValidStravaAccessToken(
@@ -2645,14 +2648,14 @@ async function getValidStravaAccessToken(
 
   if (!tokenNeedsRefresh) {
     console.log(
-      "Access Token todavÃ­a vÃ¡lido"
+      "Access Token todav├â┬¡a v├â┬ílido"
     );
 
     return user.accessToken;
   }
 
   console.log(
-    "Access Token vencido o prÃ³ximo a vencer"
+    "Access Token vencido o pr├â┬│ximo a vencer"
   );
 
   return await refreshStravaToken(
@@ -2912,7 +2915,7 @@ function calculateContinuousSpeedLimits(
 }
 /* =========================================================
    IMPORTAR TODAS LAS ACTIVIDADES DESDE STRAVA
-   PAGINACIÃ“N AUTOMÃTICA
+   PAGINACI├âÔÇ£N AUTOM├â┬üTICA
 ========================================================= */
 
 app.post(
@@ -2944,7 +2947,7 @@ if (!userId) {
       if (!user) {
         return res.status(404).json({
           error:
-            "No hay ningÃºn usuario conectado con Strava",
+            "No hay ning├â┬║n usuario conectado con Strava",
         });
       }
 
@@ -2960,7 +2963,7 @@ if (!userId) {
       if (!accessToken) {
         return res.status(401).json({
           error:
-            "No se pudo obtener un Access Token vÃ¡lido",
+            "No se pudo obtener un Access Token v├â┬ílido",
         });
       }
 const latestActivity =
@@ -2988,7 +2991,7 @@ const after =
 console.log(
   after
     ? `Sincronizando actividades posteriores a ${latestActivity?.startDate.toISOString()}`
-    : "Primera sincronización: importando historial completo"
+    : "Primera sincronizaci├│n: importando historial completo"
 );
       const allActivities: any[] =
         [];
@@ -2998,7 +3001,7 @@ console.log(
 
       while (true) {
         console.log(
-          `Pidiendo actividades a Strava - pÃ¡gina ${page}...`
+          `Pidiendo actividades a Strava - p├â┬ígina ${page}...`
         );
 
         const response =
@@ -3035,12 +3038,12 @@ console.log(
             .status(500)
             .json({
               error:
-                "Strava devolviÃ³ una respuesta inesperada",
+                "Strava devolvi├â┬│ una respuesta inesperada",
             });
         }
 
         console.log(
-          `PÃ¡gina ${page}: ${pageData.length} actividades`
+          `P├â┬ígina ${page}: ${pageData.length} actividades`
         );
 
         allActivities.push(
@@ -3058,7 +3061,7 @@ console.log(
       }
 
       console.log(
-        `Strava devolviÃ³ ${allActivities.length} actividades en total`
+        `Strava devolvi├â┬│ ${allActivities.length} actividades en total`
       );
 
       let imported = 0;
@@ -3417,7 +3420,7 @@ app.post(
 
       if (!userId) {
         return res.status(401).json({
-          error: "Sesión no válida",
+          error: "Sesi├│n no v├ílida",
         });
       }
 
@@ -3457,7 +3460,7 @@ app.post(
 
       if (!tiposValidos.includes(type)) {
         return res.status(400).json({
-          error: "Tipo de actividad no válido",
+          error: "Tipo de actividad no v├ílido",
         });
       }
 
@@ -3745,7 +3748,7 @@ app.get(
       if (userId !== requesterId) {
         if (!groupId) {
           return res.status(403).json({
-            error: "No tenés permiso para ver estas actividades",
+            error: "No ten├®s permiso para ver estas actividades",
           });
         }
 
@@ -3789,7 +3792,7 @@ const canView =
 
         if (!canView || !targetIsMember) {
           return res.status(403).json({
-            error: "No tenés permiso para ver estas actividades",
+            error: "No ten├®s permiso para ver estas actividades",
           });
         }
       }
@@ -4379,7 +4382,7 @@ app.get(
 ========================================================= */
 
 /* ---------------------------------------------------------
-   GENERAR CÃ“DIGO ÃšNICO DE GRUPO
+   GENERAR C├âÔÇ£DIGO ├â┼íNICO DE GRUPO
 --------------------------------------------------------- */
 
 async function generateUniqueJoinCode() {
@@ -4461,7 +4464,7 @@ if (!administratorId) {
   ) {
         return res.status(400).json({
           error:
-            "Deporte no vÃ¡lido",
+            "Deporte no v├â┬ílido",
         });
       }
 
@@ -4767,7 +4770,7 @@ if (isSuperAdmin) {
 );
 
 /* ---------------------------------------------------------
-   UNIRSE A UN GRUPO POR CÃ“DIGO
+   UNIRSE A UN GRUPO POR C├âÔÇ£DIGO
 --------------------------------------------------------- */
 
 app.post(
@@ -4790,7 +4793,7 @@ if (!userId) {
       if (!userId || !joinCode) {
         return res.status(400).json({
           error:
-            "Faltan usuario o cÃ³digo de grupo",
+            "Faltan usuario o c├â┬│digo de grupo",
         });
       }
 
@@ -4821,7 +4824,7 @@ if (!userId) {
       if (!group) {
         return res.status(404).json({
           error:
-            "CÃ³digo de grupo invÃ¡lido",
+            "C├â┬│digo de grupo inv├â┬ílido",
         });
       }
 
@@ -4862,7 +4865,7 @@ if (!userId) {
       });
     } catch (error) {
       console.error(
-        "Error uniÃ©ndose al grupo:",
+        "Error uni├â┬®ndose al grupo:",
         error
       );
 
@@ -5128,7 +5131,7 @@ const memberIds =
                 b.movingTime * 1000
             );
 
-            // Deben ser del mismo día
+            // Deben ser del mismo d├¡a
             const sameDay =
               aStart.getFullYear() === bStart.getFullYear() &&
               aStart.getMonth() === bStart.getMonth() &&
@@ -5136,7 +5139,7 @@ const memberIds =
 
             if (!sameDay) continue;
 
-            // Detectar superposición total o parcial
+            // Detectar superposici├│n total o parcial
             const overlaps =
               aStart < bEnd &&
               bStart < aEnd;
@@ -5576,7 +5579,7 @@ app.patch(
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenés permiso para administrar este grupo",
+            "No ten├®s permiso para administrar este grupo",
         });
       }
 
@@ -5596,7 +5599,7 @@ app.patch(
           visibility !== "PRIVATE"
         ) {
           return res.status(400).json({
-            error: "Visibilidad inválida",
+            error: "Visibilidad inv├ílida",
           });
         }
 
@@ -5614,7 +5617,7 @@ app.patch(
         ) {
           return res.status(400).json({
             error:
-              "Velocidad de referencia inválida",
+              "Velocidad de referencia inv├ílida",
           });
         }
 
@@ -5632,7 +5635,7 @@ app.patch(
           )
         ) {
           return res.status(400).json({
-            error: "Velocidad mínima inválida",
+            error: "Velocidad m├¡nima inv├ílida",
           });
         }
 
@@ -5648,7 +5651,7 @@ app.patch(
           )
         ) {
           return res.status(400).json({
-            error: "Tiempo máximo inválido",
+            error: "Tiempo m├íximo inv├ílido",
           });
         }
 
@@ -5678,7 +5681,7 @@ app.patch(
         effectiveMinSpeed >= effectiveMaxSpeed
       ) {
         return res.status(400).json({
-          error: "La velocidad mínima debe ser menor que la máxima.",
+          error: "La velocidad m├¡nima debe ser menor que la m├íxima.",
         });
       }
       if (description !== undefined) {
@@ -5786,7 +5789,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "Debés indicar al menos una actividad",
+            "Deb├®s indicar al menos una actividad",
         });
       }
 
@@ -5798,7 +5801,7 @@ app.post(
       if (uniqueActivityIds.length < 1) {
         return res.status(400).json({
           error:
-            "Debés indicar al menos una actividad",
+            "Deb├®s indicar al menos una actividad",
         });
       }
 
@@ -5808,7 +5811,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "Debés resolver un solo caso VAR por vez",
+            "Deb├®s resolver un solo caso VAR por vez",
         });
       }
 
@@ -5896,7 +5899,7 @@ app.post(
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenés permiso para administrar este grupo",
+            "No ten├®s permiso para administrar este grupo",
         });
       }
 
@@ -5923,7 +5926,7 @@ app.post(
       ) {
         return res.status(404).json({
           error:
-            "Una o más actividades no fueron encontradas",
+            "Una o m├ís actividades no fueron encontradas",
         });
       }
 
@@ -6049,7 +6052,7 @@ app.post(
       if (resolutionPairActivities.length !== 2) {
         return res.status(404).json({
           error:
-            "Una o más actividades del caso VAR no fueron encontradas",
+            "Una o m├ís actividades del caso VAR no fueron encontradas",
         });
       }
 
@@ -6129,7 +6132,7 @@ app.post(
       if (existingActivePenalties.length > 0) {
         return res.status(409).json({
           error:
-            "La penalización ya fue aplicada",
+            "La penalizaci├│n ya fue aplicada",
         });
       }
 
@@ -6211,7 +6214,7 @@ app.post(
       return res.json({
         success: true,
         message:
-          "Penalización aplicada",
+          "Penalizaci├│n aplicada",
         rankingDistanceKm: 0.01,
         appliedAt,
         activityIds:
@@ -6222,13 +6225,13 @@ app.post(
       });
     } catch (error) {
       console.error(
-        "Error aplicando penalización VAR:",
+        "Error aplicando penalizaci├│n VAR:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo aplicar la penalización",
+          "No se pudo aplicar la penalizaci├│n",
       });
     }
   }
@@ -6260,7 +6263,7 @@ async function verificarAccesoInscripcion(
   });
 
   if (group.administratorId !== userId && !membership) {
-    return { error: "No pertenecés a este grupo", code: 403 };
+    return { error: "No pertenec├®s a este grupo", code: 403 };
   }
 
   const event = await prisma.groupEvent.findFirst({
@@ -6283,7 +6286,7 @@ async function verificarAccesoInscripcion(
 app.get("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res) => {
   try {
     const userId = getAuthenticatedUserId(req);
-    if (!userId) return res.status(401).json({ error: "Debés iniciar sesión" });
+    if (!userId) return res.status(401).json({ error: "Deb├®s iniciar sesi├│n" });
 
     const { groupId, eventId } = req.params;
     const access = await verificarAccesoInscripcion(groupId, eventId, userId);
@@ -6299,15 +6302,15 @@ app.get("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res
 
     return res.json({ registered: Boolean(registration), registration });
   } catch (error) {
-    console.error("Error consultando inscripción:", error);
-    return res.status(500).json({ error: "No se pudo consultar la inscripción" });
+    console.error("Error consultando inscripci├│n:", error);
+    return res.status(500).json({ error: "No se pudo consultar la inscripci├│n" });
   }
 });
 
 app.post("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res) => {
   try {
     const userId = getAuthenticatedUserId(req);
-    if (!userId) return res.status(401).json({ error: "Debés iniciar sesión" });
+    if (!userId) return res.status(401).json({ error: "Deb├®s iniciar sesi├│n" });
 
     const { groupId, eventId } = req.params;
     const access = await verificarAccesoInscripcion(groupId, eventId, userId);
@@ -6321,15 +6324,15 @@ app.post("/api/groups/:groupId/events/:eventId/registrations/me", async (req, re
     }
 
     if (access.event.publicationStatus !== "PUBLISHED") {
-      return res.status(400).json({ error: "El evento todavía no está publicado" });
+      return res.status(400).json({ error: "El evento todav├¡a no est├í publicado" });
     }
 
     if (access.event.status === "SUSPENDED") {
-      return res.status(400).json({ error: "No podés inscribirte en un evento suspendido" });
+      return res.status(400).json({ error: "No pod├®s inscribirte en un evento suspendido" });
     }
 
     if (req.body?.acceptedTerms !== true) {
-      return res.status(400).json({ error: "Debés aceptar las condiciones del evento" });
+      return res.status(400).json({ error: "Deb├®s aceptar las condiciones del evento" });
     }
 
     const registration = await prisma.groupEventRegistration.upsert({
@@ -6348,14 +6351,14 @@ app.post("/api/groups/:groupId/events/:eventId/registrations/me", async (req, re
     return res.json({ registered: true, registration });
   } catch (error) {
     console.error("Error inscribiendo atleta:", error);
-    return res.status(500).json({ error: "No se pudo completar la inscripción" });
+    return res.status(500).json({ error: "No se pudo completar la inscripci├│n" });
   }
 });
 
 app.delete("/api/groups/:groupId/events/:eventId/registrations/me", async (req, res) => {
   try {
     const userId = getAuthenticatedUserId(req);
-    if (!userId) return res.status(401).json({ error: "Debés iniciar sesión" });
+    if (!userId) return res.status(401).json({ error: "Deb├®s iniciar sesi├│n" });
 
     const { groupId, eventId } = req.params;
     const access = await verificarAccesoInscripcion(groupId, eventId, userId);
@@ -6370,8 +6373,8 @@ app.delete("/api/groups/:groupId/events/:eventId/registrations/me", async (req, 
 
     return res.json({ registered: false });
   } catch (error) {
-    console.error("Error cancelando inscripción:", error);
-    return res.status(500).json({ error: "No se pudo cancelar la inscripción" });
+    console.error("Error cancelando inscripci├│n:", error);
+    return res.status(500).json({ error: "No se pudo cancelar la inscripci├│n" });
   }
 });
 
@@ -6384,7 +6387,7 @@ app.get("/api/groups/:groupId/events/:eventId/registrations", async (req, res) =
     const userId = getAuthenticatedUserId(req);
 
     if (!userId) {
-      return res.status(401).json({ error: "Debés iniciar sesión" });
+      return res.status(401).json({ error: "Deb├®s iniciar sesi├│n" });
     }
 
     const { groupId, eventId } = req.params;
@@ -6569,14 +6572,14 @@ app.post(
 
       if (!canCreateEvent) {
         return res.status(403).json({
-          error: "No tenés permiso para crear eventos en este grupo",
+          error: "No ten├®s permiso para crear eventos en este grupo",
         });
       }
 
       if (!title || !eventDate || !departureTime || !meetingPlace) {
         return res.status(400).json({
           error:
-            "Título, fecha, hora de salida y lugar de encuentro son obligatorios",
+            "T├¡tulo, fecha, hora de salida y lugar de encuentro son obligatorios",
         });
       }
 
@@ -6584,16 +6587,16 @@ app.post(
 
       if (Number.isNaN(parsedDate.getTime())) {
         return res.status(400).json({
-          error: "La fecha del evento no es válida",
+          error: "La fecha del evento no es v├ílida",
         });
       }
 
       const validStatuses = ["CONFIRMED", "EVALUATING", "SUSPENDED"];
       if (status !== undefined && !validStatuses.includes(status)) {
-        return res.status(400).json({ error: "Estado del evento inválido" });
+        return res.status(400).json({ error: "Estado del evento inv├ílido" });
       }
       if (details != null && (typeof details !== "object" || Array.isArray(details))) {
-        return res.status(400).json({ error: "Datos del recorrido inválidos" });
+        return res.status(400).json({ error: "Datos del recorrido inv├ílidos" });
       }
       const cleanDetails = details && typeof details === "object" ? {
         routeDescription: typeof details.routeDescription === "string" ? details.routeDescription.slice(0, 3000) : "",
@@ -6660,7 +6663,7 @@ app.post(
   }
 );
 
-/* Edición, publicación y eliminación de eventos: permisos verificados en el servidor. */
+/* Edici├│n, publicaci├│n y eliminaci├│n de eventos: permisos verificados en el servidor. */
 async function canManageGroupEvents(groupId: string, userId: string, eventId?: string) {
   const [group, user, membership] = await Promise.all([
     prisma.sportGroup.findUnique({ where: { id: groupId }, select: { administratorId: true } }),
@@ -6707,7 +6710,7 @@ app.patch("/api/groups/:groupId/events/:eventId", async (req, res) => {
     const { groupId, eventId } = req.params;
     const userId = getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
-    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No tenés permiso para editar eventos" });
+    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No ten├®s permiso para editar eventos" });
     const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId } });
     if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
 
@@ -6716,11 +6719,11 @@ app.patch("/api/groups/:groupId/events/:eventId", async (req, res) => {
       const campos = Object.keys(req.body ?? {});
       if (campos.length !== 1 || campos[0] !== "status") {
         return res.status(409).json({
-          error: "El evento ya está publicado. Solo podés cambiar su estado. Para modificar la salida, suspendé el evento y creá uno nuevo."
+          error: "El evento ya est├í publicado. Solo pod├®s cambiar su estado. Para modificar la salida, suspend├® el evento y cre├í uno nuevo."
         });
       }
       if (!["CONFIRMED", "EVALUATING", "SUSPENDED"].includes(req.body.status)) {
-        return res.status(400).json({ error: "Estado inválido" });
+        return res.status(400).json({ error: "Estado inv├ílido" });
       }
       const event = await prisma.groupEvent.update({
         where: { id: eventId },
@@ -6734,7 +6737,7 @@ app.patch("/api/groups/:groupId/events/:eventId", async (req, res) => {
     for (const field of stringFields) {
       if (Object.prototype.hasOwnProperty.call(req.body, field)) {
         const value = req.body[field];
-        if (value !== null && typeof value !== "string") return res.status(400).json({ error: `Campo ${field} inválido` });
+        if (value !== null && typeof value !== "string") return res.status(400).json({ error: `Campo ${field} inv├ílido` });
         if (["title", "departureTime", "meetingPlace"].includes(field) && (!value || !value.trim())) {
           return res.status(400).json({ error: `Campo ${field} obligatorio` });
         }
@@ -6743,24 +6746,24 @@ app.patch("/api/groups/:groupId/events/:eventId", async (req, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "eventDate")) {
       const parsed = new Date(req.body.eventDate);
-      if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: "Fecha inválida" });
+      if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: "Fecha inv├ílida" });
       data.eventDate = parsed;
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
-      if (!["CONFIRMED", "EVALUATING", "SUSPENDED"].includes(req.body.status)) return res.status(400).json({ error: "Estado inválido" });
+      if (!["CONFIRMED", "EVALUATING", "SUSPENDED"].includes(req.body.status)) return res.status(400).json({ error: "Estado inv├ílido" });
       data.status = req.body.status;
     }
     for (const field of ["weatherLatitude", "weatherLongitude"] as const) {
       if (Object.prototype.hasOwnProperty.call(req.body, field)) {
         const v = req.body[field];
         const limit = field === "weatherLatitude" ? 90 : 180;
-        if (v !== null && (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit)) return res.status(400).json({ error: `Coordenada ${field} inválida` });
+        if (v !== null && (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit)) return res.status(400).json({ error: `Coordenada ${field} inv├ílida` });
         data[field] = v;
       }
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "details")) {
       const details = req.body.details;
-      if (details !== null && (typeof details !== "object" || Array.isArray(details))) return res.status(400).json({ error: "Detalles inválidos" });
+      if (details !== null && (typeof details !== "object" || Array.isArray(details))) return res.status(400).json({ error: "Detalles inv├ílidos" });
       // Conservar las inscripciones: solo se actualizan los campos del evento.
       data.details = details === null ? Prisma.DbNull : {
         routeDescription: typeof details.routeDescription === "string" ? details.routeDescription.slice(0, 3000) : "",
@@ -6792,15 +6795,15 @@ app.patch("/api/groups/:groupId/events/:eventId/publication", async (req, res) =
     const { groupId, eventId } = req.params;
     const userId = getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
-    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No tenés permiso para publicar eventos" });
-    if (!["DRAFT", "PUBLISHED"].includes(req.body.publicationStatus)) return res.status(400).json({ error: "Publicación inválida" });
+    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No ten├®s permiso para publicar eventos" });
+    if (!["DRAFT", "PUBLISHED"].includes(req.body.publicationStatus)) return res.status(400).json({ error: "Publicaci├│n inv├ílida" });
     const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId }, select: { id: true } });
     if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
     const event = await prisma.groupEvent.update({ where: { id: eventId }, data: { publicationStatus: req.body.publicationStatus } });
     return res.json({ success: true, event });
   } catch (error) {
     console.error("Error publicando evento:", error);
-    return res.status(500).json({ error: "No se pudo cambiar la publicación" });
+    return res.status(500).json({ error: "No se pudo cambiar la publicaci├│n" });
   }
 });
 
@@ -6809,7 +6812,7 @@ app.delete("/api/groups/:groupId/events/:eventId", async (req, res) => {
     const { groupId, eventId } = req.params;
     const userId = getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
-    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No tenés permiso para eliminar eventos" });
+    if (!(await canManageGroupEvents(groupId, userId, eventId))) return res.status(403).json({ error: "No ten├®s permiso para eliminar eventos" });
     const existing = await prisma.groupEvent.findFirst({ where: { id: eventId, groupId }, select: { id: true } });
     if (!existing) return res.status(404).json({ error: "Evento no encontrado" });
     await prisma.groupEvent.delete({ where: { id: eventId } });
@@ -6847,7 +6850,7 @@ app.get("/api/groups/:groupId/event-templates", async (req, res) => {
     });
 
     if (group.administratorId !== userId && !membership) {
-      return res.status(403).json({ error: "No pertenecés a este grupo" });
+      return res.status(403).json({ error: "No pertenec├®s a este grupo" });
     }
 
     const templates = await prisma.groupEventTemplate.findMany({
@@ -6902,7 +6905,7 @@ app.post("/api/groups/:groupId/event-templates", async (req, res) => {
 
     if (!authorized) {
       return res.status(403).json({
-        error: "No tenés permiso para guardar salidas habituales",
+        error: "No ten├®s permiso para guardar salidas habituales",
       });
     }
 
@@ -7015,7 +7018,7 @@ if (!administratorId) {
       if (!canDelete) {
         return res.status(403).json({
           error:
-            "No tenÃ©s permiso para eliminar este grupo",
+            "No ten├â┬®s permiso para eliminar este grupo",
         });
       }
 
@@ -7470,7 +7473,7 @@ if (!requesterId) {
       if (!canManage) {
         return res.status(403).json({
           error:
-            "No tenÃ©s permiso para quitar miembros de este grupo",
+            "No ten├â┬®s permiso para quitar miembros de este grupo",
         });
       }
 
@@ -7559,7 +7562,7 @@ app.patch(
 
       if (typeof canCreateEvents !== "boolean") {
         return res.status(400).json({
-          error: "Permiso de eventos inválido",
+          error: "Permiso de eventos inv├ílido",
         });
       }
 
@@ -7580,7 +7583,7 @@ app.patch(
       if (group.administratorId !== requesterId) {
         return res.status(403).json({
           error:
-            "Solo el administrador del grupo puede autorizar la creación de eventos",
+            "Solo el administrador del grupo puede autorizar la creaci├│n de eventos",
         });
       }
 
@@ -8541,7 +8544,7 @@ app.get(
       if (!administration) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar esta empresa",
+            "No ten├®s permisos para administrar esta empresa",
         });
       }
 
@@ -8623,14 +8626,14 @@ app.post(
       if (!administration) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar esta empresa",
+            "No ten├®s permisos para administrar esta empresa",
         });
       }
 
       if (!hasTravelCompanyOperationalAccess(administration.company)) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para crear viajes",
+            "La empresa no est├í habilitada para crear viajes",
         });
       }
 
@@ -8659,7 +8662,7 @@ app.post(
       if (!normalizedTitle) {
         return res.status(400).json({
           error:
-            "El título del viaje es obligatorio",
+            "El t├¡tulo del viaje es obligatorio",
         });
       }
 
@@ -8758,13 +8761,13 @@ app.patch(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar la configuración general de este viaje",
+            "No ten├®s permisos para administrar la configuraci├│n general de este viaje",
         });
       }
       if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -8838,7 +8841,7 @@ app.patch(
       if (!normalizedTitle) {
         return res.status(400).json({
           error:
-            "El título del viaje es obligatorio",
+            "El t├¡tulo del viaje es obligatorio",
         });
       }
 
@@ -8868,32 +8871,32 @@ app.patch(
       ) {
         return res.status(400).json({
           error:
-            "Los valores numéricos deben ser válidos y no negativos",
+            "Los valores num├®ricos deben ser v├ílidos y no negativos",
         });
       }
 
       if (normalizedDays !== null && !Number.isInteger(normalizedDays)) {
         return res.status(400).json({
-          error: "Los días deben ser un número entero",
+          error: "Los d├¡as deben ser un n├║mero entero",
         });
       }
 
       if (normalizedNights !== null && !Number.isInteger(normalizedNights)) {
         return res.status(400).json({
-          error: "Las noches deben ser un número entero",
+          error: "Las noches deben ser un n├║mero entero",
         });
       }
 
       if (normalizedCapacity !== null && !Number.isInteger(normalizedCapacity)) {
         return res.status(400).json({
-          error: "La capacidad debe ser un número entero",
+          error: "La capacidad debe ser un n├║mero entero",
         });
       }
 
       if (!Number.isInteger(normalizedExternalReserved)) {
         return res.status(400).json({
           error:
-            "Las reservas externas deben ser un número entero",
+            "Las reservas externas deben ser un n├║mero entero",
         });
       }
 
@@ -8922,7 +8925,7 @@ app.patch(
         Number.isNaN(normalizedStartDate.getTime())
       ) {
         return res.status(400).json({
-          error: "La fecha de inicio no es válida",
+          error: "La fecha de inicio no es v├ílida",
         });
       }
 
@@ -8931,7 +8934,7 @@ app.patch(
         Number.isNaN(normalizedEndDate.getTime())
       ) {
         return res.status(400).json({
-          error: "La fecha de finalización no es válida",
+          error: "La fecha de finalizaci├│n no es v├ílida",
         });
       }
 
@@ -8942,7 +8945,7 @@ app.patch(
       ) {
         return res.status(400).json({
           error:
-            "La fecha de finalización no puede ser anterior a la fecha de inicio",
+            "La fecha de finalizaci├│n no puede ser anterior a la fecha de inicio",
         });
       }
 
@@ -9050,7 +9053,7 @@ app.get(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para acceder a este viaje",
+            "No ten├®s permisos para acceder a este viaje",
         });
       }
 
@@ -9308,13 +9311,13 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar la configuración general de este viaje",
+            "No ten├®s permisos para administrar la configuraci├│n general de este viaje",
         });
       }
       if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -9326,7 +9329,7 @@ app.put(
       if (!modules) {
         return res.status(400).json({
           error:
-            "Debés enviar una lista de módulos",
+            "Deb├®s enviar una lista de m├│dulos",
         });
       }
 
@@ -9367,7 +9370,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              `Módulo inválido: ${type || "(vacío)"}`,
+              `M├│dulo inv├ílido: ${type || "(vac├¡o)"}`,
           });
         }
 
@@ -9377,7 +9380,7 @@ app.put(
         if (receivedTypes.has(type)) {
           return res.status(400).json({
             error:
-              `El módulo ${type} está repetido`,
+              `El m├│dulo ${type} est├í repetido`,
           });
         }
 
@@ -9441,7 +9444,7 @@ app.put(
 
       return res.status(500).json({
         error:
-          "No se pudieron actualizar los módulos del viaje",
+          "No se pudieron actualizar los m├│dulos del viaje",
       });
     }
   }
@@ -9504,7 +9507,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar los recorridos y actividades de este viaje",
+            "No ten├®s permisos para administrar los recorridos y actividades de este viaje",
         });
       }
 
@@ -9515,7 +9518,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -9527,7 +9530,7 @@ app.put(
       if (!activities) {
         return res.status(400).json({
           error:
-            "Debés enviar una lista de recorridos y actividades",
+            "Deb├®s enviar una lista de recorridos y actividades",
         });
       }
 
@@ -9629,7 +9632,7 @@ app.put(
         if (!validCategories.has(category)) {
           return res.status(400).json({
             error:
-              `Categoría inválida en la actividad ${index + 1}`,
+              `Categor├¡a inv├ílida en la actividad ${index + 1}`,
           });
         }
 
@@ -9638,7 +9641,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              `Tipo de programación inválido en la actividad ${index + 1}`,
+              `Tipo de programaci├│n inv├ílido en la actividad ${index + 1}`,
           });
         }
 
@@ -9652,7 +9655,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              `Estado de inclusión inválido en la actividad ${index + 1}`,
+              `Estado de inclusi├│n inv├ílido en la actividad ${index + 1}`,
           });
         }
 
@@ -9696,7 +9699,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              `El día de la actividad ${index + 1} debe ser un número entero mayor que cero`,
+              `El d├¡a de la actividad ${index + 1} debe ser un n├║mero entero mayor que cero`,
           });
         }
 
@@ -9706,16 +9709,16 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              `El orden de la actividad ${index + 1} no es válido`,
+              `El orden de la actividad ${index + 1} no es v├ílido`,
           });
         }
 
         const nonNegativeValues = [
           ["distancia", distanceKm],
-          ["duración", durationMinutes],
+          ["duraci├│n", durationMinutes],
           ["tiempo activo", activeMinutes],
           ["desnivel", elevationGain],
-          ["altitud máxima", maxAltitude],
+          ["altitud m├íxima", maxAltitude],
         ];
 
         for (const [label, value] of nonNegativeValues) {
@@ -9747,7 +9750,7 @@ app.put(
           ) {
             return res.status(400).json({
               error:
-                `La fecha de la actividad ${index + 1} no es válida`,
+                `La fecha de la actividad ${index + 1} no es v├ílida`,
             });
           }
 
@@ -10023,7 +10026,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "Una misma actividad fue enviada más de una vez",
+            "Una misma actividad fue enviada m├ís de una vez",
         });
       }
 
@@ -10053,7 +10056,7 @@ app.put(
 
         return res.status(400).json({
           error:
-            `El orden del requisito ${requirement} de la actividad ${activity} no es válido`,
+            `El orden del requisito ${requirement} de la actividad ${activity} no es v├ílido`,
         });
       }
 
@@ -10070,7 +10073,7 @@ app.put(
   }
 );
 /* =========================================================
-   VIARANK VIAJES - ALIMENTACIÓN Y VIABREAK
+   VIARANK VIAJES - ALIMENTACI├ôN Y VIABREAK
 ========================================================= */
 
 app.put(
@@ -10126,7 +10129,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar la alimentación de este viaje",
+            "No ten├®s permisos para administrar la alimentaci├│n de este viaje",
         });
       }
 
@@ -10137,7 +10140,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -10149,7 +10152,7 @@ app.put(
       if (!meals) {
         return res.status(400).json({
           error:
-            "Debés enviar una lista de comidas",
+            "Deb├®s enviar una lista de comidas",
         });
       }
 
@@ -10221,7 +10224,7 @@ app.put(
         if (!validMealTypes.has(type)) {
           return res.status(400).json({
             error:
-              `El tipo de comida ${index + 1} no es válido`,
+              `El tipo de comida ${index + 1} no es v├ílido`,
           });
         }
 
@@ -10234,7 +10237,7 @@ app.put(
         if (!validStatuses.has(status)) {
           return res.status(400).json({
             error:
-              `El estado de la comida ${index + 1} no es válido`,
+              `El estado de la comida ${index + 1} no es v├ílido`,
           });
         }
 
@@ -10254,7 +10257,7 @@ app.put(
           ) {
             return res.status(400).json({
               error:
-                `El día de la comida ${index + 1} no es válido`,
+                `El d├¡a de la comida ${index + 1} no es v├ílido`,
             });
           }
 
@@ -10274,7 +10277,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              `El orden de la comida ${index + 1} no es válido`,
+              `El orden de la comida ${index + 1} no es v├ílido`,
           });
         }
 
@@ -10343,7 +10346,7 @@ app.put(
         if (invalidActivityId) {
           return res.status(400).json({
             error:
-              "Una de las actividades asociadas a la alimentación no pertenece a este viaje",
+              "Una de las actividades asociadas a la alimentaci├│n no pertenece a este viaje",
           });
         }
       }
@@ -10487,18 +10490,18 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "Una misma comida fue enviada más de una vez",
+            "Una misma comida fue enviada m├ís de una vez",
         });
       }
 
       console.error(
-        "Error actualizando alimentación del viaje:",
+        "Error actualizando alimentaci├│n del viaje:",
         error
       );
 
       return res.status(500).json({
         error:
-          "No se pudo actualizar la alimentación del viaje",
+          "No se pudo actualizar la alimentaci├│n del viaje",
       });
     }
   }
@@ -10558,14 +10561,14 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar el alojamiento de este viaje",
+            "No ten├®s permisos para administrar el alojamiento de este viaje",
         });
       }
 
       if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -10577,7 +10580,7 @@ app.put(
       if (!accommodations) {
         return res.status(400).json({
           error:
-            "Debés enviar una lista de alojamientos",
+            "Deb├®s enviar una lista de alojamientos",
         });
       }
 
@@ -10658,7 +10661,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "Los valores del alojamiento deben ser válidos y no negativos",
+              "Los valores del alojamiento deben ser v├ílidos y no negativos",
           });
         }
 
@@ -10668,7 +10671,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "Las noches deben ser un número entero",
+              "Las noches deben ser un n├║mero entero",
           });
         }
 
@@ -10678,7 +10681,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "La capacidad del alojamiento debe ser un número entero",
+              "La capacidad del alojamiento debe ser un n├║mero entero",
           });
         }
 
@@ -10821,14 +10824,14 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar el transporte de este viaje",
+            "No ten├®s permisos para administrar el transporte de este viaje",
         });
       }
 
       if (!hasTravelCompanyOperationalAccess(existingTrip.company)) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -10879,7 +10882,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "Los valores de transporte deben ser válidos y no negativos",
+            "Los valores de transporte deben ser v├ílidos y no negativos",
         });
       }
 
@@ -10889,7 +10892,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "La capacidad de pasajeros debe ser un número entero",
+            "La capacidad de pasajeros debe ser un n├║mero entero",
         });
       }
 
@@ -10899,7 +10902,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "La capacidad de bicicletas debe ser un número entero",
+            "La capacidad de bicicletas debe ser un n├║mero entero",
         });
       }
 
@@ -11034,7 +11037,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar los transfers de este viaje",
+            "No ten├®s permisos para administrar los transfers de este viaje",
         });
       }
 
@@ -11051,7 +11054,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -11120,7 +11123,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "Los valores de los transfers deben ser válidos y no negativos",
+            "Los valores de los transfers deben ser v├ílidos y no negativos",
         });
       }
 
@@ -11352,7 +11355,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar el equipamiento de este viaje",
+            "No ten├®s permisos para administrar el equipamiento de este viaje",
         });
       }
 
@@ -11363,7 +11366,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "La empresa no está habilitada para editar viajes",
+            "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -11381,7 +11384,7 @@ app.put(
       if (!equipment) {
         return res.status(400).json({
           error:
-            "Debés enviar una lista de equipamiento",
+            "Deb├®s enviar una lista de equipamiento",
         });
       }
 
@@ -11489,7 +11492,7 @@ app.put(
           ) {
             return res.status(400).json({
               error:
-                `La cantidad disponible del equipamiento ${index + 1} no es válida`,
+                `La cantidad disponible del equipamiento ${index + 1} no es v├ílida`,
             });
           }
         }
@@ -11513,7 +11516,7 @@ app.put(
           ) {
             return res.status(400).json({
               error:
-                `El precio del equipamiento ${index + 1} no es válido`,
+                `El precio del equipamiento ${index + 1} no es v├ílido`,
             });
           }
         }
@@ -11536,7 +11539,7 @@ app.put(
           ) {
             return res.status(400).json({
               error:
-                `El orden del equipamiento ${index + 1} no es válido`,
+                `El orden del equipamiento ${index + 1} no es v├ílido`,
             });
           }
         }
@@ -11733,7 +11736,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permisos para administrar el seguro de este viaje",
+            "No ten├®s permisos para administrar el seguro de este viaje",
         });
       }
 
@@ -11800,7 +11803,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "La vigencia del seguro contiene una fecha inválida",
+            "La vigencia del seguro contiene una fecha inv├ílida",
         });
       }
 
@@ -11834,7 +11837,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "El valor del seguro no es válido",
+              "El valor del seguro no es v├ílido",
           });
         }
       }
@@ -12008,7 +12011,7 @@ app.put(
 
       if (!tripId) {
         return res.status(400).json({
-          error: "Viaje inválido.",
+          error: "Viaje inv├ílido.",
         });
       }
 
@@ -12043,7 +12046,7 @@ app.put(
       ) {
         return res.status(403).json({
           error:
-            "No tenés permiso para administrar precios y condiciones.",
+            "No ten├®s permiso para administrar precios y condiciones.",
         });
       }
 
@@ -12074,7 +12077,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "El valor del viaje debe ser un número no negativo.",
+            "El valor del viaje debe ser un n├║mero no negativo.",
         });
       }
 
@@ -12092,7 +12095,7 @@ app.put(
       if (!pricingMode) {
         return res.status(400).json({
           error:
-            "La modalidad de precio es inválida.",
+            "La modalidad de precio es inv├ílida.",
         });
       }
 
@@ -12122,7 +12125,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "La modalidad para asegurar la reserva es inválida.",
+            "La modalidad para asegurar la reserva es inv├ílida.",
         });
       }
 
@@ -12149,7 +12152,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "La seña fija debe ser mayor que cero.",
+              "La se├▒a fija debe ser mayor que cero.",
           });
         }
 
@@ -12159,7 +12162,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "La seña fija no puede superar el valor del viaje.",
+              "La se├▒a fija no puede superar el valor del viaje.",
           });
         }
 
@@ -12185,7 +12188,7 @@ app.put(
         ) {
           return res.status(400).json({
             error:
-              "El porcentaje de seña debe ser mayor que 0 y no superar 100.",
+              "El porcentaje de se├▒a debe ser mayor que 0 y no superar 100.",
           });
         }
 
@@ -12217,7 +12220,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "Las políticas de cancelación del participante, clima/fuerza mayor y cancelación de la empresa son obligatorias.",
+            "Las pol├¡ticas de cancelaci├│n del participante, clima/fuerza mayor y cancelaci├│n de la empresa son obligatorias.",
         });
       }
 
@@ -12247,7 +12250,7 @@ app.put(
       ) {
         return res.status(400).json({
           error:
-            "El método y la descripción de actualización del saldo son obligatorios.",
+            "El m├®todo y la descripci├│n de actualizaci├│n del saldo son obligatorios.",
         });
       }
 
@@ -12255,25 +12258,25 @@ app.put(
         `Valor del viaje: ${basePrice}`,
         reservationPaymentMode ===
         "FIXED_DEPOSIT"
-          ? `Reserva: seña fija de ${depositValue}`
+          ? `Reserva: se├▒a fija de ${depositValue}`
           : reservationPaymentMode ===
               "PERCENTAGE_DEPOSIT"
-            ? `Reserva: seña del ${depositPercentage}%`
+            ? `Reserva: se├▒a del ${depositPercentage}%`
             : "Reserva: pago total",
         "",
-        "Cancelación del participante:",
+        "Cancelaci├│n del participante:",
         participantCancellationPolicy,
         "",
         "Clima, seguridad o fuerza mayor:",
         weatherPolicy,
         "",
-        "Cancelación por parte de la empresa:",
+        "Cancelaci├│n por parte de la empresa:",
         companyCancellationPolicy,
         ...(pricingMode ===
           "FIXED_DEPOSIT_ADJUSTABLE_BALANCE"
           ? [
               "",
-              "Actualización del saldo:",
+              "Actualizaci├│n del saldo:",
               adjustmentMethod,
               adjustmentDescription,
             ]
@@ -12383,7 +12386,7 @@ app.put(
   }
 );
 /* =========================================================
-   VIARANK VIAJES - INSCRIPCIÓN / RESERVA DEL PARTICIPANTE
+   VIARANK VIAJES - INSCRIPCI├ôN / RESERVA DEL PARTICIPANTE
 ========================================================= */
 
 app.post(
@@ -12402,7 +12405,7 @@ app.post(
 
       if (!tripId) {
         return res.status(400).json({
-          error: "Viaje inválido.",
+          error: "Viaje inv├ílido.",
         });
       }
 
@@ -12489,7 +12492,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "La fecha de nacimiento no es válida.",
+            "La fecha de nacimiento no es v├ílida.",
         });
       }
 
@@ -12506,7 +12509,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "La elección de transporte de pasajero no es válida.",
+            "La elecci├│n de transporte de pasajero no es v├ílida.",
         });
       }
 
@@ -12525,7 +12528,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "La elección de transporte de bicicleta no es válida.",
+            "La elecci├│n de transporte de bicicleta no es v├ílida.",
         });
       }
 
@@ -12543,7 +12546,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "La fecha de llegada no es válida.",
+            "La fecha de llegada no es v├ílida.",
         });
       }
 
@@ -12561,7 +12564,7 @@ app.post(
       ) {
         return res.status(400).json({
           error:
-            "La fecha de salida no es válida.",
+            "La fecha de salida no es v├ílida.",
         });
       }
 
@@ -12827,7 +12830,7 @@ app.post(
               return {
                 type: "INVALID_EXTRA" as const,
                 error:
-                  "La opción de alojamiento privado no está disponible.",
+                  "La opci├│n de alojamiento privado no est├í disponible.",
               };
             }
 
@@ -12842,7 +12845,7 @@ app.post(
               return {
                 type: "INVALID_EXTRA" as const,
                 error:
-                  "La noche previa no está disponible para el alojamiento seleccionado.",
+                  "La noche previa no est├í disponible para el alojamiento seleccionado.",
               };
             }
 
@@ -12857,7 +12860,7 @@ app.post(
               return {
                 type: "INVALID_EXTRA" as const,
                 error:
-                  "La noche posterior no está disponible para el alojamiento seleccionado.",
+                  "La noche posterior no est├í disponible para el alojamiento seleccionado.",
               };
             }
 
@@ -12876,7 +12879,7 @@ app.post(
               return {
                 type: "INVALID_EXTRA" as const,
                 error:
-                  "El transfer de llegada no está disponible.",
+                  "El transfer de llegada no est├í disponible.",
               };
             }
 
@@ -12888,7 +12891,7 @@ app.post(
               return {
                 type: "INVALID_EXTRA" as const,
                 error:
-                  "El transfer de salida no está disponible.",
+                  "El transfer de salida no est├í disponible.",
               };
             }
 
@@ -12930,7 +12933,7 @@ app.post(
                 return {
                   type: "INVALID_EXTRA" as const,
                   error:
-                    "El equipamiento solicitado debe tener un identificador y una cantidad válida.",
+                    "El equipamiento solicitado debe tener un identificador y una cantidad v├ílida.",
                 };
               }
 
@@ -12960,7 +12963,7 @@ app.post(
                 return {
                   type: "INVALID_EXTRA" as const,
                   error:
-                    "Uno de los elementos de equipamiento no está disponible para este viaje.",
+                    "Uno de los elementos de equipamiento no est├í disponible para este viaje.",
                 };
               }
 
@@ -13200,7 +13203,7 @@ app.post(
             if (totalPrice < existing.totalPaid) {
               throw Object.assign(
                 new Error(
-                  "No se pueden quitar servicios porque el nuevo total quedaría por debajo del importe ya pagado."
+                  "No se pueden quitar servicios porque el nuevo total quedar├¡a por debajo del importe ya pagado."
                 ),
                 { httpStatus: 409 }
               );
@@ -13405,7 +13408,7 @@ app.post(
                     existing.pendingBalance ?? 0,
                   newBalance: pendingBalance,
                   reason:
-                    "Actualización de servicios adicionales de la reserva",
+                    "Actualizaci├│n de servicios adicionales de la reserva",
                 },
               });
             }
@@ -13486,7 +13489,7 @@ app.post(
       ) {
         return res.status(409).json({
           error:
-            "El transporte de pasajeros del organizador no está disponible para este viaje.",
+            "El transporte de pasajeros del organizador no est├í disponible para este viaje.",
         });
       }
 
@@ -13509,7 +13512,7 @@ app.post(
       ) {
         return res.status(409).json({
           error:
-            "El transporte de bicicletas del organizador no está disponible para este viaje.",
+            "El transporte de bicicletas del organizador no est├í disponible para este viaje.",
         });
       }
 
@@ -13570,21 +13573,21 @@ app.post(
       ) {
         return res.status(409).json({
           error:
-            "El viaje todavía no está publicado.",
+            "El viaje todav├¡a no est├í publicado.",
         });
       }
 
       if (result.type === "PAYMENT_REQUIRED") {
         return res.status(409).json({
           error:
-            "Primero debés informar el pago de la reserva.",
+            "Primero deb├®s informar el pago de la reserva.",
         });
       }
 
       if (result.type === "RESERVATION_CANCELLED") {
         return res.status(409).json({
           error:
-            "La reserva está cancelada. Contactá a la empresa organizadora.",
+            "La reserva est├í cancelada. Contact├í a la empresa organizadora.",
         });
       }
 
@@ -13593,7 +13596,7 @@ app.post(
       ) {
         return res.status(409).json({
           error:
-            "Tu pago de reserva todavía debe ser verificado antes de completar la ficha.",
+            "Tu pago de reserva todav├¡a debe ser verificado antes de completar la ficha.",
         });
       }
 
@@ -13605,7 +13608,7 @@ app.post(
       if (error?.code === "P2002") {
         return res.status(409).json({
           error:
-            "Ya tenés una reserva para este viaje.",
+            "Ya ten├®s una reserva para este viaje.",
         });
       }
 
@@ -13662,7 +13665,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
       pricingTermsVersion <= 0
     ) {
       return res.status(400).json({
-        error: "La versión de las condiciones es obligatoria.",
+        error: "La versi├│n de las condiciones es obligatoria.",
       });
     }
 
@@ -13720,7 +13723,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
 
             if (trip.status !== "PUBLISHED") {
               throw Object.assign(
-                new Error("El viaje no está disponible para reservas."),
+                new Error("El viaje no est├í disponible para reservas."),
                 { httpStatus: 409 }
               );
             }
@@ -13772,7 +13775,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
             if (requiredAmount <= 0) {
               throw Object.assign(
                 new Error(
-                  "El importe requerido para reservar no está configurado correctamente."
+                  "El importe requerido para reservar no est├í configurado correctamente."
                 ),
                 { httpStatus: 409 }
               );
@@ -13781,7 +13784,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
             if (amount < requiredAmount) {
               throw Object.assign(
                 new Error(
-                  `Para asegurar la reserva debés informar al menos ${requiredAmount}.`
+                  `Para asegurar la reserva deb├®s informar al menos ${requiredAmount}.`
                 ),
                 { httpStatus: 400 }
               );
@@ -13823,7 +13826,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
 
             if (existing?.status === "CONFIRMED") {
               throw Object.assign(
-                new Error("Tu reserva ya está confirmada."),
+                new Error("Tu reserva ya est├í confirmada."),
                 { httpStatus: 409 }
               );
             }
@@ -13831,7 +13834,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
             if (existing?.status === "CANCELLED") {
               throw Object.assign(
                 new Error(
-                  "La reserva anterior está cancelada y debe ser revisada por la empresa."
+                  "La reserva anterior est├í cancelada y debe ser revisada por la empresa."
                 ),
                 { httpStatus: 409 }
               );
@@ -13839,7 +13842,7 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
 
             if (existing && existing.payments.length > 0) {
               throw Object.assign(
-                new Error("Ya tenés un pago informado para esta reserva."),
+                new Error("Ya ten├®s un pago informado para esta reserva."),
                 { httpStatus: 409 }
               );
             }
@@ -13992,14 +13995,14 @@ app.post("/api/travel/trips/:tripId/reservations/me/payments", async (req, res) 
 
     if (!result) {
       return res.status(409).json({
-        error: "Conflicto al registrar el pago. Intentá nuevamente.",
+        error: "Conflicto al registrar el pago. Intent├í nuevamente.",
       });
     }
 
     return res.status(201).json({
       success: true,
       message:
-        "Pago informado. Tu lugar quedó retenido mientras se verifica el comprobante.",
+        "Pago informado. Tu lugar qued├│ retenido mientras se verifica el comprobante.",
       reservation: result.reservation,
       payment: result.payment,
       requiredAmount: result.requiredAmount,
@@ -14086,7 +14089,7 @@ app.post(
 
         if (trip.status !== "PUBLISHED") {
           throw Object.assign(
-            new Error("El viaje no está publicado."),
+            new Error("El viaje no est├í publicado."),
             { httpStatus: 409 }
           );
         }
@@ -14116,7 +14119,7 @@ app.post(
 
         if (!reservation) {
           throw Object.assign(
-            new Error("No tenés una reserva para este viaje."),
+            new Error("No ten├®s una reserva para este viaje."),
             { httpStatus: 404 }
           );
         }
@@ -14171,7 +14174,7 @@ app.post(
         if (availableToReport <= 0) {
           throw Object.assign(
             new Error(
-              "Ya hay pagos informados pendientes de verificación que cubren el saldo."
+              "Ya hay pagos informados pendientes de verificaci├│n que cubren el saldo."
             ),
             { httpStatus: 409 }
           );
@@ -14232,7 +14235,7 @@ app.post(
       return res.status(201).json({
         success: true,
         message:
-          "Pago informado. Quedó pendiente de verificación por la empresa.",
+          "Pago informado. Qued├│ pendiente de verificaci├│n por la empresa.",
         reservationId: result.reservation.id,
         payment: result.payment,
         pendingBalance: result.pendingBalance,
@@ -14290,7 +14293,7 @@ app.post(
 
       if (!hasTravelTripPermission(access, "manageFinancials")) {
         return res.status(403).json({
-          error: "No tenés permiso para administrar pagos.",
+          error: "No ten├®s permiso para administrar pagos.",
         });
       }
 
@@ -14328,7 +14331,7 @@ app.post(
 
         if (payment.reservation.status === "CANCELLED") {
           throw Object.assign(
-            new Error("La reserva está cancelada."),
+            new Error("La reserva est├í cancelada."),
             { httpStatus: 409 }
           );
         }
@@ -14499,7 +14502,7 @@ app.post(
 
       if (!hasTravelTripPermission(access, "manageFinancials")) {
         return res.status(403).json({
-          error: "No tenés permiso para administrar pagos.",
+          error: "No ten├®s permiso para administrar pagos.",
         });
       }
 
@@ -14533,7 +14536,7 @@ app.post(
 
         if (payment.reservation.status === "CANCELLED") {
           throw Object.assign(
-            new Error("La reserva está cancelada."),
+            new Error("La reserva est├í cancelada."),
             { httpStatus: 409 }
           );
         }
@@ -14589,7 +14592,7 @@ app.post(
       return res.json({
         success: true,
         message: result.placeReleased
-          ? "Pago rechazado. La plaza quedó liberada."
+          ? "Pago rechazado. La plaza qued├│ liberada."
           : "Pago rechazado.",
         ...result,
       });
@@ -14666,7 +14669,7 @@ app.get("/api/travel/trips/:tripId/team", async (req, res) => {
 
     if (!canViewTeam) {
       return res.status(403).json({
-        error: "No tenés permisos para ver el equipo de este viaje",
+        error: "No ten├®s permisos para ver el equipo de este viaje",
       });
     }
 
@@ -14745,7 +14748,7 @@ app.post("/api/travel/trips/:tripId/team", async (req, res) => {
       role !== "COLLABORATOR"
     ) {
       return res.status(400).json({
-        error: "Rol de equipo inválido",
+        error: "Rol de equipo inv├ílido",
       });
     }
 
@@ -14771,7 +14774,7 @@ app.post("/api/travel/trips/:tripId/team", async (req, res) => {
 
     if (!hasTravelCompanyOperationalAccess(trip.company)) {
       return res.status(403).json({
-        error: "La empresa no está habilitada para editar viajes",
+        error: "La empresa no est├í habilitada para editar viajes",
       });
     }
 
@@ -14809,7 +14812,7 @@ app.post("/api/travel/trips/:tripId/team", async (req, res) => {
       !requesterIsOrganizer
     ) {
       return res.status(403).json({
-        error: "No tenés permisos para administrar el equipo de este viaje",
+        error: "No ten├®s permisos para administrar el equipo de este viaje",
       });
     }
 
@@ -14907,7 +14910,7 @@ app.post("/api/travel/trips/:tripId/team", async (req, res) => {
       )
     ) {
       return res.status(403).json({
-        error: "Solo un administrador de la empresa puede otorgar permisos económicos",
+        error: "Solo un administrador de la empresa puede otorgar permisos econ├│micos",
       });
     }
 
@@ -14992,7 +14995,7 @@ app.patch(
 
       if (!hasTravelCompanyOperationalAccess(trip.company)) {
         return res.status(403).json({
-          error: "La empresa no está habilitada para editar viajes",
+          error: "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -15044,7 +15047,7 @@ app.patch(
         !requesterIsOrganizer
       ) {
         return res.status(403).json({
-          error: "No tenés permisos para modificar este equipo",
+          error: "No ten├®s permisos para modificar este equipo",
         });
       }
 
@@ -15060,7 +15063,7 @@ app.patch(
         requestedRole !== "COLLABORATOR"
       ) {
         return res.status(400).json({
-          error: "Rol de equipo inválido",
+          error: "Rol de equipo inv├ílido",
         });
       }
 
@@ -15168,7 +15171,7 @@ app.patch(
         )
       ) {
         return res.status(403).json({
-          error: "Solo un administrador de la empresa puede modificar permisos económicos",
+          error: "Solo un administrador de la empresa puede modificar permisos econ├│micos",
         });
       }
 
@@ -15255,7 +15258,7 @@ app.delete(
 
       if (!hasTravelCompanyOperationalAccess(trip.company)) {
         return res.status(403).json({
-          error: "La empresa no está habilitada para editar viajes",
+          error: "La empresa no est├í habilitada para editar viajes",
         });
       }
 
@@ -15307,7 +15310,7 @@ app.delete(
         !requesterIsOrganizer
       ) {
         return res.status(403).json({
-          error: "No tenés permisos para quitar integrantes",
+          error: "No ten├®s permisos para quitar integrantes",
         });
       }
 
@@ -15688,4 +15691,5 @@ app.listen(
     );
   }
 );
+
 
