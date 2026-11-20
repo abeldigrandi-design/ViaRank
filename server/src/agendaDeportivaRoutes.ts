@@ -63,20 +63,24 @@ export function createAgendaDeportivaRoutes(
 
     if (!title || title.length > 50) throw new Error("Titulo invalido (maximo 50 caracteres)");
     if (!locality || locality.length > 40) throw new Error("Localidad invalida (maximo 40 caracteres)");
-    if (!description || !organizer || !websiteUrl) {
-      throw new Error("Descripcion, organizador y sitio oficial son obligatorios");
+    if (!description || !organizer) {
+      throw new Error("Descripcion y organizador son obligatorios");
     }
 
-    let url: URL;
-    try {
-      url = new URL(websiteUrl);
-    } catch {
-      throw new Error("Sitio oficial invalido");
+    if (websiteUrl) {
+      let url: URL;
+      try {
+        url = new URL(websiteUrl);
+      } catch {
+        throw new Error("Sitio oficial invalido");
+      }
+
+      if (!["https:", "http:"].includes(url.protocol)) {
+        throw new Error("El sitio oficial debe utilizar HTTP o HTTPS");
+      }
     }
 
-    if (!["https:", "http:"].includes(url.protocol)) {
-      throw new Error("El sitio oficial debe utilizar HTTP o HTTPS");
-    }
+
 
     const eventDate = new Date(body?.eventDate);
     const endDate = body?.endDate ? new Date(body.endDate) : null;
@@ -126,8 +130,20 @@ export function createAgendaDeportivaRoutes(
         return;
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Medianoche de hoy en Argentina, independientemente de la zona del servidor.
+      const partes = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date());
+
+      const obtener = (tipo: string) =>
+        partes.find((parte) => parte.type === tipo)?.value ?? "";
+
+      const today = new Date(
+        `${obtener("year")}-${obtener("month")}-${obtener("day")}T03:00:00.000Z`
+      );
 
       const events = await prisma.agendaDeportivaEvento.findMany({
         where: {
