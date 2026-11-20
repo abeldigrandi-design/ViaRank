@@ -1,3 +1,4 @@
+import AgendaDeportivaDetalle from "./pages/AgendaDeportivaDetalle";
 import { createRoot } from "react-dom/client";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -49,6 +50,7 @@ createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
     <ScrollToTop />
     <Routes>
+      <Route path="/agenda-deportiva/:id" element={<AgendaDeportivaDetalle />} />
       <Route path="/" element={<App />} />
       <Route path="/support" element={<SupportPrivacy />} />
       <Route path="/registrar-actividad" element={<RecordActivity />} />
